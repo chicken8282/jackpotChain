@@ -2,33 +2,52 @@
   <div class="landing" ref="landingRef">
     <canvas ref="canvasRef" class="particle-canvas"></canvas>
 
+    <!-- Background patterns -->
+    <div class="visual-pattern pattern-scattered" v-show="activePattern === 'scattered'"></div>
+    <div class="visual-pattern pattern-connected" v-show="activePattern === 'connected'"></div>
+
     <nav class="navbar">
-      <div class="logo">JackpotChain</div>
+      <div class="logo">
+        <img src="@/assets/images/landing/jackpotchain-logo.svg" alt="JackpotChain" class="logo-icon" />
+        <span>JackpotChain</span>
+      </div>
     </nav>
 
     <!-- Phase 1 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="1">
+      <div class="phase-visual">
+        <img src="@/assets/images/landing/icons/puzzle-block.svg" alt="" class="phase-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">블록체인은 늘<br />파편으로 설명됐습니다.</h1>
       </div>
     </section>
 
     <!-- Phase 2 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="2">
+      <div class="phase-visual">
+        <img src="@/assets/images/landing/icons/question-maze.svg" alt="" class="phase-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">알 것 같으면서도<br />모르는 이유,</h1>
       </div>
     </section>
 
     <!-- Phase 3 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="3">
+      <div class="phase-visual">
+        <img src="@/assets/images/landing/icons/broken-chain.svg" alt="" class="phase-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">한 번도 흐름으로<br />배운 적이 없어서입니다.</h1>
       </div>
     </section>
 
     <!-- Phase 4 -->
-    <section class="phase-section">
+    <section class="phase-section hero-phase" data-phase="4">
+      <div class="hero-visual">
+        <img src="@/assets/images/landing/icons/blockchain-flow.svg" alt="" class="hero-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">
           <span class="gold">JackpotChain</span>은<br />그 흐름을 잇습니다.
@@ -37,22 +56,31 @@
     </section>
 
     <!-- Phase 5 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="5">
+      <div class="phase-visual">
+        <img src="@/assets/images/landing/icons/mining-pickaxe.svg" alt="" class="phase-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">클릭 한 번으로,<br />직접 채굴에 참여하고</h1>
       </div>
     </section>
 
     <!-- Phase 6 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="6">
+      <div class="phase-visual">
+        <img src="@/assets/images/landing/icons/coin-exchange.svg" alt="" class="phase-icon" loading="lazy" />
+      </div>
       <div class="phase-content">
         <h1 class="main-text">채굴로 얻은 코인으로,<br />거래에 참여하며 지식을 체화합니다.</h1>
       </div>
     </section>
 
     <!-- Phase 7 -->
-    <section class="phase-section">
+    <section class="phase-section" data-phase="7">
       <div class="phase-content">
+        <div class="cta-logo">
+          <img src="@/assets/images/landing/jackpotchain-logo.svg" alt="" class="cta-logo-icon" loading="lazy" />
+        </div>
         <h1 class="final-text">준비되셨나요?</h1>
         <div class="cta-buttons">
           <button class="btn-primary" @click="startMining">
@@ -78,6 +106,7 @@ const router = useRouter()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const landingRef = ref<HTMLElement | null>(null)
 const hideScrollIndicator = ref(false)
+const activePattern = ref<'scattered' | 'connected'>('scattered')
 
 let isScrolling = false
 let scrollTimeout: number
@@ -210,6 +239,12 @@ onMounted(() => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           entry.target.classList.add('visible')
+
+          // Pattern switching based on phase
+          const phase = entry.target.getAttribute('data-phase')
+          if (phase) {
+            activePattern.value = Number(phase) >= 4 ? 'connected' : 'scattered'
+          }
         }
       })
     },
@@ -310,6 +345,37 @@ onMounted(() => {
   display: block;
 }
 
+/* Background Patterns */
+.visual-pattern {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.8s ease-in-out;
+}
+
+.visual-pattern[style*="display: none"] {
+  display: none !important;
+}
+
+.pattern-scattered {
+  background-image: url('@/assets/images/landing/patterns/scattered-blocks.svg');
+  background-size: 400px;
+  background-repeat: repeat;
+  opacity: 0.08;
+}
+
+.pattern-connected {
+  background-image: url('@/assets/images/landing/patterns/connected-nodes.svg');
+  background-size: 400px;
+  background-repeat: repeat;
+  opacity: 0.08;
+}
+
 .navbar {
   position: fixed;
   top: 0;
@@ -320,10 +386,19 @@ onMounted(() => {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-family: 'Syne', sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: #F0B429;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 0 8px rgba(240, 180, 41, 0.4));
 }
 
 /* Phase Sections */
@@ -332,11 +407,51 @@ onMounted(() => {
   width: 100vw;
   height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 1;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+
+/* Phase glass morphism effect */
+.phase-section::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 60%;
+  background: linear-gradient(
+    135deg,
+    rgba(240, 180, 41, 0.02) 0%,
+    transparent 50%
+  );
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+}
+
+/* Phase Icons */
+.phase-visual {
+  position: relative;
+  margin-bottom: 32px;
+  opacity: 0;
+  transform: translateX(-100px);
+  transition: all 1.4s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.phase-section.visible .phase-visual {
+  opacity: 0.6;
+  transform: translateX(0);
+}
+
+.phase-icon {
+  width: 120px;
+  height: 120px;
+  filter: drop-shadow(0 0 20px rgba(240, 180, 41, 0.3));
 }
 
 .phase-content {
@@ -369,8 +484,77 @@ onMounted(() => {
 
 .main-text .gold {
   color: #F0B429;
-  text-shadow: 0 0 30px rgba(240, 180, 41, 0.6);
+  text-shadow:
+    0 0 30px rgba(240, 180, 41, 0.6),
+    0 0 60px rgba(240, 180, 41, 0.3),
+    0 0 90px rgba(240, 180, 41, 0.1);
   display: inline-block;
+  animation: text-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes text-glow {
+  from {
+    text-shadow:
+      0 0 30px rgba(240, 180, 41, 0.6),
+      0 0 60px rgba(240, 180, 41, 0.3);
+  }
+  to {
+    text-shadow:
+      0 0 40px rgba(240, 180, 41, 0.8),
+      0 0 80px rgba(240, 180, 41, 0.5);
+  }
+}
+
+/* Hero Phase (Phase 4) */
+.hero-phase {
+  background: radial-gradient(
+    circle at center,
+    rgba(240, 180, 41, 0.03) 0%,
+    transparent 60%
+  );
+}
+
+.hero-visual {
+  position: relative;
+  margin-bottom: 40px;
+}
+
+.hero-icon {
+  width: 200px;
+  height: 200px;
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(240, 180, 41, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px rgba(240, 180, 41, 0.8));
+  }
+}
+
+/* CTA Logo */
+.cta-logo {
+  opacity: 0;
+  transform: translateY(60px);
+  filter: blur(4px);
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1);
+  margin-bottom: 24px;
+}
+
+.phase-section.visible .cta-logo {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+.cta-logo-icon {
+  width: 80px;
+  height: 80px;
+  animation: pulse-glow 3s ease-in-out infinite;
 }
 
 .final-text {
@@ -383,9 +567,9 @@ onMounted(() => {
   opacity: 0;
   transform: translateY(80px);
   filter: blur(4px);
-  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1),
-              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1),
-              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.1s,
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.1s,
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.1s;
   text-shadow: 0 0 40px rgba(240, 180, 41, 0.6);
 }
 
@@ -402,9 +586,9 @@ onMounted(() => {
   opacity: 0;
   transform: translateY(60px);
   filter: blur(4px);
-  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s,
-              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s,
-              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s;
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.3s,
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.3s,
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.3s;
 }
 
 .phase-section.visible .cta-buttons {
@@ -541,6 +725,35 @@ onMounted(() => {
   .btn-secondary {
     width: 100%;
   }
+
+  /* Mobile icon sizes */
+  .logo-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .phase-icon {
+    width: 80px;
+    height: 80px;
+  }
+
+  .hero-icon {
+    width: 120px;
+    height: 120px;
+  }
+
+  .cta-logo-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .phase-visual {
+    margin-bottom: 24px;
+  }
+
+  .hero-visual {
+    margin-bottom: 32px;
+  }
 }
 
 @media (max-width: 1024px) and (min-width: 769px) {
@@ -550,6 +763,38 @@ onMounted(() => {
 
   .final-text {
     font-size: 72px;
+  }
+
+  /* Tablet icon sizes */
+  .phase-icon {
+    width: 100px;
+    height: 100px;
+  }
+
+  .hero-icon {
+    width: 160px;
+    height: 160px;
+  }
+
+  .cta-logo-icon {
+    width: 70px;
+    height: 70px;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .phase-visual,
+  .phase-icon,
+  .hero-icon,
+  .cta-logo,
+  .cta-logo-icon,
+  .main-text,
+  .main-text .gold,
+  .final-text,
+  .cta-buttons {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
   }
 }
 </style>

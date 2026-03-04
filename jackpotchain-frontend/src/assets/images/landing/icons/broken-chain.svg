@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="gold-gradient-broken" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0B429;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+  <!-- Left block -->
+  <rect x="10" y="26" width="14" height="14" rx="3"
+        fill="none" stroke="url(#gold-gradient-broken)" stroke-width="2.5" />
+  <!-- Right block (disconnected) -->
+  <rect x="40" y="26" width="14" height="14" rx="3"
+        fill="none" stroke="url(#gold-gradient-broken)" stroke-width="2.5" />
+  <!-- Broken connection -->
+  <line x1="24" y1="33" x2="28" y2="33" stroke="url(#gold-gradient-broken)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="36" y1="33" x2="40" y2="33" stroke="url(#gold-gradient-broken)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Gap indicator -->
+  <line x1="30" y1="30" x2="34" y2="36" stroke="url(#gold-gradient-broken)" stroke-width="2" opacity="0.4"/>
+  <line x1="30" y1="36" x2="34" y2="30" stroke="url(#gold-gradient-broken)" stroke-width="2" opacity="0.4"/>
+</svg>
