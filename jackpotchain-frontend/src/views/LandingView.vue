@@ -46,7 +46,7 @@
     <!-- Phase 6 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="main-text">채굴로 얻은 코인으로,<br />로또에 참여하며 지식을 체화합니다.</h1>
+        <h1 class="main-text">채굴로 얻은 코인으로,<br />거래에 참여하며 지식을 체화합니다.</h1>
       </div>
     </section>
 
