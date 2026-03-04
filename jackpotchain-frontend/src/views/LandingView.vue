@@ -1,5 +1,5 @@
 <template>
-  <div class="landing" @scroll="handleScroll" ref="landingRef">
+  <div class="landing" ref="landingRef">
     <canvas ref="canvasRef" class="particle-canvas"></canvas>
 
     <nav class="navbar">
@@ -9,41 +9,52 @@
     <!-- Phase 1 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="main-text fade-in">블록체인은 늘<br />파편으로 설명됐습니다.</h1>
+        <h1 class="main-text">블록체인은 늘<br />파편으로 설명됐습니다.</h1>
       </div>
     </section>
 
     <!-- Phase 2 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="main-text fade-in">알 것 같으면서도<br />모르는 이유,</h1>
-        <h1 class="main-text fade-in delay">한 번도 흐름으로<br />배운 적이 없어서입니다.</h1>
+        <h1 class="main-text">알 것 같으면서도<br />모르는 이유,</h1>
       </div>
     </section>
 
     <!-- Phase 3 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="main-text fade-in">
-          <span class="gold">JackpotChain</span>은<br />그 흐름을 잇습니다.
-        </h1>
-        <h1 class="main-text fade-in delay">클릭 한 번으로,<br />직접 채굴에 참여하고</h1>
+        <h1 class="main-text">한 번도 흐름으로<br />배운 적이 없어서입니다.</h1>
       </div>
     </section>
 
     <!-- Phase 4 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="main-text fade-in">채굴로 얻은 코인으로,</h1>
-        <h1 class="main-text fade-in delay">로또에 참여하며<br />지식을 체화합니다.</h1>
+        <h1 class="main-text">
+          <span class="gold">JackpotChain</span>은<br />그 흐름을 잇습니다.
+        </h1>
       </div>
     </section>
 
     <!-- Phase 5 -->
     <section class="phase-section">
       <div class="phase-content">
-        <h1 class="final-text fade-in">준비되셨나요?</h1>
-        <div class="cta-buttons fade-in delay">
+        <h1 class="main-text">클릭 한 번으로,<br />직접 채굴에 참여하고</h1>
+      </div>
+    </section>
+
+    <!-- Phase 6 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="main-text">채굴로 얻은 코인으로,<br />로또에 참여하며 지식을 체화합니다.</h1>
+      </div>
+    </section>
+
+    <!-- Phase 7 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="final-text">준비되셨나요?</h1>
+        <div class="cta-buttons">
           <button class="btn-primary" @click="startMining">
             채굴 시작하기 →
           </button>
@@ -52,7 +63,7 @@
       </div>
     </section>
 
-    <div class="scroll-indicator" :class="{ hide: currentPhase >= 4 }">
+    <div class="scroll-indicator" :class="{ hide: hideScrollIndicator }">
       <div class="mouse-icon"></div>
       <span>SCROLL</span>
     </div>
@@ -66,7 +77,11 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const landingRef = ref<HTMLElement | null>(null)
-const currentPhase = ref(0)
+const hideScrollIndicator = ref(false)
+
+let isScrolling = false
+let scrollTimeout: number
+let currentSection = 0
 
 interface Particle {
   x: number
@@ -82,17 +97,6 @@ let mouseY = 0
 
 const startMining = () => {
   router.push('/lottery')
-}
-
-const handleScroll = () => {
-  if (!landingRef.value) return
-
-  const scrollTop = landingRef.value.scrollTop
-  const windowHeight = window.innerHeight
-
-  // Calculate current phase based on scroll position
-  const phase = Math.floor(scrollTop / windowHeight)
-  currentPhase.value = phase
 }
 
 const initParticles = (canvas: HTMLCanvasElement) => {
@@ -200,24 +204,64 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', handleResize)
   document.addEventListener('webkitfullscreenchange', handleResize)
 
-  // Intersection Observer for fade-in animations
+  // Intersection Observer for smooth animations (Toss style)
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const fadeElements = entry.target.querySelectorAll('.fade-in')
-          fadeElements.forEach(el => {
-            el.classList.add('fade-in')
-          })
+          entry.target.classList.add('visible')
         }
       })
     },
-    { threshold: 0.3 }
+    {
+      threshold: 0.15,
+      rootMargin: '0px 0px -15% 0px'
+    }
   )
 
   // Observe all sections
   const sections = document.querySelectorAll('.phase-section')
   sections.forEach(section => observer.observe(section))
+
+  // Hide scroll indicator on scroll
+  const handleLandingScroll = () => {
+    if (landingRef.value && landingRef.value.scrollTop > 100) {
+      hideScrollIndicator.value = true
+    }
+  }
+
+  // Custom wheel handler for better scroll control
+  const handleWheel = (e: WheelEvent) => {
+    if (isScrolling) {
+      e.preventDefault()
+      return
+    }
+
+    const delta = e.deltaY
+    const threshold = 100 // Increase this to make scroll less sensitive
+
+    if (Math.abs(delta) > threshold) {
+      e.preventDefault()
+      isScrolling = true
+
+      const sections = document.querySelectorAll('.phase-section')
+      const direction = delta > 0 ? 1 : -1
+      const nextSection = currentSection + direction
+
+      if (nextSection >= 0 && nextSection < sections.length) {
+        currentSection = nextSection
+        sections[nextSection].scrollIntoView({ behavior: 'smooth' })
+      }
+
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(() => {
+        isScrolling = false
+      }, 800)
+    }
+  }
+
+  landingRef.value?.addEventListener('scroll', handleLandingScroll)
+  landingRef.value?.addEventListener('wheel', handleWheel, { passive: false })
 
   // Cleanup
   onUnmounted(() => {
@@ -225,6 +269,9 @@ onMounted(() => {
     window.removeEventListener('resize', handleResize)
     document.removeEventListener('fullscreenchange', handleResize)
     document.removeEventListener('webkitfullscreenchange', handleResize)
+    landingRef.value?.removeEventListener('scroll', handleLandingScroll)
+    landingRef.value?.removeEventListener('wheel', handleWheel)
+    clearTimeout(scrollTimeout)
     cancelAnimationFrame(animationId)
     observer.disconnect()
   })
@@ -244,7 +291,12 @@ onMounted(() => {
   overflow-y: scroll;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.landing::-webkit-scrollbar {
+  display: none;
 }
 
 .particle-canvas {
@@ -282,8 +334,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  scroll-snap-align: start;
   z-index: 1;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .phase-content {
@@ -299,28 +352,25 @@ onMounted(() => {
   font-weight: 800;
   color: #FFFFFF;
   line-height: 1.3;
-  margin: 0 0 32px 0;
+  margin: 0;
   opacity: 0;
-  transform: translateY(40px);
-  transition: all 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transform: translateY(80px);
+  filter: blur(4px);
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
-.main-text.fade-in {
+.phase-section.visible .main-text {
   opacity: 1;
   transform: translateY(0);
-}
-
-.main-text.delay {
-  transition-delay: 0.3s;
-}
-
-.main-text:last-child {
-  margin-bottom: 0;
+  filter: blur(0);
 }
 
 .main-text .gold {
   color: #F0B429;
-  text-shadow: 0 0 30px rgba(240, 180, 41, 0.5);
+  text-shadow: 0 0 30px rgba(240, 180, 41, 0.6);
+  display: inline-block;
 }
 
 .final-text {
@@ -331,14 +381,18 @@ onMounted(() => {
   line-height: 1.2;
   margin: 0 0 48px 0;
   opacity: 0;
-  transform: scale(0.9);
-  transition: all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: translateY(80px);
+  filter: blur(4px);
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1),
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1);
   text-shadow: 0 0 40px rgba(240, 180, 41, 0.6);
 }
 
-.final-text.fade-in {
+.phase-section.visible .final-text {
   opacity: 1;
-  transform: scale(1);
+  transform: translateY(0);
+  filter: blur(0);
 }
 
 .cta-buttons {
@@ -346,17 +400,17 @@ onMounted(() => {
   gap: 24px;
   justify-content: center;
   opacity: 0;
-  transform: translateY(30px);
-  transition: all 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transform: translateY(60px);
+  filter: blur(4px);
+  transition: opacity 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s,
+              transform 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s,
+              filter 1.4s cubic-bezier(0.19, 1, 0.22, 1) 0.2s;
 }
 
-.cta-buttons.fade-in {
+.phase-section.visible .cta-buttons {
   opacity: 1;
   transform: translateY(0);
-}
-
-.cta-buttons.delay {
-  transition-delay: 0.4s;
+  filter: blur(0);
 }
 
 .btn-primary,
@@ -470,7 +524,6 @@ onMounted(() => {
 
   .main-text {
     font-size: 42px;
-    margin-bottom: 24px;
   }
 
   .final-text {
