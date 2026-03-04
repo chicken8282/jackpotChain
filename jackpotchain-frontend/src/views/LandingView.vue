@@ -1,33 +1,58 @@
 <template>
-  <div class="landing">
+  <div class="landing" @scroll="handleScroll" ref="landingRef">
     <canvas ref="canvasRef" class="particle-canvas"></canvas>
 
     <nav class="navbar">
       <div class="logo">JackpotChain</div>
     </nav>
 
-    <div class="content-wrapper">
-      <div class="hero-content">
-        <div class="badge fade-in">BLOCKCHAIN EDUCATION</div>
+    <!-- Phase 1 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="main-text fade-in">블록체인은 늘<br />파편으로 설명됐습니다.</h1>
+      </div>
+    </section>
 
-        <h1 class="headline fade-in">
-          블록체인의 원리,<br />
-          눈으로 보고 <span class="gold">몸으로</span><br />
-          채굴하며 깨닫는다
+    <!-- Phase 2 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="main-text fade-in">알 것 같으면서도<br />모르는 이유,</h1>
+        <h1 class="main-text fade-in delay">한 번도 흐름으로<br />배운 적이 없어서입니다.</h1>
+      </div>
+    </section>
+
+    <!-- Phase 3 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="main-text fade-in">
+          <span class="gold">JackpotChain</span>은<br />그 흐름을 잇습니다.
         </h1>
+        <h1 class="main-text fade-in delay">클릭 한 번으로,<br />직접 채굴에 참여하고</h1>
+      </div>
+    </section>
 
-        <p class="subtitle fade-in">로또 한 장으로 시작하는 블록체인 체험</p>
+    <!-- Phase 4 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="main-text fade-in">채굴로 얻은 코인으로,</h1>
+        <h1 class="main-text fade-in delay">로또에 참여하며<br />지식을 체화합니다.</h1>
+      </div>
+    </section>
 
-        <div class="cta-buttons fade-in">
+    <!-- Phase 5 -->
+    <section class="phase-section">
+      <div class="phase-content">
+        <h1 class="final-text fade-in">준비되셨나요?</h1>
+        <div class="cta-buttons fade-in delay">
           <button class="btn-primary" @click="startMining">
             채굴 시작하기 →
           </button>
           <button class="btn-secondary">개념 먼저 보기</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="scroll-indicator">
+    <div class="scroll-indicator" :class="{ hide: currentPhase >= 4 }">
       <div class="mouse-icon"></div>
       <span>SCROLL</span>
     </div>
@@ -40,6 +65,8 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const landingRef = ref<HTMLElement | null>(null)
+const currentPhase = ref(0)
 
 interface Particle {
   x: number
@@ -55,6 +82,17 @@ let mouseY = 0
 
 const startMining = () => {
   router.push('/lottery')
+}
+
+const handleScroll = () => {
+  if (!landingRef.value) return
+
+  const scrollTop = landingRef.value.scrollTop
+  const windowHeight = window.innerHeight
+
+  // Calculate current phase based on scroll position
+  const phase = Math.floor(scrollTop / windowHeight)
+  currentPhase.value = phase
 }
 
 const initParticles = (canvas: HTMLCanvasElement) => {
@@ -99,7 +137,7 @@ const drawParticles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement)
   })
 
   // Draw connections
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
   ctx.lineWidth = 1
 
   for (let i = 0; i < particles.length; i++) {
@@ -118,7 +156,7 @@ const drawParticles = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement)
   }
 
   // Draw particles
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
   particles.forEach(p => {
     ctx.beginPath()
     ctx.arc(p.x, p.y, 2, 0, Math.PI * 2)
@@ -162,6 +200,25 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', handleResize)
   document.addEventListener('webkitfullscreenchange', handleResize)
 
+  // Intersection Observer for fade-in animations
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const fadeElements = entry.target.querySelectorAll('.fade-in')
+          fadeElements.forEach(el => {
+            el.classList.add('fade-in')
+          })
+        }
+      })
+    },
+    { threshold: 0.3 }
+  )
+
+  // Observe all sections
+  const sections = document.querySelectorAll('.phase-section')
+  sections.forEach(section => observer.observe(section))
+
   // Cleanup
   onUnmounted(() => {
     window.removeEventListener('mousemove', handleMouseMove)
@@ -169,6 +226,7 @@ onMounted(() => {
     document.removeEventListener('fullscreenchange', handleResize)
     document.removeEventListener('webkitfullscreenchange', handleResize)
     cancelAnimationFrame(animationId)
+    observer.disconnect()
   })
 })
 </script>
@@ -183,6 +241,10 @@ onMounted(() => {
   margin: 0;
   padding: 0;
   background-color: #0A0A0F;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  scroll-snap-type: y mandatory;
 }
 
 .particle-canvas {
@@ -212,76 +274,98 @@ onMounted(() => {
   color: #F0B429;
 }
 
-.content-wrapper {
+/* Phase Sections */
+.phase-section {
   position: relative;
-  z-index: 1;
   width: 100vw;
   height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  scroll-snap-align: start;
+  z-index: 1;
 }
 
-.hero-content {
+.phase-content {
   width: 100%;
-  max-width: min(900px, 90vw);
-  padding: 0 24px;
+  max-width: min(1200px, 90vw);
+  padding: 0 48px;
   text-align: center;
 }
 
-.badge {
-  display: inline-block;
-  padding: 8px 16px;
-  border: 1px solid #F0B429;
-  border-radius: 4px;
-  background-color: transparent;
-  color: #F0B429;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  letter-spacing: 2px;
-  margin-bottom: 32px;
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.headline {
+.main-text {
   font-family: 'Syne', sans-serif;
-  font-size: 64px;
+  font-size: 72px;
   font-weight: 800;
   color: #FFFFFF;
-  line-height: 1.2;
-  margin: 0 auto 24px auto;
-  max-width: min(800px, 90vw);
-  animation: fadeInUp 0.6s ease-out 0.15s backwards;
+  line-height: 1.3;
+  margin: 0 0 32px 0;
+  opacity: 0;
+  transform: translateY(40px);
+  transition: all 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.headline .gold {
+.main-text.fade-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.main-text.delay {
+  transition-delay: 0.3s;
+}
+
+.main-text:last-child {
+  margin-bottom: 0;
+}
+
+.main-text .gold {
   color: #F0B429;
+  text-shadow: 0 0 30px rgba(240, 180, 41, 0.5);
 }
 
-.subtitle {
-  font-family: 'Noto Sans KR', sans-serif;
-  font-size: 18px;
-  font-weight: 400;
-  color: #888899;
+.final-text {
+  font-family: 'Syne', sans-serif;
+  font-size: 96px;
+  font-weight: 800;
+  color: #F0B429;
+  line-height: 1.2;
   margin: 0 0 48px 0;
-  animation: fadeInUp 0.6s ease-out 0.3s backwards;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 0 40px rgba(240, 180, 41, 0.6);
+}
+
+.final-text.fade-in {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .cta-buttons {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   justify-content: center;
-  animation: fadeInUp 0.6s ease-out 0.45s backwards;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.cta-buttons.fade-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cta-buttons.delay {
+  transition-delay: 0.4s;
 }
 
 .btn-primary,
 .btn-secondary {
   font-family: 'Noto Sans KR', sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  padding: 16px 32px;
-  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 20px 48px;
+  border-radius: 12px;
   border: none;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -314,12 +398,19 @@ onMounted(() => {
   bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   animation: bounce 2s infinite;
+  opacity: 1;
+  transition: opacity 0.5s;
+}
+
+.scroll-indicator.hide {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mouse-icon {
@@ -350,16 +441,6 @@ onMounted(() => {
   letter-spacing: 2px;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 @keyframes bounce {
   0%, 100% {
@@ -383,17 +464,24 @@ onMounted(() => {
 
 /* 반응형 */
 @media (max-width: 768px) {
-  .headline {
-    font-size: 40px;
+  .phase-content {
+    padding: 0 24px;
   }
 
-  .subtitle {
-    font-size: 16px;
+  .main-text {
+    font-size: 42px;
+    margin-bottom: 24px;
+  }
+
+  .final-text {
+    font-size: 56px;
+    margin-bottom: 32px;
   }
 
   .cta-buttons {
     flex-direction: column;
     width: 100%;
+    gap: 16px;
   }
 
   .btn-primary,
@@ -403,8 +491,12 @@ onMounted(() => {
 }
 
 @media (max-width: 1024px) and (min-width: 769px) {
-  .headline {
-    font-size: 48px;
+  .main-text {
+    font-size: 56px;
+  }
+
+  .final-text {
+    font-size: 72px;
   }
 }
 </style>
