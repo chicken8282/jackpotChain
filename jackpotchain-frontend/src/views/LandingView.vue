@@ -15,7 +15,26 @@
     <!-- Phase 1 -->
     <section class="phase-section" data-phase="1">
       <div class="phase-visual">
-        <img src="@/assets/images/landing/icons/puzzle-block.svg" alt="" class="phase-icon" loading="lazy" />
+        <svg class="phase-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 64">
+          <defs>
+            <linearGradient id="gold-gradient-puzzle" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#F0B429;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
+            </linearGradient>
+          </defs>
+          <!-- 분산원장 (맨 왼쪽) -->
+          <text x="5" y="18" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-1">분산원장</text>
+          <!-- 해시함수 (왼쪽) -->
+          <text x="25" y="52" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-2">해시함수</text>
+          <!-- 합의 (중앙 왼쪽) -->
+          <text x="75" y="22" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-3">합의</text>
+          <!-- P2P (중앙) -->
+          <text x="100" y="56" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-4">P2P</text>
+          <!-- 탈중앙화 (오른쪽) -->
+          <text x="135" y="26" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-5">탈중앙화</text>
+          <!-- 채굴 (맨 오른쪽) -->
+          <text x="170" y="48" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-6">채굴</text>
+        </svg>
       </div>
       <div class="phase-content">
         <h1 class="main-text">블록체인은 늘<br />파편으로 설명됐습니다.</h1>
@@ -30,7 +49,7 @@
     </section>
 
     <!-- Phase 3 -->
-    <section class="phase-section" data-phase="3">
+    <section class="phase-section phase-3-section" data-phase="3">
       <div class="phase-visual">
         <img src="@/assets/images/landing/icons/broken-chain.svg" alt="" class="phase-icon" loading="lazy" />
       </div>
@@ -447,6 +466,30 @@ onMounted(() => {
   filter: drop-shadow(0 0 20px rgba(240, 180, 41, 0.3));
 }
 
+/* Phase 1 단어들 애니메이션 */
+.phase-section[data-phase="1"] .word {
+  opacity: 0;
+  animation: word-appear 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.phase-section.visible[data-phase="1"] .word-1 { animation-delay: 2s; }
+.phase-section.visible[data-phase="1"] .word-2 { animation-delay: 1s; }
+.phase-section.visible[data-phase="1"] .word-3 { animation-delay: 0.1s; }
+.phase-section.visible[data-phase="1"] .word-4 { animation-delay: 0.5s; }
+.phase-section.visible[data-phase="1"] .word-5 { animation-delay: 1.6s; }
+.phase-section.visible[data-phase="1"] .word-6 { animation-delay: 2.4s; }
+
+@keyframes word-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .phase-content {
   width: 100%;
   max-width: min(1200px, 90vw);
@@ -498,13 +541,45 @@ onMounted(() => {
   }
 }
 
-/* Hero Phase (Phase 4) */
+
+/* Hero Phase (Phase 4) - 반전 효과 */
 .hero-phase {
   background: radial-gradient(
     circle at center,
     rgba(240, 180, 41, 0.03) 0%,
     transparent 60%
   );
+}
+
+/* Phase 4 등장 효과 (Phase 3 깨진 후) */
+.hero-phase .hero-visual,
+.hero-phase .phase-content {
+  opacity: 0;
+  transform: scale(0.8);
+  filter: blur(15px);
+}
+
+.hero-phase.visible .hero-visual,
+.hero-phase.visible .phase-content {
+  animation: hero-emerge 1s cubic-bezier(0.19, 1, 0.22, 1) 0.3s forwards;
+}
+
+@keyframes hero-emerge {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(15px) brightness(1.8);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+    filter: blur(5px) brightness(1.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0) brightness(1);
+  }
 }
 
 .hero-visual {
