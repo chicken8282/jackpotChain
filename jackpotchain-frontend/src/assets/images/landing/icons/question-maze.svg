@@ -5,8 +5,12 @@
       <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
     </linearGradient>
   </defs>
-  <!-- Simple clean question mark -->
-  <path d="M 32 16 Q 40 16 42 22 Q 44 28 40 32 Q 36 36 32 38 L 32 44"
-        fill="none" stroke="url(#gold-gradient-question)" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="32" cy="50" r="2.5" fill="url(#gold-gradient-question)"/>
+  <!-- 혼란스러운 선들 - 물음표 없이 -->
+  <path d="M 12 16 L 28 16 L 28 24 M 36 12 L 36 28 L 48 28 M 20 32 L 44 32 M 16 40 L 16 52 L 32 52 M 40 36 L 52 36 L 52 48 M 24 44 L 40 44"
+        fill="none" stroke="url(#gold-gradient-question)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <!-- 막힌 경로들 -->
+  <circle cx="28" cy="20" r="2" fill="url(#gold-gradient-question)"/>
+  <circle cx="36" cy="28" r="2" fill="url(#gold-gradient-question)"/>
+  <circle cx="32" cy="52" r="2" fill="url(#gold-gradient-question)"/>
+  <circle cx="52" cy="42" r="2" fill="url(#gold-gradient-question)"/>
 </svg>

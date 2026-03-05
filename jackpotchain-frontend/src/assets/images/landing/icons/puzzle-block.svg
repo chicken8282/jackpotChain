@@ -1,17 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 64">
   <defs>
     <linearGradient id="gold-gradient-puzzle" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#F0B429;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
     </linearGradient>
   </defs>
-  <!-- Simpler scattered fragments -->
-  <rect x="10" y="10" width="12" height="12" rx="2"
-        fill="none" stroke="url(#gold-gradient-puzzle)" stroke-width="2" />
-  <rect x="42" y="12" width="12" height="12" rx="2"
-        fill="none" stroke="url(#gold-gradient-puzzle)" stroke-width="2" />
-  <rect x="14" y="32" width="12" height="12" rx="2"
-        fill="none" stroke="url(#gold-gradient-puzzle)" stroke-width="2" />
-  <rect x="38" y="40" width="12" height="12" rx="2"
-        fill="none" stroke="url(#gold-gradient-puzzle)" stroke-width="2" />
+  <!-- 훨씬 큰 글자로 단어들 분산 -->
+  <!-- 분산원장 (맨 왼쪽) -->
+  <text x="5" y="18" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">분산원장</text>
+  <!-- 해시함수 (왼쪽) -->
+  <text x="25" y="52" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">해시함수</text>
+  <!-- 합의 (중앙 왼쪽) -->
+  <text x="75" y="22" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">합의</text>
+  <!-- P2P (중앙) -->
+  <text x="100" y="56" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">P2P</text>
+  <!-- 탈중앙화 (오른쪽) -->
+  <text x="135" y="26" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">탈중앙화</text>
+  <!-- 채굴 (맨 오른쪽) -->
+  <text x="170" y="48" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500">채굴</text>
 </svg>

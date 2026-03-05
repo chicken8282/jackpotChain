@@ -3,8 +3,7 @@
     <canvas ref="canvasRef" class="particle-canvas"></canvas>
 
     <!-- Background patterns -->
-    <div class="visual-pattern pattern-scattered" v-show="activePattern === 'scattered'"></div>
-    <div class="visual-pattern pattern-connected" v-show="activePattern === 'connected'"></div>
+    <div class="visual-pattern pattern-connected"></div>
 
     <nav class="navbar">
       <div class="logo">
@@ -25,9 +24,6 @@
 
     <!-- Phase 2 -->
     <section class="phase-section" data-phase="2">
-      <div class="phase-visual">
-        <img src="@/assets/images/landing/icons/question-maze.svg" alt="" class="phase-icon" loading="lazy" />
-      </div>
       <div class="phase-content">
         <h1 class="main-text">알 것 같으면서도<br />모르는 이유,</h1>
       </div>
@@ -67,9 +63,6 @@
 
     <!-- Phase 6 -->
     <section class="phase-section" data-phase="6">
-      <div class="phase-visual">
-        <img src="@/assets/images/landing/icons/coin-exchange.svg" alt="" class="phase-icon" loading="lazy" />
-      </div>
       <div class="phase-content">
         <h1 class="main-text">채굴로 얻은 코인으로,<br />거래에 참여하며 지식을 체화합니다.</h1>
       </div>
@@ -444,12 +437,12 @@ onMounted(() => {
 }
 
 .phase-section.visible .phase-visual {
-  opacity: 0.6;
+  opacity: 1;
   transform: translateX(0);
 }
 
 .phase-icon {
-  width: 120px;
+  width: 400px;
   height: 120px;
   filter: drop-shadow(0 0 20px rgba(240, 180, 41, 0.3));
 }
@@ -733,7 +726,7 @@ onMounted(() => {
   }
 
   .phase-icon {
-    width: 80px;
+    width: 280px;
     height: 80px;
   }
 
@@ -767,7 +760,7 @@ onMounted(() => {
 
   /* Tablet icon sizes */
   .phase-icon {
-    width: 100px;
+    width: 350px;
     height: 100px;
   }
 
