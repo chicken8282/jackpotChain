@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="pattern-gold-2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0B429;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+  <!-- Connected network for phases 4-7 -->
+  <!-- Nodes -->
+  <circle cx="80" cy="80" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="200" cy="60" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="320" cy="100" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="100" cy="200" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="240" cy="180" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="140" cy="320" r="6" fill="url(#pattern-gold-2)"/>
+  <circle cx="300" cy="280" r="6" fill="url(#pattern-gold-2)"/>
+  <!-- Connections -->
+  <line x1="80" y1="80" x2="200" y2="60" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="200" y1="60" x2="320" y2="100" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="80" y1="80" x2="100" y2="200" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="200" y1="60" x2="240" y2="180" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="320" y1="100" x2="240" y2="180" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="100" y1="200" x2="140" y2="320" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="240" y1="180" x2="300" y2="280" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+  <line x1="140" y1="320" x2="300" y2="280" stroke="url(#pattern-gold-2)" stroke-width="1" opacity="0.6"/>
+</svg>
