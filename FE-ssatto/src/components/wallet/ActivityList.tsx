@@ -9,7 +9,6 @@ interface ActivityListProps {
 export default function ActivityList({ activities }: ActivityListProps) {
   return (
     <Card
-      eyebrow="활동 내역"
       title={
         <div className="flex items-end justify-between gap-4">
           <h3 className="font-display text-2xl font-bold text-white">활동 기록</h3>
@@ -19,7 +18,7 @@ export default function ActivityList({ activities }: ActivityListProps) {
         </div>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-3 max-h-[400px] hover:overflow-y-auto overflow-y-hidden subtle-scroll pr-2">
         <AnimatePresence initial={false}>
           {activities.map((activity, index) => (
             <motion.div

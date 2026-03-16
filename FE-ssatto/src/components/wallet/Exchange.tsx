@@ -9,18 +9,17 @@ interface ExchangeProps {
 }
 
 export default function Exchange({ jackBalance, onExchange }: ExchangeProps) {
-  const [amount, setAmount] = useState(120);
+  const [amount, setAmount] = useState(100);
   const [done, setDone] = useState(false);
-  const potAmount = Number((amount / 5).toFixed(2));
+  const potAmount = Number((amount / 100).toFixed(2));
 
   return (
     <Card
-      eyebrow="교환"
       title={
         <div className="flex items-end justify-between gap-4">
           <h3 className="font-display text-2xl font-bold text-white">내부 교환</h3>
           <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold uppercase tracking-widest text-text-secondary shadow-sm">
-            비율: 5 JACK = 1 POT
+            비율: 100 JACK = 1 POT
           </span>
         </div>
       }
@@ -34,6 +33,7 @@ export default function Exchange({ jackBalance, onExchange }: ExchangeProps) {
               min={0}
               max={jackBalance}
               value={amount}
+              step={100}
               onChange={(event) => {
                 setAmount(Number(event.target.value));
                 setDone(false);
@@ -44,6 +44,7 @@ export default function Exchange({ jackBalance, onExchange }: ExchangeProps) {
               type="range"
               min={0}
               max={jackBalance}
+              step={100}
               value={amount}
               onChange={(event) => {
                 setAmount(Number(event.target.value));

@@ -15,6 +15,7 @@ export interface WalletStore {
   createWallet: (nickname?: string) => void;
   restoreWallet: (mnemonic: string[]) => void;
   exchangeJackToPot: (jackAmount: number) => void;
+  exchangePotToJack: (potAmount: number) => void;
   commitLotto: (hexNumbers: string[]) => void;
   claimReward: (entryId: string) => void;
 }
@@ -65,21 +66,36 @@ export const useWalletStore = create<WalletStore>((set) => ({
     })),
   exchangeJackToPot: (jackAmount) =>
     set((state) => {
-      if (jackAmount <= 0 || jackAmount > state.jackBalance) {
-        return state;
-      }
-
-      const potAmount = Number((jackAmount / 5).toFixed(2));
-
+      if (jackAmount <= 0 || jackAmount > state.jackBalance) return state;
+      const potAmount = Math.floor(jackAmount / 100);
       return {
-        jackBalance: state.jackBalance - jackAmount,
-        potBalance: Number((state.potBalance + potAmount).toFixed(2)),
+        jackBalance: state.jackBalance - (potAmount * 100),
+        potBalance: state.potBalance + potAmount,
         activities: [
           {
             id: makeId("act"),
             type: "교환",
             description: "JACK를 POT로 전환",
-            amount: `-${jackAmount} JACK / +${potAmount} POT`,
+            amount: `-${potAmount * 100} JACK / +${potAmount} POT`,
+            createdAt: "방금 전",
+          },
+          ...state.activities,
+        ],
+      };
+    }),
+  exchangePotToJack: (potAmount) =>
+    set((state) => {
+      if (potAmount <= 0 || potAmount > state.potBalance) return state;
+      const jackAmount = potAmount * 100;
+      return {
+        jackBalance: state.jackBalance + jackAmount,
+        potBalance: state.potBalance - potAmount,
+        activities: [
+          {
+            id: makeId("act"),
+            type: "교환",
+            description: "POT를 JACK으로 전환",
+            amount: `-${potAmount} POT / +${jackAmount} JACK`,
             createdAt: "방금 전",
           },
           ...state.activities,

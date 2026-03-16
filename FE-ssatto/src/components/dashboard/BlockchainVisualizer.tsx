@@ -95,17 +95,26 @@ export default function BlockchainVisualizer() {
     setSelectedBlock(block);
   };
 
-  const handleWheel: WheelEventHandler<HTMLDivElement> = (event) => {
+  useEffect(() => {
     const rail = railRef.current;
-    if (!rail) {
-      return;
-    }
+    if (!rail) return;
 
-    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-      event.preventDefault();
-      rail.scrollLeft += event.deltaY;
-    }
-  };
+    const handleWheel = (event: WheelEvent) => {
+      // 좌우 이동량이 적고 상하 이동량이 더 많은 경우라도
+      // 이 영역 안에 마우스를 두고 휠을 굴리면 세로 스크롤은 막고 좌우 스크롤로 치환
+      if (event.deltaY !== 0) {
+        event.preventDefault();
+        rail.scrollLeft += event.deltaY;
+      }
+    };
+
+    // passive: false로 등록해야 event.preventDefault() 정상 동작
+    rail.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      rail.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   const handlePointerDown: PointerEventHandler<HTMLDivElement> = (event) => {
     const rail = railRef.current;
@@ -153,40 +162,30 @@ export default function BlockchainVisualizer() {
         <div className="pointer-events-none absolute inset-x-0 top-10 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)]" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-[680px]">
+          <div className="w-full">
             <span className="rounded-full border border-info/20 bg-info/10 px-3 py-1 text-[11px] tracking-[0.2em] text-info font-bold uppercase">
               라이브 네트워크
             </span>
-            <h1 className="mt-4 font-display text-5xl sm:text-6xl font-extrabold leading-none tracking-tight text-white">
-              체인 흐름
+            <h1 className="mt-4 font-display text-[clamp(2rem,4vw,3.6rem)] font-extrabold leading-[1] tracking-[-0.04em] text-white">
+              블록 체인 흐름
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-col rounded-[16px] border border-border bg-surface px-5 py-4 shadow-sm min-w-[140px]">
+          <div className="flex flex-row items-center gap-4">
+            <div className="flex flex-col items-center justify-center rounded-[16px] border border-border bg-surface px-5 py-4 shadow-sm min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1">현재 높이</span>
               <span className="font-display text-2xl font-bold text-text-primary">#{dashboardStats.currentHeight}</span>
             </div>
-            <div className="flex flex-col rounded-[16px] border border-info/30 bg-info/5 px-5 py-4 shadow-[0_4px_24px_rgba(59,130,246,0.1)] min-w-[140px]">
+            <div className="flex flex-col items-center justify-center rounded-[16px] border border-info/30 bg-info/5 px-5 py-4 shadow-[0_4px_24px_rgba(59,130,246,0.1)] min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-info uppercase tracking-widest mb-1">활성 노드</span>
               <span className="font-display text-2xl font-bold text-text-primary">{dashboardStats.activeNodes}</span>
-            </div>
-            <div className="flex flex-col rounded-[16px] border border-accent-gold/30 bg-accent-gold/5 px-5 py-4 shadow-[0_4px_24px_rgba(245,158,11,0.08)] min-w-[140px]">
-              <span className="text-[11px] font-bold text-accent-gold uppercase tracking-widest mb-1">풀 보상</span>
-              <span className="font-display text-2xl font-bold text-accent-gold">
-                +{confirmedBlocks[confirmedBlocks.length - 1]?.jackpotContribution ?? 0}
-              </span>
             </div>
           </div>
         </div>
 
-        <div className="relative mt-9">
-          <div className="pointer-events-none absolute left-1/2 top-4 z-10 h-[374px] w-[1px] -translate-x-1/2 bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.1),transparent)]" />
-          <div className="pointer-events-none absolute left-1/2 top-28 z-10 h-24 w-24 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_70%)] blur-2xl" />
-
+        <div className="relative mt-4">
           <div
             ref={railRef}
-            onWheel={handleWheel}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={endDrag}
@@ -194,7 +193,6 @@ export default function BlockchainVisualizer() {
             onPointerLeave={endDrag}
             className="dashboard-rail relative overflow-x-auto overflow-y-visible px-0 pb-10 pt-20 [cursor:grab] active:[cursor:grabbing]"
           >
-            <div className="absolute inset-x-0 top-[220px] h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)]" />
 
             <div className="flex min-w-max items-center xl:px-[18vw]">
               {confirmedBlocks.map((block, index) => (

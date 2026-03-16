@@ -15,7 +15,7 @@ export default function JackpotPool() {
   return (
     <section
       ref={ref}
-      className="relative mx-auto w-full max-w-[1100px] overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.72),rgba(7,11,21,0.88))] px-5 py-6 sm:px-7 sm:py-7"
+      className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.72),rgba(7,11,21,0.88))] px-5 py-6 sm:px-7 sm:py-7"
     >
       <div className="absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top,rgba(229,160,0,0.12),transparent_68%)]" />
       <div className="mb-4">
@@ -24,12 +24,12 @@ export default function JackpotPool() {
         </h2>
       </div>
 
-      <div className="mt-8 flex flex-col items-center justify-center text-center">
+      <div className="flex flex-col items-center justify-center text-center">
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.96 }}
           animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative h-[180px] w-full max-w-[300px]"
+          className="relative h-[280px] w-full max-w-[300px]"
         >
           <div className="absolute left-1/2 top-0 h-7 w-24 -translate-x-1/2 rounded-b-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(17,24,39,0.68))]" />
           <div className="absolute left-1/2 top-6 h-6 w-2.5 -translate-x-1/2 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))]" />
@@ -45,10 +45,10 @@ export default function JackpotPool() {
                 animate={
                   inView
                     ? {
-                      opacity: [0, 1, 1, 0.82, 0],
-                      y: [-6, 34, 88, 140, 164],
-                      x: [0, 1, -2, 2, 0],
-                      scale: [0.7, 0.9, 0.98, 0.98, 0.96],
+                      opacity: [0, 1, 1, 0],
+                      y: [-6, 60, 160, 240],
+                      x: [0, 1, -2, 0],
+                      scale: [0.7, 0.9, 0.98, 0.96],
                     }
                     : {}
                 }
@@ -67,14 +67,13 @@ export default function JackpotPool() {
           </div>
         </motion.div>
 
-        <div className="mt-8">
-          <p className="font-display text-6xl sm:text-[5.5rem] font-black tracking-[-0.04em] text-white drop-shadow-[0_0_30px_rgba(245,158,11,0.2)]">
-            <AnimatedNumber value={dashboardStats.jackpotPool} delay={0.12} />
-          </p>
-          <p className="mt-2 text-xl font-bold text-accent-gold">JACK</p>
-          <p className="mt-4 text-[11px] tracking-[0.2em] text-text-secondary font-bold uppercase">
-            현재 누적량
-          </p>
+        <div className="mt-4">
+          <div className="flex items-baseline gap-3">
+            <p className="font-display text-5xl sm:text-[4.5rem] font-black tracking-[-0.04em] text-white drop-shadow-[0_0_30px_rgba(245,158,11,0.2)]">
+              <AnimatedNumber value={dashboardStats.jackpotPool} delay={0.12} />
+            </p>
+            <p className="text-2xl font-bold text-accent-gold">JACK</p>
+          </div>
         </div>
       </div>
     </section>

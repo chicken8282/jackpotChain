@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
 const navItems = [
@@ -10,28 +9,9 @@ const navItems = [
 ];
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80);
-
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   return (
-    <header className="fixed inset-x-0 top-0 z-50 px-4 py-4 sm:px-6 lg:px-10">
-      <motion.div
-        animate={{
-          backgroundColor: scrolled ? "rgba(3,7,18,0.92)" : "rgba(3,7,18,0.5)",
-          backdropFilter: scrolled ? "blur(12px)" : "blur(8px)",
-          borderColor: scrolled ? "rgba(255,255,255,0.08)" : "transparent",
-        }}
-        transition={{ duration: 0.25 }}
-        className="tech-panel mx-auto flex max-w-4xl items-center justify-between rounded-[20px] border px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.4)]"
-      >
+    <header className="absolute inset-x-0 top-0 z-50 px-4 py-4 sm:px-6 lg:px-10">
+      <div className="tech-panel mx-auto flex max-w-4xl items-center justify-between rounded-[20px] border border-white/20 bg-[rgba(15,20,35,0.85)] px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-md">
         <div className="relative flex items-center gap-3">
           <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-accent-gold/40 bg-accent-gold/10 font-display text-sm font-bold text-accent-gold shadow-[0_0_12px_rgba(245,158,11,0.2)]">
             JC
@@ -71,7 +51,7 @@ export default function Navbar() {
             </NavLink>
           ))}
         </nav>
-      </motion.div>
+      </div>
     </header>
   );
 }

@@ -41,15 +41,13 @@ function InfoRow({
       </span>
       <div className="flex min-w-0 items-start justify-between gap-2">
         <span
-          className={`min-w-0 truncate text-sm ${
-            monospace ? "font-mono text-[12px]" : "font-medium"
-          } ${
-            accent === "gold"
+          className={`min-w-0 truncate text-sm ${monospace ? "font-mono text-[12px]" : "font-medium"
+            } ${accent === "gold"
               ? "text-accent-gold"
               : accent === "blue"
                 ? "text-info"
                 : "text-text-primary"
-          }`}
+            }`}
           title={fullValue ?? value}
         >
           {value}
@@ -96,13 +94,12 @@ function SummaryMetric({
     <div className="flex items-end justify-between gap-3 border-b border-white/8 py-3 last:border-b-0">
       <span className="text-[11px] tracking-[0.16em] text-text-secondary uppercase">{label}</span>
       <span
-        className={`truncate text-right font-display text-xl font-bold tracking-[-0.04em] ${
-          accent === "gold"
+        className={`truncate text-right font-display text-xl font-bold tracking-[-0.04em] ${accent === "gold"
             ? "text-accent-gold"
             : accent === "blue"
               ? "text-info"
               : "text-text-primary"
-        }`}
+          }`}
       >
         {value}
       </span>
@@ -196,7 +193,7 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
             exit={{ opacity: 0, y: 10, scale: 0.98, filter: "blur(6px)" }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             onClick={(event) => event.stopPropagation()}
-            className="relative flex max-h-[min(88vh,860px)] w-full max-w-[1040px] min-w-0 flex-col overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,rgba(9,16,31,0.9),rgba(5,9,20,0.96))] shadow-[0_36px_110px_rgba(0,0,0,0.46)] backdrop-blur-xl"
+            className="relative flex max-h-[min(88vh,860px)] w-full max-w-[640px] min-w-0 flex-col overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,rgba(9,16,31,0.9),rgba(5,9,20,0.96))] shadow-[0_36px_110px_rgba(0,0,0,0.46)] backdrop-blur-xl"
           >
             <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_60%),radial-gradient(circle_at_20%_0%,rgba(229,160,0,0.12),transparent_40%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.14),transparent_42%)]" />
 
@@ -204,11 +201,10 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`rounded-full border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${
-                      block.status === "confirmed"
+                    className={`rounded-full border px-3 py-1 text-[10px] tracking-[0.16em] uppercase ${block.status === "confirmed"
                         ? "border-accent-gold/24 bg-accent-gold/10 text-accent-gold"
                         : "border-info/24 bg-info/10 text-info"
-                    }`}
+                      }`}
                   >
                     {block.status === "confirmed" ? "확정 블록" : "후보 블록"}
                   </span>
@@ -218,8 +214,9 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
                     </span>
                   ) : null}
                 </div>
-                <h3 className="mt-3 truncate font-display text-[clamp(1.8rem,3vw,2.4rem)] font-bold tracking-[-0.05em]">
+                <h3 className="mt-3 truncate font-display text-[clamp(1.8rem,3vw,2.4rem)] font-bold tracking-[-0.05em] flex items-baseline gap-3">
                   블록 #{block.height}
+                  <span className="text-lg text-text-secondary font-medium tracking-normal whitespace-nowrap overflow-hidden text-ellipsis block min-w-0">by {block.minerLabel}</span>
                 </h3>
                 <p className="mt-2 max-w-[56ch] truncate font-mono text-[12px] text-text-secondary">
                   {shortenMiddle(block.hash, 14, 10)}
@@ -236,15 +233,16 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
               </button>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-5 overflow-hidden px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.95fr)]">
-              <div className="min-w-0 overflow-y-auto pr-1">
+            <div className="grid min-h-0 flex-1 gap-5 overflow-hidden px-5 py-5 sm:px-6">
+              <div className="min-w-0 overflow-y-auto pr-1 subtle-scroll">
                 <div className="grid min-w-0 gap-4">
                   <MetaSection title="기본 정보">
                     <InfoRow label="높이" value={`#${block.height}`} />
                     <InfoRow label="상태" value={block.status === "confirmed" ? "확정" : "후보"} />
-                    <InfoRow label="확인 수" value={`${block.confirmations}회`} accent="gold" />
+                    <InfoRow label="블록 총 보상" value={totalReward} accent="gold" />
                     <InfoRow label="생성 시각" value={block.minedAt} fullValue={block.minedAt} />
                     <InfoRow label="TX 수" value={`${block.txCount}건`} />
+                    <InfoRow label="채굴 소요시간" value={block.miningElapsed} />
                   </MetaSection>
 
                   <MetaSection title="헤더 정보">
@@ -268,71 +266,8 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
                     <InfoRow label="Nonce" value={block.nonce.toLocaleString("ko-KR")} monospace />
                     <InfoRow label="난이도" value={block.difficulty} accent="blue" monospace />
                   </MetaSection>
-
-                  <MetaSection title="채굴 정보">
-                    <InfoRow
-                      label="채굴 주소"
-                      value={shortenMiddle(block.coinbaseAddress, 8, 4)}
-                      fullValue={block.coinbaseAddress}
-                      monospace
-                      onCopy={() => copyValue("coinbaseAddress", block.coinbaseAddress)}
-                      copied={copiedField === "coinbaseAddress"}
-                    />
-                    <InfoRow label="채굴 태그" value={block.minerLabel} fullValue={block.minerLabel} />
-                    <InfoRow label="블록 보상" value={`${block.reward.toLocaleString("ko-KR")} JACK`} accent="gold" />
-                    <InfoRow label="수수료" value={`${block.feeReward.toLocaleString("ko-KR")} JACK`} />
-                    <InfoRow label="총 보상" value={totalReward} accent="gold" />
-                    <InfoRow label="채굴 소요" value={block.miningElapsed} />
-                  </MetaSection>
-
-                  <MetaSection title="네트워크 상태">
-                    <InfoRow
-                      label="블록 해시"
-                      value={shortenMiddle(block.hash, 12, 8)}
-                      fullValue={block.hash}
-                      monospace
-                      onCopy={() => copyValue("hash", block.hash)}
-                      copied={copiedField === "hash"}
-                    />
-                    <InfoRow label="짧은 해시" value={block.id} fullValue={block.id} monospace />
-                    <InfoRow label="체인 위치" value={block.isMainChain ? "메인 체인" : "분기 체인"} />
-                    <InfoRow
-                      label="잭팟 기여"
-                      value={`${block.jackpotContribution.toLocaleString("ko-KR")} JACK`}
-                      accent="blue"
-                    />
-                    <InfoRow label="활성 시점" value={block.minedAt} fullValue={block.minedAt} />
-                  </MetaSection>
                 </div>
               </div>
-
-              <aside className="min-w-0 overflow-y-auto">
-                <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[rgba(255,255,255,0.03)] p-5">
-                  <p className="text-[11px] tracking-[0.18em] text-text-secondary uppercase">블록 요약</p>
-
-                  <div className="mt-4 overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,25,45,0.86),rgba(8,13,24,0.94))] px-4 py-5">
-                    <div className="flex justify-center overflow-hidden">
-                      <BlockPrism block={block} compact active />
-                    </div>
-
-                    <div className="mt-5 min-w-0 border-t border-white/8 pt-2">
-                      <SummaryMetric
-                        label="상태"
-                        value={block.status === "confirmed" ? "확정" : "후보"}
-                        accent={block.status === "confirmed" ? "gold" : "blue"}
-                      />
-                      <SummaryMetric label="총 보상" value={totalReward} accent="gold" />
-                      <SummaryMetric label="TX 수" value={`${block.txCount}건`} />
-                      <SummaryMetric label="확인 수" value={`${block.confirmations}회`} />
-                      <SummaryMetric label="난이도" value={block.difficulty} accent="blue" />
-                      <SummaryMetric
-                        label="Nonce"
-                        value={block.nonce.toLocaleString("ko-KR")}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </aside>
             </div>
           </motion.div>
         </motion.div>

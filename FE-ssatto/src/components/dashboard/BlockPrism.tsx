@@ -48,13 +48,13 @@ export default function BlockPrism({
   const palette = getPalette(block);
   const size = compact
     ? {
-      root: "h-[160px] min-w-[230px] w-full max-w-[260px]",
+      root: "min-h-[170px] min-w-[230px] w-full max-w-[260px]",
       height: "text-[1.8rem]",
       footerValue: "text-[1.1rem]",
       footerLabel: "text-[10px]",
     }
     : {
-      root: "h-[180px] min-w-[260px] w-full max-w-[300px]",
+      root: "min-h-[190px] min-w-[260px] w-full max-w-[300px]",
       height: "text-[2rem]",
       footerValue: "text-[1.2rem]",
       footerLabel: "text-[11px]",
@@ -106,38 +106,25 @@ export default function BlockPrism({
             </div>
           </div>
 
-          <div className="mt-5 min-w-0 overflow-hidden">
-            <p className="text-[10px] font-bold tracking-[0.2em] text-text-secondary uppercase">해시</p>
-            <div className="mt-2 flex min-w-0 items-center gap-2 overflow-hidden">
-              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${palette.orb}`} />
-              <p
-                className="min-w-0 flex-1 truncate whitespace-nowrap font-mono text-[12px] leading-none text-text-primary"
-                title={block.hash}
-              >
-                {getShortHash(block.hash)}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-auto border-t border-white/10 pt-4">
+          <div className="mt-4 border-t border-white/10 pt-4">
             <div className="flex items-end justify-between gap-3 overflow-hidden">
               <div className="min-w-0">
                 <p className={`${size.footerLabel} font-bold tracking-widest text-text-secondary uppercase`}>
-                  보상
+                  생성자
                 </p>
                 <p
-                  className={`mt-1 whitespace-nowrap font-display font-bold leading-none tracking-[-0.04em] ${size.footerValue} ${palette.metric}`}
+                  className={`mt-1 whitespace-nowrap font-bold leading-none tracking-[-0.04em] ${size.footerValue} ${palette.metric}`}
                 >
-                  {block.reward} JACK
+                  {block.minerLabel}
                 </p>
               </div>
 
               <div className="min-w-0 text-right">
                 <p className={`${size.footerLabel} font-bold tracking-widest text-text-secondary uppercase`}>
-                  TX
+                  해시
                 </p>
-                <p className={`mt-1 whitespace-nowrap font-mono font-bold leading-none ${size.footerValue} text-white`}>
-                  {block.txCount}
+                <p className={`mt-1 whitespace-nowrap font-mono font-bold leading-none ${size.footerValue} text-[#F86965]`}>
+                  {block.hash.slice(-6)}
                 </p>
               </div>
             </div>

@@ -1,6 +1,5 @@
 import PageLayout from "../components/layout/PageLayout";
 import BlockchainVisualizer from "../components/dashboard/BlockchainVisualizer";
-import JackpotPool from "../components/dashboard/JackpotPool";
 import BlockHeight from "../components/dashboard/BlockHeight";
 import NodeNetwork from "../components/dashboard/NodeNetwork";
 import { GradientDots } from "../components/common/GradientDots";
@@ -15,7 +14,6 @@ export default function DashboardPage() {
       />
 
       <BlockchainVisualizer />
-      <JackpotPool />
       <section className="grid gap-5 lg:grid-cols-[0.84fr_1.16fr]">
         <BlockHeight />
         <NodeNetwork />

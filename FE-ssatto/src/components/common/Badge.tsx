@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 
 interface BadgeProps extends PropsWithChildren {
   tone?: "gold" | "blue" | "green" | "red";
+  className?: string;
 }
 
 const toneMap = {
@@ -11,10 +12,10 @@ const toneMap = {
   red: "border-danger/30 bg-danger/10 text-danger",
 };
 
-export default function Badge({ children, tone = "gold" }: BadgeProps) {
+export default function Badge({ children, tone = "gold", className = "" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.16em] uppercase ${toneMap[tone]}`}
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.16em] uppercase ${toneMap[tone]} ${className}`}
     >
       {children}
     </span>
