@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..constants import NETWORK_MAGIC
+from ...blockchain.jackpotchain.constants import NETWORK_MAGIC
 
 class MessageType(Enum):
     """메시지 타입"""
