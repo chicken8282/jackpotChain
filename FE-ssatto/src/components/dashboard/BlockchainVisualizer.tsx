@@ -162,7 +162,7 @@ export default function BlockchainVisualizer() {
         <div className="pointer-events-none absolute inset-x-0 top-10 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)]" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="w-full">
+          <div className="w-full pl-[15px]">
             <span className="rounded-full border border-info/20 bg-info/10 px-3 py-1 text-[11px] tracking-[0.2em] text-info font-bold uppercase">
               라이브 네트워크
             </span>

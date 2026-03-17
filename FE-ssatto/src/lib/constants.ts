@@ -32,7 +32,7 @@ export const MEMPOOL_BLOCKS: BlockData[] = [
 export const INITIAL_ENTRIES: LottoEntry[] = [
   {
     id: "entry-001",
-    createdAt: "오늘 13:20",
+    createdAt: "03.16 13:20",
     numbers: ["0A", "1F", "2B", "3D", "44", "5E"],
     jackpotSnapshot: 1241500,
     status: "당첨",
@@ -41,16 +41,16 @@ export const INITIAL_ENTRIES: LottoEntry[] = [
   },
   {
     id: "entry-002",
-    createdAt: "오늘 11:45",
+    createdAt: "03.16 11:45",
     numbers: ["09", "11", "2A", "31", "47", "5B"],
     jackpotSnapshot: 1238800,
-    status: "대기",
+    status: "추첨중",
     reward: 0,
     claimed: false,
   },
   {
     id: "entry-003",
-    createdAt: "어제 21:12",
+    createdAt: "03.15 21:12",
     numbers: ["03", "15", "27", "38", "4A", "5F"],
     jackpotSnapshot: 1231200,
     status: "미당첨",
@@ -63,55 +63,31 @@ export const INITIAL_ACTIVITIES: Activity[] = [
   {
     id: "act-001",
     type: "채굴",
-    description: "블록 #928 채굴 보상 정산",
+    description: "블록 #928 채굴 보상을 받았습니다.",
     amount: "+50 JACK",
-    createdAt: "방금 전",
+    createdAt: "03.16 15:22",
   },
   {
     id: "act-002",
     type: "교환",
-    description: "JACK를 POT로 전환",
+    description: "JACK를 POT로 교환했습니다.",
     amount: "-120 JACK / +24 POT",
-    createdAt: "오늘 14:10",
+    createdAt: "03.16 14:10",
   },
   {
     id: "act-003",
     type: "로또 참여",
-    description: "6개 번호로 회차 참여",
+    description: "6개 조합으로 로또에 참여했습니다.",
     amount: "-30 JACK",
-    createdAt: "오늘 13:20",
+    createdAt: "03.16 13:20",
   },
 ];
 
 export const INITIAL_MINED_BLOCKS: MinedBlock[] = [
-  {
-    id: "mine-928",
-    height: 928,
-    hash: "0x8A2840",
-    reward: 50,
-    createdAt: "오늘 15:22",
-  },
-  {
-    id: "mine-927",
-    height: 927,
-    hash: "0x8A27E9",
-    reward: 50,
-    createdAt: "오늘 12:05",
-  },
-  {
-    id: "mine-922",
-    height: 922,
-    hash: "0x8A22CF",
-    reward: 50,
-    createdAt: "어제 18:44",
-  },
-  {
-    id: "mine-917",
-    height: 917,
-    hash: "0x8A179B",
-    reward: 50,
-    createdAt: "어제 08:21",
-  },
+  { id: "mine-928", height: 928, hash: "0x8A2840", reward: 50, createdAt: "03.16 15:22" },
+  { id: "mine-927", height: 927, hash: "0x8A27E9", reward: 50, createdAt: "03.16 12:05" },
+  { id: "mine-922", height: 922, hash: "0x8A22CF", reward: 50, createdAt: "03.15 18:44" },
+  { id: "mine-917", height: 917, hash: "0x8A179B", reward: 50, createdAt: "03.15 08:21" },
 ];
 
 export const PRIZE_ROWS = [

@@ -50,10 +50,10 @@ export default function NodeNetwork() {
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, delay: 0.1 }}
-      className="relative overflow-hidden rounded-[24px] border border-border bg-surface px-5 sm:px-6 pt-5 pb-5 sm:pt-6 sm:pb-6 shadow-sm h-full flex flex-col justify-between"
+      className="relative flex h-full min-h-[280px] flex-col overflow-hidden rounded-[24px] border border-border bg-surface px-5 pb-4 pt-4 shadow-sm sm:px-6 sm:pb-5 sm:pt-5"
     >
       <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.1),transparent_70%)]" />
-      <div className="relative">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-4">
           <h3 className="font-display text-2xl font-bold text-white">노드 네트워크</h3>
           <span className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[11px] uppercase tracking-wider font-bold text-info">
@@ -61,8 +61,9 @@ export default function NodeNetwork() {
           </span>
         </div>
 
-        <div className="mt-4 flex-1 rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-2 py-2 lg:px-5 lg:py-5 flex items-center justify-center">
-          <svg viewBox="0 0 420 340" className="h-[220px] w-full">
+        <div className="mt-3 flex flex-1 items-stretch justify-center rounded-[24px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-2 py-2 lg:px-3 lg:py-3">
+          <div className="flex h-full min-h-[92px] w-full items-center justify-center">
+            <svg viewBox="0 0 420 340" className="h-full min-h-[92px] w-full">
             <defs>
               <linearGradient id="node-line" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="rgba(59,130,246,0.08)" />
@@ -158,7 +159,8 @@ export default function NodeNetwork() {
                 </motion.g>
               );
             })}
-          </svg>
+            </svg>
+          </div>
         </div>
       </div>
     </motion.section>

@@ -10,7 +10,7 @@ export interface LottoEntry {
   createdAt: string;
   numbers: string[];
   jackpotSnapshot: number;
-  status: "대기" | "당첨" | "미당첨";
+  status: "추첨중" | "당첨" | "미당첨";
   reward: number;
   claimed: boolean;
 }
