@@ -13,10 +13,6 @@ function getStatusLabel(block: DashboardBlockDetail) {
   return block.status === "confirmed" ? "확정" : "후보";
 }
 
-function getHashSuffix(hash: string) {
-  return hash.replace(/^0x/i, "").slice(-2).toUpperCase().padStart(2, "0");
-}
-
 function getPalette(block: DashboardBlockDetail) {
   if (block.status === "confirmed") {
     return {
@@ -124,7 +120,7 @@ export default function BlockPrism({
                   해시
                 </p>
                 <p className={`mt-1 whitespace-nowrap font-mono font-bold leading-none ${size.footerValue} text-[#F86965]`}>
-                  {getHashSuffix(block.hash)}
+                  {block.hash.slice(-6)}
                 </p>
               </div>
             </div>

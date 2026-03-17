@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Card from "../common/Card";
-import GoldButton from "../common/GoldButton";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
 
 interface WalletCreateProps {
@@ -37,6 +36,8 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
   const [generatedPrivateKey, setGeneratedPrivateKey] = useState(makePrivateKey());
 
   const theme = getWalletTheme(selectedColor);
+  const createActionButtonClassName =
+    "inline-flex h-11 w-fit shrink-0 items-center justify-center rounded-[16px] border border-[#DEA03C]/70 bg-white/5 px-5 text-sm font-bold text-[#DEA03C] transition hover:border-[#DEA03C] hover:bg-[#DEA03C]/10";
 
   useEffect(() => {
     if (open === "create") {
@@ -114,77 +115,81 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                      Nickname
-                    </label>
-                    <input
-                      type="text"
-                      value={nickname}
-                      onChange={(event) => setNickname(event.target.value)}
-                      placeholder="지갑 이름을 입력하세요"
-                      className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
-                    />
+                <div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                        Nickname
+                      </label>
+                      <input
+                        type="text"
+                        value={nickname}
+                        onChange={(event) => setNickname(event.target.value)}
+                        placeholder="지갑 이름을 입력하세요"
+                        className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                      />
+                    </div>
+
+                    {open === "create" ? (
+                      <>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            Wallet Address
+                          </label>
+                          <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                            {generatedAddress}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            Private Key
+                          </label>
+                          <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                            {generatedPrivateKey}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            Wallet Address
+                          </label>
+                          <input
+                            type="text"
+                            value={restoreAddress}
+                            onChange={(event) => setRestoreAddress(event.target.value)}
+                            placeholder="0x..."
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            Private Key
+                          </label>
+                          <input
+                            type="text"
+                            value={restorePrivateKey}
+                            onChange={(event) => setRestorePrivateKey(event.target.value)}
+                            placeholder="0x..."
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  {open === "create" ? (
-                    <>
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Wallet Address
-                        </label>
-                        <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
-                          {generatedAddress}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Private Key
-                        </label>
-                        <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
-                          {generatedPrivateKey}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Wallet Address
-                        </label>
-                        <input
-                          type="text"
-                          value={restoreAddress}
-                          onChange={(event) => setRestoreAddress(event.target.value)}
-                          placeholder="0x..."
-                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Private Key
-                        </label>
-                        <input
-                          type="text"
-                          value={restorePrivateKey}
-                          onChange={(event) => setRestorePrivateKey(event.target.value)}
-                          placeholder="0x..."
-                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <GoldButton
-                    type="button"
-                    onClick={open === "create" ? handleCreate : handleRestore}
-                    className="h-11 w-full rounded-[16px] py-0 text-sm"
-                  >
-                    {open === "create" ? "지갑 생성 완료" : "지갑 등록 완료"}
-                  </GoldButton>
+                  <div className="flex justify-center pt-8">
+                    <button
+                      type="button"
+                      onClick={open === "create" ? handleCreate : handleRestore}
+                      className={createActionButtonClassName}
+                    >
+                      {open === "create" ? "지갑 생성 완료" : "지갑 등록 완료"}
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </motion.div>
@@ -203,7 +208,7 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
         >
           <div className="flex flex-col justify-center gap-6">
             <div>
-              <h2 className="font-display text-3xl font-extrabold leading-[1] tracking-[-0.04em] text-white">
+              <h2 className="font-display text-[2.8rem] font-extrabold leading-[0.98] tracking-[-0.04em] text-white">
                 지갑 생성
               </h2>
               <p className="mt-2 text-sm text-text-secondary">
@@ -212,7 +217,7 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="mt-[10px] flex items-center gap-3">
               {WALLET_THEME_OPTIONS.map((option) => (
                 <button
                   key={option.id}
@@ -228,18 +233,18 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
               ))}
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <GoldButton
+            <div className="flex flex-col gap-3 pt-[90px] sm:flex-row sm:items-center">
+              <button
                 type="button"
                 onClick={() => setOpen("create")}
-                className="h-11 flex-1 rounded-[16px] py-0 text-sm"
+                className={createActionButtonClassName}
               >
                 지갑 생성하기
-              </GoldButton>
+              </button>
               <button
                 type="button"
                 onClick={() => setOpen("restore")}
-                className="h-11 min-w-[220px] rounded-[16px] border border-white/15 bg-white/5 px-7 text-sm font-bold text-white transition hover:border-white/30 hover:bg-white/10"
+                className="inline-flex h-11 w-fit shrink-0 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-5 text-sm font-bold text-white transition hover:border-white/30 hover:bg-white/10"
               >
                 기존 지갑 등록하기
               </button>
@@ -253,31 +258,18 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
             <div className={`pointer-events-none absolute inset-x-0 top-0 h-36 rounded-t-[30px] ${theme.glowClassName}`} />
 
             <motion.div
-              animate={{ y: [0, -4, 0] }}
-              transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
-              className={`absolute right-4 bottom-5 top-5 w-[86%] rounded-[24px] border ${theme.borderClassName} bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(5,10,20,0.92))] shadow-lg`}
-              style={{ zIndex: 1 }}
-            >
-              <div className="p-6 text-right">
-                <p className={`text-base font-bold ${theme.accentClassName}`}>POT 카드</p>
-                <p className="mt-10 font-display text-4xl font-extrabold text-white">184 POT</p>
-              </div>
-            </motion.div>
-
-            <motion.div
               animate={{ y: [0, 6, 0] }}
               transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-              className={`absolute left-4 bottom-5 top-5 w-[86%] rounded-[24px] border-2 ${theme.borderClassName} ${theme.shellClassName} shadow-[0_20px_48px_rgba(0,0,0,0.38)] backdrop-blur-sm`}
+              className={`absolute bottom-5 left-5 right-5 top-5 rounded-[24px] border-2 ${theme.borderClassName} ${theme.shellClassName} shadow-[0_20px_48px_rgba(0,0,0,0.38)] backdrop-blur-sm`}
               style={{ zIndex: 2 }}
             >
               <div className={`absolute inset-x-4 top-4 h-12 rounded-[18px] bg-gradient-to-r ${theme.highlightClassName}`} />
-              <div className="relative p-6">
-                <p className={`text-base font-bold ${theme.accentClassName}`}>JACK 카드</p>
-                <p className="mt-10 font-display text-5xl font-black text-white drop-shadow-md">
-                  10,250 JACK
+              <div className="relative h-full px-6 pb-6 pt-6">
+                <p className={`translate-x-[10px] translate-y-[5px] text-base font-bold ${theme.accentClassName}`}>
+                  JACK 코인
                 </p>
-                <p className="mt-5 break-all font-mono text-xs text-text-secondary">
-                  생성 예정 주소: {generatedAddress}
+                <p className="absolute bottom-5 left-6 font-display text-5xl font-black text-white drop-shadow-md">
+                  10,250 JACK
                 </p>
               </div>
             </motion.div>

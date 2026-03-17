@@ -87,41 +87,45 @@ export default function MinedBlocks({ blocks }: MinedBlocksProps) {
           ) : (
             <div className="flex min-w-max items-center gap-4">
               {blocks.map((block, index) => (
-                <div key={block.id} className="flex items-center gap-4">
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0, x: 40 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    onClick={() => setSelectedBlock(toBlockDetail(block))}
-                    className="w-[300px] cursor-pointer rounded-[24px] border border-border bg-surface px-6 py-6 text-left shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-colors hover:border-accent-gold/40"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary">블록 높이</p>
+                <motion.button
+                  key={block.id}
+                  type="button"
+                  initial={{ opacity: 0, x: 40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  onClick={() => setSelectedBlock(toBlockDetail(block))}
+                  className="h-44 w-[17rem] cursor-pointer rounded-[24px] border border-border bg-surface px-4 py-3 text-left shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-colors hover:border-accent-gold/40"
+                >
+                  <div className="flex h-full flex-col justify-between">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-tertiary">블록 높이</p>
+                        <p className="mt-2 font-display text-[1.7rem] font-black leading-none tracking-[-0.05em] text-white">
+                          #{block.height}
+                        </p>
+                      </div>
                       <p className="font-mono text-sm font-medium text-text-secondary">{block.createdAt}</p>
                     </div>
-                    <p className="mt-2 font-display text-4xl font-extrabold text-white">#{block.height}</p>
-                    <p className="mt-3 truncate font-mono text-[11px] font-medium tracking-wide text-text-tertiary">
-                      {block.hash}
-                    </p>
-                    <div className="mt-6 flex items-end justify-between rounded-[16px] border border-accent-gold/30 bg-accent-gold/10 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_15px_rgba(245,158,11,0.1)]">
+
+                    <div>
+                      <p className="truncate font-mono text-[11px] font-medium tracking-wide text-text-tertiary">
+                        {block.hash}
+                      </p>
+                    </div>
+
+                    <div className="flex items-end justify-between rounded-[16px] border border-accent-gold/30 bg-accent-gold/10 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_15px_rgba(245,158,11,0.1)]">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-accent-gold/80">보상</p>
-                        <p className="mt-1 font-display text-3xl font-extrabold text-accent-gold drop-shadow-sm">
-                          <AnimatedNumber value={block.reward} suffix="JACK" delay={0.2 + index * 0.08} />
+                        <p className="mt-1 font-display text-[1.4rem] font-extrabold leading-none text-accent-gold drop-shadow-sm">
+                          <AnimatedNumber value={block.reward} suffix=" JACK" delay={0.2 + index * 0.08} />
                         </p>
                       </div>
                       <span className="rounded-md border border-accent-gold/20 bg-accent-gold/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-accent-gold">
                         상세 보기
                       </span>
                     </div>
-                  </motion.button>
-                  {index < blocks.length - 1 ? (
-                    <div className="flex w-20 shrink-0 items-center justify-center">
-                      <div className="h-2 w-full rounded-full bg-[linear-gradient(90deg,rgba(59,130,246,0.2),rgba(229,160,0,0.8),rgba(59,130,246,0.2))]" />
-                    </div>
-                  ) : null}
-                </div>
+                  </div>
+                </motion.button>
               ))}
             </div>
           )}

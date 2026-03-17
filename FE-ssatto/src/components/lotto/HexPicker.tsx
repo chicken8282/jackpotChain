@@ -1,10 +1,11 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
+import InteractiveHoverButton from "../common/InteractiveHoverButton";
 import { useWalletStore } from "../../stores/useWalletStore";
 import type { LottoEntry as StoreLottoEntry } from "../../types";
 
@@ -103,6 +104,13 @@ function getNeighborValue(hex: string, delta: number) {
   let value = Number.parseInt(hex, 16);
   value = (value + delta + 256) % 256;
   return value.toString(16).toUpperCase().padStart(2, "0");
+}
+
+function generateRandomHex() {
+  return Math.floor(Math.random() * 256)
+    .toString(16)
+    .toUpperCase()
+    .padStart(2, "0");
 }
 
 function HistoryModal({
@@ -236,9 +244,10 @@ function SuccessModal({ open }: { open: boolean }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[28px] border border-accent-gold/25 bg-[linear-gradient(180deg,rgba(11,18,30,0.98),rgba(7,11,20,0.98))] px-6 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-        <p className="text-lg font-bold text-white">
-          로또 추첨이 등록되었습니다. 로또 결과 확인까지 약 10분이 소요됩니다.
+      <div className="w-full max-w-md rounded-[28px] border border-white/25 bg-white/[0.14] px-6 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.56)] backdrop-blur-md">
+        <p className="text-lg font-bold text-white">로또추첨이되었슴니다.</p>
+        <p className="mt-1 text-base font-bold text-white">
+          로또 결과 확인까지 약 <span className="text-accent-gold">10분</span>이 소요됩니다.
         </p>
       </div>
     </div>,
@@ -263,6 +272,44 @@ export default function HexPicker({
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
+  const randomizeSpinIntervalRef = useRef<number | null>(null);
+  const randomizeRevealIntervalRef = useRef<number | null>(null);
+  const randomizeFinalValuesRef = useRef<string[]>(selected);
+  const lockedSlotCountRef = useRef(selected.length);
+  const pulseTimeoutRef = useRef<number | null>(null);
+
+  const clearPulseTimeout = () => {
+    if (pulseTimeoutRef.current !== null) {
+      window.clearTimeout(pulseTimeoutRef.current);
+      pulseTimeoutRef.current = null;
+    }
+  };
+
+  const triggerSlotPulse = (index: number) => {
+    clearPulseTimeout();
+    setSlotPulse(index);
+    pulseTimeoutRef.current = window.setTimeout(() => {
+      setSlotPulse(null);
+      pulseTimeoutRef.current = null;
+    }, 300);
+  };
+
+  const clearRandomizeTimers = () => {
+    if (randomizeSpinIntervalRef.current !== null) {
+      window.clearInterval(randomizeSpinIntervalRef.current);
+      randomizeSpinIntervalRef.current = null;
+    }
+
+    if (randomizeRevealIntervalRef.current !== null) {
+      window.clearInterval(randomizeRevealIntervalRef.current);
+      randomizeRevealIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    lockedSlotCountRef.current = lockedSlotCount;
+  }, [lockedSlotCount]);
 
   useEffect(() => {
     if (!showSuccessModal) {
@@ -276,6 +323,14 @@ export default function HexPicker({
 
     return () => window.clearTimeout(timeout);
   }, [showSuccessModal]);
+
+  useEffect(
+    () => () => {
+      clearRandomizeTimers();
+      clearPulseTimeout();
+    },
+    [],
+  );
 
   const mergedHistory = useMemo(() => {
     const storeHistory: HistoryEntry[] =
@@ -307,20 +362,41 @@ export default function HexPicker({
   }, [entries]);
 
   const handleRandomize = () => {
+    if (randomizing) {
+      return;
+    }
+
+    clearRandomizeTimers();
+    clearPulseTimeout();
+
+    const finalValues = selected.map(() => generateRandomHex());
+    randomizeFinalValuesRef.current = finalValues;
+    lockedSlotCountRef.current = 0;
+    setLockedSlotCount(0);
+    setSlotPulse(null);
     setRandomizing(true);
-    let count = 0;
 
-    const interval = window.setInterval(() => {
+    randomizeSpinIntervalRef.current = window.setInterval(() => {
       setSelected((current) =>
-        current.map(() => Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, "0")),
+        current.map((value, index) => (index < lockedSlotCountRef.current ? randomizeFinalValuesRef.current[index] : generateRandomHex())),
       );
-      count += 1;
+    }, 80);
 
-      if (count > 12) {
-        window.clearInterval(interval);
+    randomizeRevealIntervalRef.current = window.setInterval(() => {
+      const nextLockedCount = lockedSlotCountRef.current + 1;
+      lockedSlotCountRef.current = nextLockedCount;
+      setLockedSlotCount(nextLockedCount);
+      setSelected((current) =>
+        current.map((value, index) => (index < nextLockedCount ? randomizeFinalValuesRef.current[index] : value)),
+      );
+      triggerSlotPulse(nextLockedCount - 1);
+
+      if (nextLockedCount >= finalValues.length) {
+        clearRandomizeTimers();
+        setSelected(finalValues);
         setRandomizing(false);
       }
-    }, 80);
+    }, 500);
   };
 
   const showNotice = (message: string) => {
@@ -339,6 +415,10 @@ export default function HexPicker({
   };
 
   const cycleSlot = (index: number, delta: number) => {
+    if (randomizing) {
+      return;
+    }
+
     setSelected((current) => {
       const next = [...current];
       let value = Number.parseInt(next[index], 16);
@@ -346,8 +426,7 @@ export default function HexPicker({
       next[index] = value.toString(16).toUpperCase().padStart(2, "0");
       return next;
     });
-    setSlotPulse(index);
-    window.setTimeout(() => setSlotPulse(null), 300);
+    triggerSlotPulse(index);
   };
 
   const handleParticipate = () => {
@@ -371,9 +450,7 @@ export default function HexPicker({
         title={
           <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <h2
-              className={`font-display text-3xl font-bold leading-[1] tracking-[-0.04em] ${
-                tab === "draw" ? "ml-3 text-[#DEA03C] lg:ml-7" : "text-white"
-              }`}
+              className="ml-3 font-display text-3xl font-bold leading-[1] tracking-[-0.04em] text-white lg:ml-7"
             >
               {tab === "draw" ? "로또 추첨 참여" : "참여 내역"}
             </h2>
@@ -445,14 +522,13 @@ export default function HexPicker({
                 </div>
 
                 <div className="absolute right-[18px] top-1/2 hidden -translate-y-1/2 xl:block">
-                  <button
+                  <InteractiveHoverButton
                     type="button"
                     onClick={handleParticipate}
                     disabled={disabled || randomizing}
-                    className="h-11 rounded-[14px] border-2 border-[#DEA03C] bg-[linear-gradient(135deg,rgba(222,160,60,0.22),rgba(5,10,20,0.95))] px-8 text-sm font-bold text-white shadow-[0_4px_20px_rgba(222,160,60,0.2)] transition hover:bg-[#DEA03C]/25 active:scale-95 disabled:opacity-50"
-                  >
-                    로또 추첨 참여하기
-                  </button>
+                    text="로또 추첨"
+                    hoverText="참여하기"
+                  />
                 </div>
               </div>
 
@@ -481,7 +557,7 @@ export default function HexPicker({
 
                             <motion.div
                               animate={
-                                randomizing
+                                randomizing && index >= lockedSlotCount
                                   ? { y: [0, -10, 10, -5, 0] }
                                   : slotPulse === index
                                     ? { scale: [1, 1.04, 1] }

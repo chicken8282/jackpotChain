@@ -1,4 +1,4 @@
-import type { PointerEventHandler, WheelEventHandler } from "react";
+import type { PointerEventHandler } from "react";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import BlockDetailModal from "./BlockDetailModal";
@@ -68,9 +68,76 @@ export default function BlockchainVisualizer() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<DashboardBlockDetail | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const centerRef = useRef<HTMLDivElement | null>(null);
-  const dragState = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
+  const dragState = useRef({
+    active: false,
+    startX: 0,
+    startLeft: 0,
+    moved: false,
+    lastX: 0,
+    lastTime: 0,
+    velocity: 0,
+  });
   const suppressClickUntil = useRef(0);
+  const motionState = useRef({
+    velocity: 0,
+    bounce: 0,
+    frame: 0 as number | null,
+  });
+
+  const setBounceOffset = (value: number) => {
+    if (!contentRef.current) {
+      return;
+    }
+
+    contentRef.current.style.transform = value === 0 ? "" : `translateX(${value}px)`;
+  };
+
+  const stopMotion = () => {
+    const { frame } = motionState.current;
+    if (frame !== null) {
+      window.cancelAnimationFrame(frame);
+    }
+    motionState.current.frame = null;
+    motionState.current.velocity = 0;
+    motionState.current.bounce = 0;
+    setBounceOffset(0);
+  };
+
+  const runMomentumFrame = () => {
+    const rail = railRef.current;
+    if (!rail) {
+      stopMotion();
+      return;
+    }
+
+    const maxScroll = Math.max(rail.scrollWidth - rail.clientWidth, 0);
+    const nextLeft = rail.scrollLeft + motionState.current.velocity;
+    const clampedLeft = Math.min(Math.max(nextLeft, 0), maxScroll);
+    const overshoot = clampedLeft - nextLeft;
+    const bounceTarget = Math.max(-42, Math.min(42, overshoot * 0.34));
+
+    rail.scrollLeft = clampedLeft;
+    motionState.current.bounce += (bounceTarget - motionState.current.bounce) * (overshoot !== 0 ? 0.24 : 0.18);
+    setBounceOffset(motionState.current.bounce);
+    motionState.current.velocity *= overshoot !== 0 ? 0.55 : 0.92;
+
+    if (Math.abs(motionState.current.velocity) < 0.18 && Math.abs(motionState.current.bounce) < 0.3) {
+      stopMotion();
+      return;
+    }
+
+    motionState.current.frame = window.requestAnimationFrame(runMomentumFrame);
+  };
+
+  const startMotion = () => {
+    if (motionState.current.frame !== null) {
+      return;
+    }
+
+    motionState.current.frame = window.requestAnimationFrame(runMomentumFrame);
+  };
 
   useEffect(() => {
     const rail = railRef.current;
@@ -87,6 +154,8 @@ export default function BlockchainVisualizer() {
     rail.scrollTo({ left: Math.max(targetLeft, 0) });
   }, []);
 
+  useEffect(() => () => stopMotion(), []);
+
   const handleSelect = (block: DashboardBlockDetail) => {
     if (Date.now() < suppressClickUntil.current) {
       return;
@@ -102,9 +171,11 @@ export default function BlockchainVisualizer() {
     const handleWheel = (event: WheelEvent) => {
       // 좌우 이동량이 적고 상하 이동량이 더 많은 경우라도
       // 이 영역 안에 마우스를 두고 휠을 굴리면 세로 스크롤은 막고 좌우 스크롤로 치환
-      if (event.deltaY !== 0) {
+      if (event.deltaY !== 0 || event.deltaX !== 0) {
         event.preventDefault();
-        rail.scrollLeft += event.deltaY;
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        motionState.current.velocity += delta * 0.16;
+        startMotion();
       }
     };
 
@@ -112,6 +183,7 @@ export default function BlockchainVisualizer() {
     rail.addEventListener("wheel", handleWheel, { passive: false });
 
     return () => {
+      stopMotion();
       rail.removeEventListener("wheel", handleWheel);
     };
   }, []);
@@ -126,11 +198,15 @@ export default function BlockchainVisualizer() {
       return;
     }
 
+    stopMotion();
     dragState.current = {
       active: true,
       startX: event.clientX,
       startLeft: rail.scrollLeft,
       moved: false,
+      lastX: event.clientX,
+      lastTime: performance.now(),
+      velocity: 0,
     };
     rail.setPointerCapture(event.pointerId);
   };
@@ -145,12 +221,37 @@ export default function BlockchainVisualizer() {
     if (Math.abs(delta) > 6) {
       dragState.current.moved = true;
     }
-    rail.scrollLeft = dragState.current.startLeft - delta;
+
+    const rawScrollLeft = dragState.current.startLeft - delta;
+    const maxScroll = Math.max(rail.scrollWidth - rail.clientWidth, 0);
+    const clampedScrollLeft = Math.min(Math.max(rawScrollLeft, 0), maxScroll);
+    const overshoot = clampedScrollLeft - rawScrollLeft;
+
+    rail.scrollLeft = clampedScrollLeft;
+    motionState.current.bounce += (Math.max(-44, Math.min(44, overshoot * 0.4)) - motionState.current.bounce) * 0.3;
+    setBounceOffset(motionState.current.bounce);
+
+    const now = performance.now();
+    const elapsed = Math.max(now - dragState.current.lastTime, 16);
+    dragState.current.velocity = ((dragState.current.lastX - event.clientX) / elapsed) * 16;
+    dragState.current.lastX = event.clientX;
+    dragState.current.lastTime = now;
   };
 
   const endDrag = () => {
     if (dragState.current.moved) {
       suppressClickUntil.current = Date.now() + 140;
+    }
+    if (!dragState.current.active) {
+      return;
+    }
+
+    motionState.current.velocity += dragState.current.velocity * 0.9;
+    if (
+      motionState.current.frame === null &&
+      (Math.abs(motionState.current.velocity) >= 0.2 || Math.abs(motionState.current.bounce) >= 0.2)
+    ) {
+      startMotion();
     }
     dragState.current.active = false;
   };
@@ -162,7 +263,7 @@ export default function BlockchainVisualizer() {
         <div className="pointer-events-none absolute inset-x-0 top-10 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)]" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="w-full pl-[15px]">
+          <div className="w-full">
             <span className="rounded-full border border-info/20 bg-info/10 px-3 py-1 text-[11px] tracking-[0.2em] text-info font-bold uppercase">
               라이브 네트워크
             </span>
@@ -183,7 +284,7 @@ export default function BlockchainVisualizer() {
           </div>
         </div>
 
-        <div className="relative mt-4">
+        <div className="relative mt-4 xl:-mx-[100px] xl:px-[100px]">
           <div
             ref={railRef}
             onPointerDown={handlePointerDown}
@@ -194,7 +295,7 @@ export default function BlockchainVisualizer() {
             className="dashboard-rail relative overflow-x-auto overflow-y-visible px-0 pb-10 pt-20 [cursor:grab] active:[cursor:grabbing]"
           >
 
-            <div className="flex min-w-max items-center xl:px-[18vw]">
+            <div ref={contentRef} className="flex min-w-max items-center will-change-transform xl:px-[18vw]">
               {confirmedBlocks.map((block, index) => (
                 <div key={block.id} className="group flex items-center">
                   <DashboardBlock

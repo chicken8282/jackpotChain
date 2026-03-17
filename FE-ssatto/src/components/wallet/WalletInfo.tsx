@@ -123,10 +123,10 @@ export default function WalletInfo({
     if (diff < -total / 2) diff += total;
 
     if (diff === 0) return { x: 0, scale: 1, opacity: 1, zIndex: 10, rotateY: 0 };
-    if (diff === -1) return { x: -460, scale: 0.84, opacity: 0.45, zIndex: 6, rotateY: 12 };
-    if (diff === 1) return { x: 460, scale: 0.84, opacity: 0.45, zIndex: 6, rotateY: -12 };
-    if (diff <= -2) return { x: -680, scale: 0.7, opacity: 0.15, zIndex: 3, rotateY: 20 };
-    return { x: 680, scale: 0.7, opacity: 0.15, zIndex: 3, rotateY: -20 };
+    if (diff === -1) return { x: -460, scale: 0.84, opacity: 0.2, zIndex: 6, rotateY: 12 };
+    if (diff === 1) return { x: 460, scale: 0.84, opacity: 0.2, zIndex: 6, rotateY: -12 };
+    if (diff <= -2) return { x: -680, scale: 0.7, opacity: 0.05, zIndex: 3, rotateY: 20 };
+    return { x: 680, scale: 0.7, opacity: 0.05, zIndex: 3, rotateY: -20 };
   };
 
   const isVisible = (index: number) => {
@@ -223,6 +223,7 @@ export default function WalletInfo({
                     : "0 12px 36px rgba(0,0,0,0.3)",
                 }}
               >
+                <div className="pointer-events-none absolute inset-0 bg-[rgba(8,12,22,0.28)]" />
                 <div className={`pointer-events-none absolute inset-x-0 top-0 h-36 ${theme.glowClassName}`} />
 
                 <div className="relative mb-6 border-b border-white/6 pb-5">
@@ -240,11 +241,13 @@ export default function WalletInfo({
                 </div>
 
                 <div className="relative flex flex-col items-center gap-6 sm:flex-row">
-                  <div className="flex flex-1 flex-col items-center rounded-[22px] border border-orange-400/30 bg-[linear-gradient(135deg,rgba(251,146,60,0.12),rgba(20,10,5,0.7))] px-5 py-5 text-center shadow-[0_8px_32px_rgba(251,146,60,0.1)]">
-                    <p className="text-xs font-bold uppercase tracking-widest text-orange-400">JACK 코인</p>
+                  <div
+                    className={`flex flex-1 flex-col items-center rounded-[22px] border px-5 py-5 text-center ${theme.coinPanelBorderClassName} ${theme.coinPanelShellClassName}`}
+                  >
+                    <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>JACK 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
                       <AnimatedNumber key={`jack-${activeIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
-                      <span className="text-base font-bold text-orange-300">JACK</span>
+                      <span className={`text-base font-bold ${theme.accentClassName}`}>JACK</span>
                     </div>
                   </div>
 
@@ -265,11 +268,13 @@ export default function WalletInfo({
                     </div>
                   </div>
 
-                  <div className="flex flex-1 flex-col items-center rounded-[22px] border border-info/30 bg-[linear-gradient(135deg,rgba(59,130,246,0.12),rgba(10,15,30,0.7))] px-5 py-5 text-center shadow-[0_8px_32px_rgba(59,130,246,0.1)]">
-                    <p className="text-xs font-bold uppercase tracking-widest text-info">POT 코인</p>
+                  <div
+                    className={`flex flex-1 flex-col items-center rounded-[22px] border px-5 py-5 text-center ${theme.coinPanelBorderClassName} ${theme.coinPanelShellClassName}`}
+                  >
+                    <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>POT 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
                       <AnimatedNumber key={`pot-${activeIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
-                      <span className="text-base font-bold text-sky-300">POT</span>
+                      <span className={`text-base font-bold ${theme.accentClassName}`}>POT</span>
                     </div>
                   </div>
                 </div>

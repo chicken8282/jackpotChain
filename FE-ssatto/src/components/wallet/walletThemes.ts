@@ -7,10 +7,13 @@ export const WALLET_THEME_OPTIONS = [
     accentClassName: "text-slate-200",
     chipClassName: "border-slate-300/30 bg-slate-200/10 text-slate-100",
     shellClassName:
-      "bg-[linear-gradient(145deg,rgba(148,163,184,0.16),rgba(12,18,32,0.98)_62%)]",
+      "bg-[linear-gradient(145deg,rgba(148,163,184,0.36),rgba(10,14,24,1)_62%)]",
     glowClassName:
       "bg-[radial-gradient(circle_at_top,rgba(226,232,240,0.22),transparent_64%)]",
     highlightClassName: "from-slate-100/18 via-slate-100/8 to-transparent",
+    coinPanelBorderClassName: "border-slate-300/30",
+    coinPanelShellClassName:
+      "bg-[linear-gradient(135deg,rgba(226,232,240,0.22),rgba(16,20,30,0.94))] shadow-[0_8px_32px_rgba(148,163,184,0.12)]",
   },
   {
     id: "yellow",
@@ -20,10 +23,13 @@ export const WALLET_THEME_OPTIONS = [
     accentClassName: "text-amber-200",
     chipClassName: "border-amber-300/30 bg-amber-300/10 text-amber-100",
     shellClassName:
-      "bg-[linear-gradient(145deg,rgba(251,191,36,0.16),rgba(18,12,3,0.98)_62%)]",
+      "bg-[linear-gradient(145deg,rgba(251,191,36,0.36),rgba(18,12,3,1)_62%)]",
     glowClassName:
       "bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.24),transparent_66%)]",
     highlightClassName: "from-amber-100/20 via-amber-200/8 to-transparent",
+    coinPanelBorderClassName: "border-amber-300/30",
+    coinPanelShellClassName:
+      "bg-[linear-gradient(135deg,rgba(251,191,36,0.22),rgba(24,18,6,0.94))] shadow-[0_8px_32px_rgba(251,191,36,0.12)]",
   },
   {
     id: "blue",
@@ -33,10 +39,13 @@ export const WALLET_THEME_OPTIONS = [
     accentClassName: "text-sky-200",
     chipClassName: "border-sky-300/30 bg-sky-300/10 text-sky-100",
     shellClassName:
-      "bg-[linear-gradient(145deg,rgba(56,189,248,0.16),rgba(6,18,34,0.98)_62%)]",
+      "bg-[linear-gradient(145deg,rgba(56,189,248,0.36),rgba(6,18,34,1)_62%)]",
     glowClassName:
       "bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.22),transparent_66%)]",
     highlightClassName: "from-sky-100/20 via-sky-100/8 to-transparent",
+    coinPanelBorderClassName: "border-sky-300/30",
+    coinPanelShellClassName:
+      "bg-[linear-gradient(135deg,rgba(56,189,248,0.22),rgba(8,20,34,0.94))] shadow-[0_8px_32px_rgba(56,189,248,0.12)]",
   },
   {
     id: "green",
@@ -46,10 +55,13 @@ export const WALLET_THEME_OPTIONS = [
     accentClassName: "text-emerald-200",
     chipClassName: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100",
     shellClassName:
-      "bg-[linear-gradient(145deg,rgba(52,211,153,0.16),rgba(3,22,20,0.98)_62%)]",
+      "bg-[linear-gradient(145deg,rgba(52,211,153,0.36),rgba(3,22,20,1)_62%)]",
     glowClassName:
       "bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.24),transparent_66%)]",
     highlightClassName: "from-emerald-100/20 via-emerald-100/8 to-transparent",
+    coinPanelBorderClassName: "border-emerald-300/30",
+    coinPanelShellClassName:
+      "bg-[linear-gradient(135deg,rgba(52,211,153,0.22),rgba(6,22,20,0.94))] shadow-[0_8px_32px_rgba(52,211,153,0.12)]",
   },
   {
     id: "red",
@@ -59,10 +71,13 @@ export const WALLET_THEME_OPTIONS = [
     accentClassName: "text-rose-200",
     chipClassName: "border-rose-300/30 bg-rose-300/10 text-rose-100",
     shellClassName:
-      "bg-[linear-gradient(145deg,rgba(251,113,133,0.16),rgba(28,8,16,0.98)_62%)]",
+      "bg-[linear-gradient(145deg,rgba(251,113,133,0.36),rgba(28,8,16,1)_62%)]",
     glowClassName:
       "bg-[radial-gradient(circle_at_top,rgba(251,113,133,0.24),transparent_66%)]",
     highlightClassName: "from-rose-100/18 via-rose-100/8 to-transparent",
+    coinPanelBorderClassName: "border-rose-300/30",
+    coinPanelShellClassName:
+      "bg-[linear-gradient(135deg,rgba(251,113,133,0.22),rgba(28,10,18,0.94))] shadow-[0_8px_32px_rgba(251,113,133,0.12)]",
   },
 ] as const;
 
