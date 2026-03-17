@@ -21,9 +21,17 @@ interface WalletInfoProps {
   onAddWallet?: (
     nickname: string,
     type: "create" | "restore",
-    mnemonic?: string,
+    payload?: { address?: string; privateKey?: string },
     color?: WalletThemeId,
   ) => void;
+}
+
+function generateAddress() {
+  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`;
+}
+
+function generatePrivateKey() {
+  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(64, "A").slice(0, 64)}`;
 }
 
 export default function WalletInfo({
@@ -33,13 +41,13 @@ export default function WalletInfo({
   onAddWallet,
 }: WalletInfoProps) {
   const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
-  const exchangePotToJack = useWalletStore((state) => state.exchangePotToJack);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"choose" | "create" | "restore">("choose");
   const [newNickname, setNewNickname] = useState("");
-  const [restoreWords, setRestoreWords] = useState(Array(12).fill(""));
   const [newColor, setNewColor] = useState<WalletThemeId>("gray");
+  const [restoreAddress, setRestoreAddress] = useState("");
+  const [restorePrivateKey, setRestorePrivateKey] = useState("");
   const [showTooltip, setShowTooltip] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
 
@@ -71,31 +79,20 @@ export default function WalletInfo({
     }
   };
 
-  const handleExchange = (direction: "JACK_TO_POT" | "POT_TO_JACK") => {
+  const handleExchangeJackToPot = () => {
     if (activeIndex !== 0) {
-      setExchangeError("추가된 Mock 지갑은 교환 기능을 사용할 수 없습니다.");
+      setExchangeError("추가된 Mock 지갑에서는 교환 기능을 사용할 수 없습니다.");
       setTimeout(() => setExchangeError(null), 2500);
       return;
     }
 
-    if (direction === "JACK_TO_POT") {
-      if (activeWallet.jackBalance < 100) {
-        setExchangeError("JACK 잔액이 부족합니다. 최소 100 JACK이 필요합니다.");
-        setTimeout(() => setExchangeError(null), 2500);
-        return;
-      }
-
-      exchangeJackToPot(100);
-      return;
-    }
-
-    if (activeWallet.potBalance < 1) {
-      setExchangeError("POT 잔액이 부족합니다. 최소 1 POT이 필요합니다.");
+    if (activeWallet.jackBalance < 100) {
+      setExchangeError("JACK 잔액이 부족합니다. 최소 100 JACK이 필요합니다.");
       setTimeout(() => setExchangeError(null), 2500);
       return;
     }
 
-    exchangePotToJack(1);
+    exchangeJackToPot(100);
   };
 
   const handleAdd = () => {
@@ -106,14 +103,17 @@ export default function WalletInfo({
     onAddWallet?.(
       newNickname.trim(),
       addMode === "restore" ? "restore" : "create",
-      addMode === "restore" ? restoreWords.join(" ") : undefined,
+      addMode === "restore"
+        ? { address: restoreAddress.trim(), privateKey: restorePrivateKey.trim() }
+        : { address: generateAddress(), privateKey: generatePrivateKey() },
       newColor,
     );
     setShowAddModal(false);
     setAddMode("choose");
     setNewNickname("");
-    setRestoreWords(Array(12).fill(""));
     setNewColor("gray");
+    setRestoreAddress("");
+    setRestorePrivateKey("");
     onChangeIndex(wallets.length);
   };
 
@@ -225,21 +225,23 @@ export default function WalletInfo({
               >
                 <div className={`pointer-events-none absolute inset-x-0 top-0 h-36 ${theme.glowClassName}`} />
 
-                <div className="relative mb-6 flex items-start justify-between border-b border-white/6 pb-5">
-                  <div>
-                    <h2 className="font-display text-2xl font-bold text-white">{wallet.nickname} 지갑</h2>
-                    <p className="mt-1.5 break-all font-mono text-xs text-text-tertiary">{wallet.address}</p>
-                  </div>
-                  <div className="ml-4 flex shrink-0 items-center gap-2">
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${theme.chipClassName}`}>
-                      {index + 1} / {total}
-                    </span>
+                <div className="relative mb-6 border-b border-white/6 pb-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="font-display text-2xl font-bold text-white">{wallet.nickname} 지갑</h2>
+                      <p className="mt-1.5 break-all font-mono text-xs text-text-tertiary">{wallet.address}</p>
+                    </div>
+                    <div className="ml-4 flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${theme.chipClassName}`}>
+                        {index + 1} / {total}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="relative flex flex-col items-center gap-6 sm:flex-row">
                   <div className="flex flex-1 flex-col items-center rounded-[22px] border border-orange-400/30 bg-[linear-gradient(135deg,rgba(251,146,60,0.12),rgba(20,10,5,0.7))] px-5 py-5 text-center shadow-[0_8px_32px_rgba(251,146,60,0.1)]">
-                    <p className="text-xs font-bold uppercase tracking-widest text-orange-400">Jack 코인</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-orange-400">JACK 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
                       <AnimatedNumber key={`jack-${activeIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
                       <span className="text-base font-bold text-orange-300">JACK</span>
@@ -250,18 +252,9 @@ export default function WalletInfo({
                     <p className="whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-white/40">
                       100 JACK = 1 POT
                     </p>
-                    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1.5 shadow-inner">
+                    <div className="flex items-center rounded-full border border-white/10 bg-white/5 p-1.5 shadow-inner">
                       <button
-                        onClick={() => handleExchange("POT_TO_JACK")}
-                        title="POT to JACK"
-                        className="rounded-full p-2 text-white/40 transition-colors hover:bg-white/15 hover:text-orange-400"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleExchange("JACK_TO_POT")}
+                        onClick={handleExchangeJackToPot}
                         title="JACK to POT"
                         className="rounded-full p-2 text-white/40 transition-colors hover:bg-white/15 hover:text-info"
                       >
@@ -273,7 +266,7 @@ export default function WalletInfo({
                   </div>
 
                   <div className="flex flex-1 flex-col items-center rounded-[22px] border border-info/30 bg-[linear-gradient(135deg,rgba(59,130,246,0.12),rgba(10,15,30,0.7))] px-5 py-5 text-center shadow-[0_8px_32px_rgba(59,130,246,0.1)]">
-                    <p className="text-xs font-bold uppercase tracking-widest text-info">Pot 코인</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-info">POT 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
                       <AnimatedNumber key={`pot-${activeIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
                       <span className="text-base font-bold text-sky-300">POT</span>
@@ -344,7 +337,7 @@ export default function WalletInfo({
                 <div className="relative">
                   <h3 className="font-display text-2xl font-bold text-white">지갑 추가</h3>
                   <p className="mt-1 text-sm text-text-secondary">
-                    새 지갑을 생성하거나 복구 문구로 기존 지갑을 등록할 수 있습니다.
+                    새 지갑을 생성하거나 기존 지갑 주소와 private key로 등록할 수 있습니다.
                   </p>
 
                   {addMode === "choose" && (
@@ -355,7 +348,7 @@ export default function WalletInfo({
                         className="rounded-[20px] border border-accent-gold/25 bg-accent-gold/8 px-6 py-5 text-left transition-all hover:border-accent-gold/50 hover:bg-accent-gold/12"
                       >
                         <p className="font-bold text-white">새 지갑 생성하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">별도 지갑을 빠르게 추가합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">생성 즉시 새 주소를 추가합니다.</p>
                       </button>
                       <button
                         type="button"
@@ -363,7 +356,7 @@ export default function WalletInfo({
                         className="rounded-[20px] border border-info/25 bg-info/8 px-6 py-5 text-left transition-all hover:border-info/50 hover:bg-info/12"
                       >
                         <p className="font-bold text-white">기존 지갑 등록하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">12개 복구 문구로 지갑을 복구합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">주소와 private key로 지갑을 등록합니다.</p>
                       </button>
                     </div>
                   )}
@@ -398,27 +391,32 @@ export default function WalletInfo({
                       </div>
 
                       {addMode === "restore" && (
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                            Recovery Phrase
-                          </label>
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            {restoreWords.map((word, index) => (
-                              <input
-                                key={index}
-                                type="text"
-                                value={word}
-                                onChange={(event) => {
-                                  const next = [...restoreWords];
-                                  next[index] = event.target.value;
-                                  setRestoreWords(next);
-                                }}
-                                placeholder={`${index + 1}.`}
-                                className="rounded-[10px] border border-white/10 bg-white/5 px-2 py-2 text-xs text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                              />
-                            ))}
+                        <>
+                          <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                              Wallet Address
+                            </label>
+                            <input
+                              type="text"
+                              value={restoreAddress}
+                              onChange={(event) => setRestoreAddress(event.target.value)}
+                              placeholder="0x..."
+                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                            />
                           </div>
-                        </div>
+                          <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                              Private Key
+                            </label>
+                            <input
+                              type="text"
+                              value={restorePrivateKey}
+                              onChange={(event) => setRestorePrivateKey(event.target.value)}
+                              placeholder="0x..."
+                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                            />
+                          </div>
+                        </>
                       )}
 
                       <div className="flex gap-3 pt-2">
@@ -430,7 +428,7 @@ export default function WalletInfo({
                           이전
                         </button>
                         <GoldButton onClick={handleAdd} className="flex-1 py-3.5">
-                          {addMode === "create" ? "지갑 추가" : "지갑 복구"}
+                          {addMode === "create" ? "지갑 추가" : "지갑 등록"}
                         </GoldButton>
                       </div>
                     </div>

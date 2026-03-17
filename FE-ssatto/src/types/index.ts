@@ -17,7 +17,7 @@ export interface LottoEntry {
 
 export interface Activity {
   id: string;
-  type: "지갑 생성" | "교환" | "로또 참여" | "보상 수령" | "채굴";
+  type: "지갑 생성" | "지갑 등록" | "교환" | "로또 참여" | "보상 수령" | "채굴";
   description: string;
   amount?: string;
   createdAt: string;

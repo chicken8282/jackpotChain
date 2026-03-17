@@ -63,7 +63,7 @@ export const INITIAL_ACTIVITIES: Activity[] = [
   {
     id: "act-001",
     type: "채굴",
-    description: "블록 #928 채굴 보상을 받았습니다.",
+    description: "블록 #928 채굴 보상이 지급되었습니다.",
     amount: "+50 JACK",
     createdAt: "03.16 15:22",
   },
@@ -77,8 +77,8 @@ export const INITIAL_ACTIVITIES: Activity[] = [
   {
     id: "act-003",
     type: "로또 참여",
-    description: "6개 조합으로 로또에 참여했습니다.",
-    amount: "-30 JACK",
+    description: "6개 번호 조합으로 로또에 참여했습니다.",
+    amount: "-1 POT",
     createdAt: "03.16 13:20",
   },
 ];
@@ -97,10 +97,6 @@ export const PRIZE_ROWS = [
   { label: "4개 일치", reward: "240 JACK" },
   { label: "3개 일치", reward: "60 JACK" },
 ];
-
-export const HEX_OPTIONS = Array.from({ length: 64 }, (_, index) =>
-  index.toString(16).toUpperCase().padStart(2, "0"),
-);
 
 export const MNEMONIC_SEED = [
   "ledger",

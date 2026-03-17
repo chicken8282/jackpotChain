@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import Card from "../common/Card";
 import AnimatedNumber from "../common/AnimatedNumber";
+import Card from "../common/Card";
+import { useWalletStore } from "../../stores/useWalletStore";
 import type { LottoEntry as StoreLottoEntry } from "../../types";
 
 interface HistoryEntry {
@@ -13,8 +14,9 @@ interface HistoryEntry {
   resultNumbers: string[];
   date: string;
   blockHash: string;
-  isWinner: boolean;
-  prize?: string;
+  statusLabel: "추첨중" | "당첨" | "미당첨";
+  rewardLabel?: string;
+  claimable: boolean;
 }
 
 interface HexPickerProps {
@@ -24,15 +26,49 @@ interface HexPickerProps {
   onClaim?: (entryId: string) => void;
 }
 
-const mockHistory: HistoryEntry[] = [
+const slotThemes = [
+  {
+    border: "1px solid rgba(251,191,36,0.9)",
+    bg: "linear-gradient(180deg, rgba(201,153,29,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(251,191,36,0.25)",
+  },
+  {
+    border: "1px solid rgba(56,189,248,0.9)",
+    bg: "linear-gradient(180deg, rgba(45,151,198,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(56,189,248,0.25)",
+  },
+  {
+    border: "1px solid rgba(255,101,95,0.9)",
+    bg: "linear-gradient(180deg, rgba(204,81,76,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(255,101,95,0.25)",
+  },
+  {
+    border: "1px solid rgba(148,163,184,0.9)",
+    bg: "linear-gradient(180deg, rgba(118,130,147,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(148,163,184,0.25)",
+  },
+  {
+    border: "1px solid rgba(52,211,153,0.9)",
+    bg: "linear-gradient(180deg, rgba(42,169,122,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(52,211,153,0.25)",
+  },
+  {
+    border: "1px solid rgba(249,115,22,0.9)",
+    bg: "linear-gradient(180deg, rgba(199,92,18,0.60) 0%, rgba(12,40,90,0.18) 100%)",
+    glow: "rgba(249,115,22,0.25)",
+  },
+];
+
+const fallbackHistory: HistoryEntry[] = [
   {
     id: "history-1",
     numbers: ["0A", "1F", "2B", "3D", "44", "5E"],
     resultNumbers: ["0A", "10", "2B", "4C", "44", "EF"],
     date: "2026.03.15 14:30",
     blockHash: "0x8f2a...3e1d",
-    isWinner: true,
-    prize: "2,500 POT",
+    statusLabel: "당첨",
+    rewardLabel: "2,500 POT",
+    claimable: false,
   },
   {
     id: "history-2",
@@ -40,54 +76,61 @@ const mockHistory: HistoryEntry[] = [
     resultNumbers: ["11", "A3", "40", "79", "BC", "08"],
     date: "2026.03.14 09:15",
     blockHash: "0x1c4e...9a2b",
-    isWinner: false,
+    statusLabel: "미당첨",
+    claimable: false,
   },
-];
-
-const SLOT_THEMES = [
-  { border: "1px solid rgba(251,191,36,0.9)", bg: "linear-gradient(180deg, rgba(201,153,29,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(251,191,36,0.25)" },
-  { border: "1px solid rgba(56,189,248,0.9)", bg: "linear-gradient(180deg, rgba(45,151,198,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(56,189,248,0.25)" },
-  { border: "1px solid rgba(255,101,95,0.9)", bg: "linear-gradient(180deg, rgba(204,81,76,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(255,101,95,0.25)" },
-  { border: "1px solid rgba(148,163,184,0.9)", bg: "linear-gradient(180deg, rgba(118,130,147,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(148,163,184,0.25)" },
-  { border: "1px solid rgba(52,211,153,0.9)", bg: "linear-gradient(180deg, rgba(42,169,122,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(52,211,153,0.25)" },
-  { border: "1px solid rgba(249,115,22,0.9)", bg: "linear-gradient(180deg, rgba(199,92,18,0.60) 0%, rgba(12,40,90,0.18) 100%)", glow: "rgba(249,115,22,0.25)" },
 ];
 
 function buildResultNumbers(numbers: string[], seed: string) {
   return numbers.map((value, index) => {
-    const numeric = parseInt(value, 16);
+    const numeric = Number.parseInt(value, 16);
     const offset = (seed.charCodeAt(index % seed.length) + index * 7) % 16;
     return ((numeric + offset) % 256).toString(16).toUpperCase().padStart(2, "0");
   });
+}
+
+function buildBlockHash(seed: string, numbers: string[]) {
+  const prefix = seed.replace(/[^a-fA-F0-9]/g, "").slice(-4).padStart(4, "0").toLowerCase();
+  const suffix = numbers[numbers.length - 1]?.toLowerCase() ?? "00";
+  return `0x${prefix}...${suffix}`;
 }
 
 function countMatches(numbers: string[], resultNumbers: string[]) {
   return numbers.filter((value, index) => value === resultNumbers[index]).length;
 }
 
-function LottoHistoryModal({ entry, onClose }: { entry: HistoryEntry | null; onClose: () => void }) {
-  if (!entry) {
+function getNeighborValue(hex: string, delta: number) {
+  let value = Number.parseInt(hex, 16);
+  value = (value + delta + 256) % 256;
+  return value.toString(16).toUpperCase().padStart(2, "0");
+}
+
+function HistoryModal({
+  entry,
+  onClose,
+  onClaim,
+}: {
+  entry: HistoryEntry;
+  onClose: () => void;
+  onClaim?: (entryId: string) => void;
+}) {
+  const matches = countMatches(entry.numbers, entry.resultNumbers);
+
+  if (typeof document === "undefined") {
     return null;
   }
 
-  const matches = countMatches(entry.numbers, entry.resultNumbers);
-
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+      <button
+        type="button"
         onClick={onClose}
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        aria-label="닫기"
       />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 20 }}
-        className="relative w-full max-w-2xl rounded-[30px] border border-white/10 bg-[#0C101C] p-8 shadow-2xl"
-      >
+      <div className="relative w-full max-w-2xl rounded-[30px] border border-white/10 bg-[#0C101C] p-8 shadow-2xl">
         <button
+          type="button"
           onClick={onClose}
           className="absolute right-6 top-6 text-text-tertiary transition-colors hover:text-white"
         >
@@ -103,7 +146,7 @@ function LottoHistoryModal({ entry, onClose }: { entry: HistoryEntry | null; onC
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-[24px] border border-accent-gold/15 bg-accent-gold/5 p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-accent-gold">내가 선택한 번호</p>
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-accent-gold">내 선택 번호</p>
             <div className="grid grid-cols-3 gap-3">
               {entry.numbers.map((number, index) => (
                 <div
@@ -142,7 +185,7 @@ function LottoHistoryModal({ entry, onClose }: { entry: HistoryEntry | null; onC
         <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-text-tertiary">
-              비교 기준 블록
+              비교한 블록 해시
             </span>
             <p className="font-mono text-sm text-info">{entry.blockHash}</p>
           </div>
@@ -150,62 +193,76 @@ function LottoHistoryModal({ entry, onClose }: { entry: HistoryEntry | null; onC
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-text-tertiary">
               비교 결과
             </span>
-            <p className={`font-bold ${entry.isWinner ? "text-accent-gold" : "text-text-primary"}`}>
-              {matches} / 6 일치 {entry.prize ? `(${entry.prize})` : ""}
+            <p className="font-bold text-white">
+              {matches} / 6 일치 · {entry.statusLabel}
             </p>
+            {entry.rewardLabel ? (
+              <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
+            ) : null}
           </div>
         </div>
 
-        <button
-          onClick={onClose}
-          className="mt-8 h-14 w-full rounded-2xl border border-white/10 bg-white/5 font-bold text-white transition-colors hover:bg-white/10"
-        >
-          닫기
-        </button>
-      </motion.div>
-    </div>
-  );
-}
-
-function LottoSuccessModal({ open }: { open: boolean }) {
-  if (!open) {
-    return null;
-  }
-
-  return createPortal(
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 14 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 8 }}
-          className="w-full max-w-md rounded-[28px] border border-accent-gold/25 bg-[linear-gradient(180deg,rgba(11,18,30,0.98),rgba(7,11,20,0.98))] px-6 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
-        >
-          <p className="text-lg font-bold text-white">
-            로또 추첨이 등록되었습니다. 로또 결과 확인까지 약 10분이 소요됩니다.
-          </p>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>,
+        <div className="mt-8 flex gap-3">
+          {entry.claimable && onClaim ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClaim(entry.id);
+                onClose();
+              }}
+              className="h-14 flex-1 rounded-2xl border border-accent-gold/35 bg-accent-gold/10 font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
+            >
+              보상 받기
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 font-bold text-white transition-colors hover:bg-white/10"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>,
     document.body,
   );
 }
 
-export default function HexPicker({ disabled = false, onCommit, entries }: HexPickerProps) {
+function SuccessModal({ open }: { open: boolean }) {
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-accent-gold/25 bg-[linear-gradient(180deg,rgba(11,18,30,0.98),rgba(7,11,20,0.98))] px-6 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <p className="text-lg font-bold text-white">
+          로또 추첨이 등록되었습니다. 로또 결과 확인까지 약 10분이 소요됩니다.
+        </p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export default function HexPicker({
+  disabled = false,
+  onCommit,
+  entries,
+  onClaim,
+}: HexPickerProps) {
+  const jackBalance = useWalletStore((state) => state.jackBalance);
+  const potBalance = useWalletStore((state) => state.potBalance);
+  const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
+
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["0A", "1F", "2B", "3C", "4D", "5E"]);
-  const [jackBalance, setJackBalance] = useState(10250);
-  const [potBalance, setPotBalance] = useState(184);
   const [randomizing, setRandomizing] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<HistoryEntry | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>(mockHistory);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!showSuccessModal) {
@@ -221,105 +278,89 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
   }, [showSuccessModal]);
 
   const mergedHistory = useMemo(() => {
-    if (!entries?.length) {
-      return history;
-    }
+    const storeHistory: HistoryEntry[] =
+      entries?.map((entry) => {
+        const resultNumbers = buildResultNumbers(entry.numbers, entry.id);
+        const rewardLabel = entry.reward > 0 ? `${entry.reward.toLocaleString("ko-KR")} JACK` : undefined;
 
-    const storeEntries: HistoryEntry[] = entries.map((entry) => {
-      const resultNumbers = buildResultNumbers(entry.numbers, entry.id);
-      return {
-        id: entry.id,
-        numbers: entry.numbers,
-        resultNumbers,
-        date: entry.createdAt,
-        blockHash: `0x${entry.id.slice(-4).padStart(4, "0")}...${entry.numbers[0]}`,
-        isWinner: entry.status === "당첨",
-        prize: entry.reward > 0 ? `${entry.reward.toLocaleString("ko-KR")} JACK` : undefined,
-      };
-    });
+        return {
+          id: entry.id,
+          numbers: entry.numbers,
+          resultNumbers,
+          date: entry.createdAt,
+          blockHash: buildBlockHash(entry.id, entry.numbers),
+          statusLabel:
+            entry.status === "당첨" ? "당첨" : entry.status === "미당첨" ? "미당첨" : "추첨중",
+          rewardLabel,
+          claimable: entry.status === "당첨" && !entry.claimed,
+        };
+      }) ?? [];
 
     const seen = new Set<string>();
-    return [...storeEntries, ...history].filter((entry) => {
+    return [...storeHistory, ...fallbackHistory].filter((entry) => {
       if (seen.has(entry.id)) {
         return false;
       }
       seen.add(entry.id);
       return true;
     });
-  }, [entries, history]);
+  }, [entries]);
 
-  const handleRandomize = useCallback(() => {
+  const handleRandomize = () => {
     setRandomizing(true);
     let count = 0;
+
     const interval = window.setInterval(() => {
       setSelected((current) =>
         current.map(() => Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, "0")),
       );
       count += 1;
+
       if (count > 12) {
         window.clearInterval(interval);
         setRandomizing(false);
       }
     }, 80);
-  }, []);
+  };
 
-  const handleExchange = (type: "JACK_TO_POT" | "POT_TO_JACK") => {
-    if (type === "JACK_TO_POT") {
-      if (jackBalance >= 100) {
-        setJackBalance((prev) => prev - 100);
-        setPotBalance((prev) => prev + 1);
-      }
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), 2000);
+  };
+
+  const handleExchangeJackToPot = () => {
+    if (jackBalance < 100) {
+      showNotice("교환하려면 최소 100 JACK이 필요합니다.");
       return;
     }
 
-    if (potBalance >= 1) {
-      setPotBalance((prev) => prev - 1);
-      setJackBalance((prev) => prev + 100);
-    }
+    exchangeJackToPot(100);
+    showNotice("100 JACK을 1 POT로 교환했습니다.");
   };
 
   const cycleSlot = (index: number, delta: number) => {
-    const next = [...selected];
-    let value = parseInt(next[index], 16);
-    value = (value + delta + 256) % 256;
-    next[index] = value.toString(16).toUpperCase().padStart(2, "0");
-    setSelected(next);
+    setSelected((current) => {
+      const next = [...current];
+      let value = Number.parseInt(next[index], 16);
+      value = (value + delta + 256) % 256;
+      next[index] = value.toString(16).toUpperCase().padStart(2, "0");
+      return next;
+    });
     setSlotPulse(index);
     window.setTimeout(() => setSlotPulse(null), 300);
   };
 
-  const getNeighborValue = (hex: string, delta: number) => {
-    let value = parseInt(hex, 16);
-    value = (value + delta + 256) % 256;
-    return value.toString(16).toUpperCase().padStart(2, "0");
-  };
-
   const handleParticipate = () => {
-    if (disabled || randomizing || potBalance < 1) {
+    if (disabled || randomizing) {
+      return;
+    }
+
+    if (potBalance < 1) {
+      showNotice("로또 참여에는 최소 1 POT가 필요합니다.");
       return;
     }
 
     onCommit?.(selected);
-    setPotBalance((prev) => Math.max(prev - 1, 0));
-
-    const entryId = `local-${Date.now()}`;
-    const newEntry: HistoryEntry = {
-      id: entryId,
-      numbers: selected,
-      resultNumbers: buildResultNumbers(selected, entryId),
-      date: new Intl.DateTimeFormat("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }).format(new Date()),
-      blockHash: `0x${selected.join("").slice(0, 4).toLowerCase()}...${selected[5].toLowerCase()}`,
-      isWinner: false,
-    };
-
-    setHistory((prev) => [newEntry, ...prev]);
     setShowSuccessModal(true);
   };
 
@@ -339,17 +380,23 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
             <div className="flex items-center gap-4">
               <div className="flex rounded-xl bg-white/5 p-1">
                 <button
+                  type="button"
                   onClick={() => setTab("draw")}
                   className={`rounded-lg px-5 py-2 text-sm font-bold transition-all ${
-                    tab === "draw" ? "bg-white/10 text-white shadow-lg" : "text-text-tertiary hover:text-text-secondary"
+                    tab === "draw"
+                      ? "bg-white/10 text-white shadow-lg"
+                      : "text-text-tertiary hover:text-text-secondary"
                   }`}
                 >
-                  추첨 참여
+                  로또 추첨 참여
                 </button>
                 <button
+                  type="button"
                   onClick={() => setTab("history")}
                   className={`rounded-lg px-5 py-2 text-sm font-bold transition-all ${
-                    tab === "history" ? "bg-white/10 text-white shadow-lg" : "text-text-tertiary hover:text-text-secondary"
+                    tab === "history"
+                      ? "bg-white/10 text-white shadow-lg"
+                      : "text-text-tertiary hover:text-text-secondary"
                   }`}
                 >
                   참여 내역
@@ -366,41 +413,31 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
                 <div className="flex flex-1 flex-wrap items-center justify-center gap-3 lg:gap-6">
                   <div className="flex min-w-[200px] flex-col items-center rounded-[20px] border border-orange-400/50 bg-[linear-gradient(135deg,rgba(251,146,60,0.18),rgba(10,15,30,0.85))] px-5 py-4 text-center shadow-[0_4px_24px_rgba(251,146,60,0.15)]">
                     <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-400">
-                      JACK 잔액
+                      JACK 밸런스
                     </span>
                     <p className="font-display text-3xl font-black leading-none text-white">
                       <AnimatedNumber value={jackBalance} />
                     </p>
                   </div>
 
-                  <div className="flex flex-col items-center gap-1.5">
-                    <p className="whitespace-nowrap text-[9px] font-bold uppercase tracking-widest text-white/35">
-                      100 JACK = 1 POT
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-white/35">
+                      JACK &gt; POT
                     </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleExchange("POT_TO_JACK")}
-                        title="POT to JACK"
-                        className="rounded-full border border-white/10 bg-white/5 p-2.5 text-text-secondary transition-colors hover:border-orange-400/40 hover:bg-white/10 hover:text-orange-400"
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleExchange("JACK_TO_POT")}
-                        title="JACK to POT"
-                        className="rounded-full border border-white/10 bg-white/5 p-2.5 text-text-secondary transition-colors hover:border-info/40 hover:bg-white/10 hover:text-info"
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExchangeJackToPot}
+                      title="JACK to POT"
+                      className="rounded-full border border-white/10 bg-white/5 p-3 text-text-secondary transition-colors hover:border-info/40 hover:bg-white/10 hover:text-info"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
                   </div>
 
                   <div className="flex min-w-[200px] flex-col items-center rounded-[20px] border border-info/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.12),rgba(10,15,30,0.85))] px-5 py-4 text-center shadow-[0_4px_20px_rgba(59,130,246,0.1)]">
-                    <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-info">POT 잔액</span>
+                    <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-info">POT 밸런스</span>
                     <p className="font-display text-3xl font-black leading-none text-white">
                       <AnimatedNumber value={potBalance} delay={0.15} />
                     </p>
@@ -419,6 +456,8 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
                 </div>
               </div>
 
+              {notice ? <p className="mb-4 text-center text-sm font-bold text-accent-gold">{notice}</p> : null}
+
               <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(160deg,#0A0D18,#02040A)] px-4 py-10">
                 <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.08),transparent)]" />
                 <div className="absolute inset-x-0 bottom-0 h-24 bg-[radial-gradient(ellipse_at_bottom,rgba(222,160,60,0.05),transparent)]" />
@@ -427,7 +466,7 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
                   <div className="subtle-scroll overflow-x-auto pb-2" style={{ marginLeft: "98px", marginRight: "140px" }}>
                     <div className="flex min-w-max items-stretch justify-center gap-3 px-2 sm:gap-4">
                       {selected.map((value, index) => {
-                        const theme = SLOT_THEMES[index % SLOT_THEMES.length];
+                        const theme = slotThemes[index % slotThemes.length];
 
                         return (
                           <div key={`${index}-${value}`} className="flex w-[118px] shrink-0 flex-col items-center gap-3 sm:w-[130px]">
@@ -465,18 +504,9 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
                                     boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px ${theme.glow}`,
                                   }}
                                 >
-                                  <AnimatePresence mode="wait">
-                                    <motion.p
-                                      key={value}
-                                      initial={{ opacity: 0, y: 15 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      exit={{ opacity: 0, y: -15 }}
-                                      transition={{ duration: 0.15 }}
-                                      className="font-display text-5xl font-extrabold tracking-[0.08em] text-white drop-shadow-sm"
-                                    >
-                                      {value}
-                                    </motion.p>
-                                  </AnimatePresence>
+                                  <p className="font-display text-5xl font-extrabold tracking-[0.08em] text-white drop-shadow-sm">
+                                    {value}
+                                  </p>
                                 </div>
 
                                 <p className="font-mono text-lg text-text-tertiary">
@@ -526,10 +556,14 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
                       <span className="text-sm font-bold text-white">{entry.date}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          entry.isWinner ? "bg-accent-gold/20 text-accent-gold" : "bg-white/10 text-text-tertiary"
+                          entry.statusLabel === "당첨"
+                            ? "bg-accent-gold/20 text-accent-gold"
+                            : entry.statusLabel === "추첨중"
+                              ? "bg-info/15 text-info"
+                              : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.isWinner ? "당첨" : "진행중"}
+                        {entry.statusLabel}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -560,15 +594,10 @@ export default function HexPicker({ disabled = false, onCommit, entries }: HexPi
         </div>
       </Card>
 
-      <LottoSuccessModal open={showSuccessModal} />
-
-      <AnimatePresence>
-        {selectedHistory &&
-          createPortal(
-            <LottoHistoryModal entry={selectedHistory} onClose={() => setSelectedHistory(null)} />,
-            document.body,
-          )}
-      </AnimatePresence>
+      <SuccessModal open={showSuccessModal} />
+      {selectedHistory ? (
+        <HistoryModal entry={selectedHistory} onClose={() => setSelectedHistory(null)} onClaim={onClaim} />
+      ) : null}
     </>
   );
 }
