@@ -14,8 +14,7 @@ interface HistoryEntry {
   numbers: string[];
   resultNumbers: string[];
   date: string;
-  blockHash: string;
-  statusLabel: "추첨중" | "당첨" | "미당첨";
+  statusLabel: "DRAWING" | "WINNING" | "LOSING";
   rewardLabel?: string;
   claimable: boolean;
 }
@@ -66,8 +65,7 @@ const fallbackHistory: HistoryEntry[] = [
     numbers: ["0A", "1F", "2B", "3D", "44", "5E"],
     resultNumbers: ["0A", "10", "2B", "4C", "44", "EF"],
     date: "2026.03.15 14:30",
-    blockHash: "0x8f2a...3e1d",
-    statusLabel: "당첨",
+    statusLabel: "WINNING",
     rewardLabel: "2,500 POT",
     claimable: false,
   },
@@ -76,8 +74,7 @@ const fallbackHistory: HistoryEntry[] = [
     numbers: ["12", "A3", "45", "78", "BC", "09"],
     resultNumbers: ["11", "A3", "40", "79", "BC", "08"],
     date: "2026.03.14 09:15",
-    blockHash: "0x1c4e...9a2b",
-    statusLabel: "미당첨",
+    statusLabel: "LOSING",
     claimable: false,
   },
 ];
@@ -88,12 +85,6 @@ function buildResultNumbers(numbers: string[], seed: string) {
     const offset = (seed.charCodeAt(index % seed.length) + index * 7) % 16;
     return ((numeric + offset) % 256).toString(16).toUpperCase().padStart(2, "0");
   });
-}
-
-function buildBlockHash(seed: string, numbers: string[]) {
-  const prefix = seed.replace(/[^a-fA-F0-9]/g, "").slice(-4).padStart(4, "0").toLowerCase();
-  const suffix = numbers[numbers.length - 1]?.toLowerCase() ?? "00";
-  return `0x${prefix}...${suffix}`;
 }
 
 function countMatches(numbers: string[], resultNumbers: string[]) {
@@ -190,19 +181,13 @@ function HistoryModal({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-text-tertiary">
-              비교한 블록 해시
-            </span>
-            <p className="font-mono text-sm text-info">{entry.blockHash}</p>
-          </div>
+        <div className="mt-6">
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-text-tertiary">
               비교 결과
             </span>
             <p className="font-bold text-white">
-              {matches} / 6 일치 · {entry.statusLabel}
+              {matches} / 6 일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
             </p>
             {entry.rewardLabel ? (
               <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
@@ -211,18 +196,23 @@ function HistoryModal({
         </div>
 
         <div className="mt-8 flex gap-3">
-          {entry.claimable && onClaim ? (
-            <button
-              type="button"
-              onClick={() => {
+          <button
+            type="button"
+            disabled={!entry.claimable}
+            onClick={() => {
+              if (entry.claimable && onClaim) {
                 onClaim(entry.id);
-                onClose();
-              }}
-              className="h-14 flex-1 rounded-2xl border border-accent-gold/35 bg-accent-gold/10 font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
-            >
-              보상 받기
-            </button>
-          ) : null}
+              }
+              onClose();
+            }}
+            className={`h-14 flex-1 rounded-2xl border font-bold transition-colors ${
+              entry.claimable
+                ? "border-accent-gold/35 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/15"
+                : "cursor-not-allowed border-white/10 bg-white/5 text-white/40"
+            }`}
+          >
+            수령
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -343,11 +333,10 @@ export default function HexPicker({
           numbers: entry.numbers,
           resultNumbers,
           date: entry.createdAt,
-          blockHash: buildBlockHash(entry.id, entry.numbers),
           statusLabel:
-            entry.status === "당첨" ? "당첨" : entry.status === "미당첨" ? "미당첨" : "추첨중",
+            entry.status === "WINNING" ? "WINNING" : entry.status === "LOSING" ? "LOSING" : "DRAWING",
           rewardLabel,
-          claimable: entry.status === "당첨" && !entry.claimed,
+          claimable: entry.isClaimable,
         };
       }) ?? [];
 
@@ -632,14 +621,14 @@ export default function HexPicker({
                       <span className="text-sm font-bold text-white">{entry.date}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          entry.statusLabel === "당첨"
+                          entry.statusLabel === "WINNING"
                             ? "bg-accent-gold/20 text-accent-gold"
-                            : entry.statusLabel === "추첨중"
+                            : entry.statusLabel === "DRAWING"
                               ? "bg-info/15 text-info"
                               : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.statusLabel}
+                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -651,6 +640,18 @@ export default function HexPicker({
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
+                    {entry.claimable && onClaim ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClaim(entry.id);
+                        }}
+                        className="rounded-full border border-accent-gold/35 bg-accent-gold/10 px-3 py-1 text-xs font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
+                      >
+                        수령
+                      </button>
+                    ) : null}
                     <span className="text-xs font-bold text-text-secondary">
                       {countMatches(entry.numbers, entry.resultNumbers)} / 6 일치
                     </span>

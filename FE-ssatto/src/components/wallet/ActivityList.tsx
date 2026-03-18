@@ -36,8 +36,15 @@ export default function ActivityList({ activities }: ActivityListProps) {
                   <p className="mt-1 text-sm text-text-primary">{activity.description}</p>
                 </div>
                 <div className="text-left lg:text-right">
-                  {activity.amount ? (
-                    <p className="font-mono text-sm text-accent-gold">{activity.amount}</p>
+                  {activity.jackAmount != null ? (
+                    <p className={`font-mono text-sm ${activity.jackAmount >= 0 ? "text-accent-gold" : "text-text-secondary"}`}>
+                      {activity.jackAmount >= 0 ? "+" : ""}{(activity.jackAmount / 1e8).toLocaleString("ko-KR")} JACK
+                    </p>
+                  ) : null}
+                  {activity.potAmount != null ? (
+                    <p className={`font-mono text-sm ${activity.potAmount >= 0 ? "text-info" : "text-text-secondary"}`}>
+                      {activity.potAmount >= 0 ? "+" : ""}{(activity.potAmount / 1e8).toLocaleString("ko-KR")} POT
+                    </p>
                   ) : null}
                   <p className="mt-1 text-xs text-text-secondary">{activity.createdAt}</p>
                 </div>

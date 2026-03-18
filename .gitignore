@@ -7,3 +7,4 @@ AGENTS.md
 **/dist/
 **/.vite/
 **/claude
+.claude/

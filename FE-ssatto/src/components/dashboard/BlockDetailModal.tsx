@@ -225,24 +225,8 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
                       onCopy={() => copyValue("previousHash", block.previousHash)}
                       copied={copiedField === "previousHash"}
                     />
-                    <InfoRow
-                      label="머클 루트"
-                      value={shortenMiddle(block.merkleRoot)}
-                      fullValue={block.merkleRoot}
-                      monospace
-                      onCopy={() => copyValue("merkleRoot", block.merkleRoot)}
-                      copied={copiedField === "merkleRoot"}
-                    />
                     <InfoRow label="Nonce" value={block.nonce.toLocaleString("ko-KR")} monospace />
                     <InfoRow label="난이도" value={block.difficulty} accent="blue" monospace />
-                    <InfoRow
-                      label="코인베이스"
-                      value={shortenMiddle(block.coinbaseAddress, 8, 6)}
-                      fullValue={block.coinbaseAddress}
-                      monospace
-                      onCopy={() => copyValue("coinbaseAddress", block.coinbaseAddress)}
-                      copied={copiedField === "coinbaseAddress"}
-                    />
                   </MetaSection>
                 </div>
               </div>

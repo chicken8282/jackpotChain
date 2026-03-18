@@ -10,16 +10,18 @@ export interface LottoEntry {
   createdAt: string;
   numbers: string[];
   jackpotSnapshot: number;
-  status: "추첨중" | "당첨" | "미당첨";
+  status: "DRAWING" | "WINNING" | "LOSING";
   reward: number;
   claimed: boolean;
+  isClaimable: boolean;
 }
 
 export interface Activity {
   id: string;
-  type: "지갑 생성" | "지갑 등록" | "교환" | "로또 참여" | "보상 수령" | "채굴";
+  type: "WALLET_CREATED" | "WALLET_REGISTERED" | "EXCHANGE" | "LOTTO_COMMIT" | "LOTTO_CLAIM" | "MINING";
   description: string;
-  amount?: string;
+  jackAmount?: number;
+  potAmount?: number;
   createdAt: string;
 }
 

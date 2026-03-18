@@ -111,6 +111,8 @@ TUI 실행
 
 ## 4. 트랜잭션 서명과 클라이언트 사이드 서명
 
+> ✅ **선택된 방안: 클라이언트 사이드 서명 플로우** — private key는 브라우저 IndexedDB에만 보관하며, 서명은 브라우저에서 수행 후 signed TX hex만 서버에 전달합니다. MVP 타협안(Server Node 내부 지갑)은 사용하지 않습니다.
+
 ### TX 서명이 필요한 이유
 
 UTXO 모델에서 "내 코인을 사용한다"는 것은 **내가 해당 UTXO의 주인임을 증명**하는 것입니다.
@@ -255,7 +257,9 @@ TX 생성 → 서명 → 브로드캐스트   →   Mempool에 TX 도착
       ▼
 version=3 TX 생성:
   input  : 1 POT UTXO
-  output : Jackpot Pool 주소 (100% 풀 적립, 수정 예정)
+  output : Jackpot Pool 주소 (0.80 POT = 80%)  ✅ 선택된 비율
+  output : OP_RETURN 소각 (0.19 POT = 19%)
+  output : 채굴자 (0.01 POT = 1%)
   output : OP_RETURN (commit_hash 기록)
   output : POT 잔돈 (있을 경우)
       │
@@ -298,6 +302,8 @@ version=5 TX 생성:
 ---
 
 ## 7. JACK → POT 교환과 단방향 구조 (version=2)
+
+> ✅ **선택된 방안: JACK → POT 단방향 교환만** — POT → JACK 역교환은 지원하지 않습니다. FE UI도 단방향(JACK → POT)으로만 구현합니다.
 
 ### 교환 TX 구조
 
@@ -369,17 +375,19 @@ def is_op_return(self) -> bool:
 ### 채굴 보상과 Jackpot Pool 형성
 
 ```
-채굴 보상 (수정 예정):
+채굴 보상 ✅:
   블록 생성 성공 → 채굴자에게 100 JACK (100%)
 
-Jackpot Pool 형성:
-  사용자가 로또 참여 시 1 POT → 100% Jackpot Pool 적립 (수정 예정)
+Jackpot Pool 형성 ✅:
+  사용자가 로또 참여 시 1 POT → Pool 80% / 소각 19% / 채굴자 1%
   Pool에 쌓인 JACK이 당첨자에게 지급됨
 ```
 
 ---
 
 ## 9. Server Node 블록 수신과 Backend 연동 (Webhook 방식)
+
+> ✅ **선택된 방안: Webhook 방식** — Server Node가 블록 수신 시 Backend 내부 엔드포인트로 HTTP POST를 전송, Backend가 블록·TX를 파싱하여 DB에 인덱싱합니다. 매번 RPC를 호출하는 Polling 방식 대신 이 방식을 사용합니다.
 
 ### 왜 Webhook 방식인가?
 
@@ -605,21 +613,25 @@ JackpotChain 같은 소규모 네트워크에서는 **모든 노드(Server Node,
 
 ---
 
-## 12. 수수료 구조 (수정 예정 반영)
+## 12. 수수료 구조 (✅ 선택된 방안 확정)
 
-| 항목 | 현재 | 수정 예정 |
-|------|------|----------|
-| 블록 채굴 보상 | 50 JACK | **100 JACK** |
-| 블록 보상 수령자 | 채굴자 50% / Pool 30% / 소각 20% | **채굴자 100%** |
-| 로또 참여비(1 POT) | Pool 80% / 소각 19% / 채굴자 1% | **Pool 100%** |
+| 항목 | 기존 코드 | ✅ 선택된 방안 |
+|------|----------|--------------:|
+| 블록 채굴 보상 | 50 JACK | **100 JACK** ✅ |
+| 블록 보상 수령자 | 채굴자 50% / Pool 30% / 소각 20% | **채굴자 100%** ✅ |
+| 로또 참여비(1 POT) | Pool 80% / 소각 19% / 채굴자 1% | **Pool 80% / 소각 19% / 채굴자 1% (기존 유지)** ✅ |
+
+> **결정 근거**: 블록 보상은 채굴자에게 100% 귀속시켜 채굴 인센티브를 극대화하고,
+> 로또 참여비 분배는 기존 구조(Pool 80% / 소각 19% / 채굴자 1%)를 그대로 유지합니다.
+> "수정 예정"이었던 로또 Pool 100% 안은 채택하지 않습니다.
 
 수정 위치: `jackpotchain/constants.py`
 ```python
-BLOCK_REWARD      = 100 * COIN   # 50 → 100
-FEE_MINER_RATIO   = 1.00         # 0.50 → 1.00
-FEE_JACKPOT_RATIO = 0.00         # 0.30 → 0.00
-FEE_BURN_RATIO    = 0.00         # 0.20 → 0.00
-LOTTO_POOL_RATIO  = 1.00         # 0.80 → 1.00
-LOTTO_BURN_RATIO  = 0.00         # 0.19 → 0.00
-LOTTO_MINER_RATIO = 0.00         # 0.01 → 0.00
+BLOCK_REWARD      = 100 * COIN   # ✅ 50 → 100
+FEE_MINER_RATIO   = 1.00         # ✅ 0.50 → 1.00
+FEE_JACKPOT_RATIO = 0.00         # ✅ 0.30 → 0.00
+FEE_BURN_RATIO    = 0.00         # ✅ 0.20 → 0.00
+LOTTO_POOL_RATIO  = 0.80         # ✅ 기존 유지 (0.80)
+LOTTO_BURN_RATIO  = 0.19         # ✅ 기존 유지 (0.19)
+LOTTO_MINER_RATIO = 0.01         # ✅ 기존 유지 (0.01)
 ```
