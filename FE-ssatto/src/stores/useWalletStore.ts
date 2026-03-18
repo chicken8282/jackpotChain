@@ -1,102 +1,131 @@
 import { create } from "zustand";
-import { INITIAL_ACTIVITIES, INITIAL_ENTRIES, INITIAL_MINED_BLOCKS, MNEMONIC_SEED } from "../lib/constants";
+import {
+  INITIAL_ACTIVITIES,
+  INITIAL_ENTRIES,
+  INITIAL_MINED_BLOCKS,
+} from "../lib/constants";
 import type { Activity, LottoEntry, MinedBlock } from "../types";
+import type { WalletThemeId } from "../components/wallet/walletThemes";
+
+interface WalletCredentials {
+  address: string;
+  privateKey: string;
+}
 
 export interface WalletStore {
   isConnected: boolean;
   nickname: string;
   address: string;
+  privateKey: string;
+  walletColor: WalletThemeId;
   jackBalance: number;
   potBalance: number;
-  mnemonic: string[];
   entries: LottoEntry[];
   activities: Activity[];
   minedBlocks: MinedBlock[];
-  createWallet: (nickname?: string) => void;
-  restoreWallet: (mnemonic: string[]) => void;
+  createWallet: (
+    nickname?: string,
+    color?: WalletThemeId,
+    credentials?: Partial<WalletCredentials>,
+  ) => void;
+  restoreWallet: (
+    privateKey: string,
+    address: string,
+    nickname?: string,
+    color?: WalletThemeId,
+  ) => void;
   exchangeJackToPot: (jackAmount: number) => void;
-  exchangePotToJack: (potAmount: number) => void;
   commitLotto: (hexNumbers: string[]) => void;
   claimReward: (entryId: string) => void;
 }
 
-const makeAddress = () => "0x7FA1B8D2C4E6901234AB56CD78EF9012AC34EF78";
 const makeId = (prefix: string) => `${prefix}-${Math.random().toString(16).slice(2, 8)}`;
+
+const makeTimestamp = () =>
+  new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+
+const makeAddress = () =>
+  `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`;
+
+const makePrivateKey = () =>
+  `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(64, "A").slice(0, 64)}`;
 
 export const useWalletStore = create<WalletStore>((set) => ({
   isConnected: false,
-  nickname: "행운 채굴자",
+  nickname: "내 지갑",
   address: "",
+  privateKey: "",
+  walletColor: "gray",
   jackBalance: 10250,
   potBalance: 184,
-  mnemonic: [],
   entries: INITIAL_ENTRIES,
   activities: INITIAL_ACTIVITIES,
   minedBlocks: INITIAL_MINED_BLOCKS,
-  createWallet: (nickname = "행운 채굴자") =>
+  createWallet: (nickname = "내 지갑", color = "gray", credentials) => {
+    const address = credentials?.address ?? makeAddress();
+    const privateKey = credentials?.privateKey ?? makePrivateKey();
+
     set(() => ({
       isConnected: true,
       nickname,
-      address: makeAddress(),
-      mnemonic: MNEMONIC_SEED,
+      address,
+      privateKey,
+      walletColor: color,
       activities: [
         {
           id: makeId("act"),
           type: "지갑 생성",
-          description: `${nickname} 지갑 생성 완료`,
-          createdAt: "방금 전",
+          description: `${nickname} 지갑을 생성했습니다.`,
+          createdAt: makeTimestamp(),
         },
         ...INITIAL_ACTIVITIES,
       ],
-    })),
-  restoreWallet: (mnemonic) =>
+    }));
+  },
+  restoreWallet: (privateKey, address, nickname = "기존 지갑", color = "gray") =>
     set((state) => ({
       isConnected: true,
-      mnemonic,
-      address: makeAddress(),
+      nickname,
+      privateKey,
+      address,
+      walletColor: color,
       activities: [
         {
           id: makeId("act"),
-          type: "지갑 생성",
-          description: "니모닉으로 지갑 복구 완료",
-          createdAt: "방금 전",
+          type: "지갑 등록",
+          description: "기존 지갑을 private key와 주소로 등록했습니다.",
+          createdAt: makeTimestamp(),
         },
         ...state.activities,
       ],
     })),
   exchangeJackToPot: (jackAmount) =>
     set((state) => {
-      if (jackAmount <= 0 || jackAmount > state.jackBalance) return state;
+      if (jackAmount <= 0 || jackAmount > state.jackBalance) {
+        return state;
+      }
+
       const potAmount = Math.floor(jackAmount / 100);
+      if (potAmount < 1) {
+        return state;
+      }
+
       return {
-        jackBalance: state.jackBalance - (potAmount * 100),
+        jackBalance: state.jackBalance - potAmount * 100,
         potBalance: state.potBalance + potAmount,
         activities: [
           {
             id: makeId("act"),
             type: "교환",
-            description: "JACK를 POT로 전환",
+            description: "JACK를 POT로 교환했습니다.",
             amount: `-${potAmount * 100} JACK / +${potAmount} POT`,
-            createdAt: "방금 전",
-          },
-          ...state.activities,
-        ],
-      };
-    }),
-  exchangePotToJack: (potAmount) =>
-    set((state) => {
-      if (potAmount <= 0 || potAmount > state.potBalance) return state;
-      const jackAmount = potAmount * 100;
-      return {
-        jackBalance: state.jackBalance + jackAmount,
-        potBalance: state.potBalance - potAmount,
-        activities: [
-          {
-            id: makeId("act"),
-            type: "교환",
-            description: "POT를 JACK으로 전환",
-            amount: `-${potAmount} POT / +${jackAmount} JACK`,
-            createdAt: "방금 전",
+            createdAt: makeTimestamp(),
           },
           ...state.activities,
         ],
@@ -110,10 +139,10 @@ export const useWalletStore = create<WalletStore>((set) => ({
 
       const entry: LottoEntry = {
         id: makeId("entry"),
-        createdAt: "방금 전",
+        createdAt: makeTimestamp(),
         numbers: hexNumbers,
         jackpotSnapshot: 1241500 + state.entries.length * 1200,
-        status: "대기",
+        status: "추첨중",
         reward: 0,
         claimed: false,
       };
@@ -125,9 +154,9 @@ export const useWalletStore = create<WalletStore>((set) => ({
           {
             id: makeId("act"),
             type: "로또 참여",
-            description: `${hexNumbers.join(" · ")} 번호로 회차 참여`,
+            description: `${hexNumbers.join(" ")} 조합으로 로또에 참여했습니다.`,
             amount: "-1 POT",
-            createdAt: "방금 전",
+            createdAt: makeTimestamp(),
           },
           ...state.activities,
         ],
@@ -149,9 +178,9 @@ export const useWalletStore = create<WalletStore>((set) => ({
           {
             id: makeId("act"),
             type: "보상 수령",
-            description: "로또 보상 수령 완료",
+            description: "로또 보상을 수령했습니다.",
             amount: `+${target.reward} JACK`,
-            createdAt: "방금 전",
+            createdAt: makeTimestamp(),
           },
           ...state.activities,
         ],

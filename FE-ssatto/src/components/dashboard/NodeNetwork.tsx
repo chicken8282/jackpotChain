@@ -4,14 +4,14 @@ import { useAnimateOnScroll } from "../../hooks/useAnimateOnScroll";
 import { dashboardStats } from "./dashboardMockData";
 
 const nodes = [
-  { id: "center", x: 210, y: 158, size: 20, label: "중앙 노드" },
-  { id: "n1", x: 112, y: 82, size: 13, label: "노드 01" },
-  { id: "n2", x: 214, y: 52, size: 13, label: "노드 02" },
-  { id: "n3", x: 326, y: 86, size: 13, label: "노드 03" },
-  { id: "n4", x: 78, y: 190, size: 12, label: "노드 04" },
-  { id: "n5", x: 340, y: 194, size: 12, label: "노드 05" },
-  { id: "n6", x: 132, y: 282, size: 13, label: "노드 06" },
-  { id: "n7", x: 288, y: 288, size: 13, label: "노드 07" },
+  { id: "center", x: 210, y: 148, size: 16, label: "중앙 노드" },
+  { id: "n1", x: 128, y: 94, size: 11, label: "노드 01" },
+  { id: "n2", x: 212, y: 72, size: 11, label: "노드 02" },
+  { id: "n3", x: 294, y: 96, size: 11, label: "노드 03" },
+  { id: "n4", x: 98, y: 182, size: 10, label: "노드 04" },
+  { id: "n5", x: 320, y: 184, size: 10, label: "노드 05" },
+  { id: "n6", x: 146, y: 244, size: 11, label: "노드 06" },
+  { id: "n7", x: 274, y: 246, size: 11, label: "노드 07" },
 ];
 
 const links = [
@@ -39,7 +39,7 @@ export default function NodeNetwork() {
     to: string,
   ) => {
     const curveX = (start.x + end.x) / 2;
-    const curveY = (start.y + end.y) / 2 - (from === "center" || to === "center" ? 24 : 12);
+    const curveY = (start.y + end.y) / 2 - (from === "center" || to === "center" ? 18 : 10);
 
     return `M ${start.x} ${start.y} Q ${curveX} ${curveY} ${end.x} ${end.y}`;
   };
@@ -50,19 +50,21 @@ export default function NodeNetwork() {
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, delay: 0.1 }}
-      className="relative overflow-hidden rounded-[24px] border border-border bg-surface px-5 sm:px-6 pt-5 pb-5 sm:pt-6 sm:pb-6 shadow-sm h-full flex flex-col justify-between"
+      className="relative flex h-full min-h-[228px] flex-col overflow-hidden rounded-[24px] border border-border bg-surface px-4 pb-4 pt-4 shadow-sm sm:px-5"
     >
-      <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.1),transparent_70%)]" />
-      <div className="relative">
+      <div className="absolute inset-x-0 top-0 h-16 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.1),transparent_70%)]" />
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="font-display text-2xl font-bold text-white">노드 네트워크</h3>
-          <span className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[11px] uppercase tracking-wider font-bold text-info">
+          <h3 className="font-display text-[1.5rem] font-bold text-white">노드 네트워크</h3>
+          <span className="rounded-full border border-info/30 bg-info/10 px-2.5 py-1 text-[10px] uppercase tracking-wider font-bold text-info">
             활성 노드 {dashboardStats.activeNodes}개
           </span>
         </div>
 
-        <div className="mt-4 flex-1 rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-2 py-2 lg:px-5 lg:py-5 flex items-center justify-center">
-          <svg viewBox="0 0 420 340" className="h-[220px] w-full">
+        <div className="mt-2 flex flex-1 items-stretch justify-center rounded-[22px] border border-white/8 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] px-2 py-2 lg:px-3 lg:py-3">
+          <div className="flex h-full min-h-[112px] w-full items-center justify-center">
+            <div className="flex h-full w-full max-h-[280px] max-w-[392px] items-center justify-center">
+              <svg viewBox="0 0 420 300" className="h-full w-full">
             <defs>
               <linearGradient id="node-line" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="rgba(59,130,246,0.08)" />
@@ -71,8 +73,8 @@ export default function NodeNetwork() {
               </linearGradient>
             </defs>
 
-            <circle cx="210" cy="160" r="118" fill="none" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 10" />
-            <circle cx="210" cy="160" r="78" fill="none" stroke="rgba(59,130,246,0.12)" strokeDasharray="2 8" />
+            <circle cx="210" cy="148" r="100" fill="none" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 10" />
+            <circle cx="210" cy="148" r="66" fill="none" stroke="rgba(59,130,246,0.12)" strokeDasharray="2 8" />
 
             {links.map(([from, to], index) => {
               const fromId = String(from);
@@ -90,13 +92,13 @@ export default function NodeNetwork() {
                     d={path}
                     fill="none"
                     stroke={highlighted ? "url(#node-line)" : "rgba(59,130,246,0.18)"}
-                    strokeWidth={highlighted ? 2.8 : 1.6}
+                    strokeWidth={highlighted ? 2.4 : 1.4}
                     initial={{ pathLength: 0, opacity: 0 }}
                     animate={inView ? { pathLength: 1, opacity: 1 } : {}}
                     transition={{ duration: 0.42, delay: index * 0.05 }}
                   />
                   <motion.circle
-                    r={highlighted ? 3.5 : 2.5}
+                    r={highlighted ? 3 : 2.2}
                     fill={highlighted ? "rgba(255,255,255,0.92)" : "rgba(96,165,250,0.82)"}
                     animate={
                       inView
@@ -108,7 +110,7 @@ export default function NodeNetwork() {
                     }
                     style={{ offsetPath: `path("${path}")` }}
                     transition={{
-                      duration: highlighted ? 1.8 : 2.8,
+                      duration: highlighted ? 1.7 : 2.6,
                       delay: index * 0.1,
                       repeat: Number.POSITIVE_INFINITY,
                       ease: "linear",
@@ -132,7 +134,7 @@ export default function NodeNetwork() {
                   <motion.circle
                     cx={node.x}
                     cy={node.y}
-                    r={node.size + 10}
+                    r={node.size + 8}
                     fill="rgba(59,130,246,0.08)"
                     animate={highlighted ? { opacity: [0.25, 0.5, 0.25] } : { opacity: 0.18 }}
                     transition={{ duration: 1.6, repeat: Number.POSITIVE_INFINITY }}
@@ -143,14 +145,14 @@ export default function NodeNetwork() {
                     r={node.size}
                     fill={node.id === "center" ? "rgba(229,160,0,0.95)" : "rgba(12,22,42,0.98)"}
                     stroke={node.id === "center" ? "rgba(255,232,179,0.95)" : "rgba(96,165,250,0.7)"}
-                    strokeWidth="2.2"
+                    strokeWidth="2"
                   />
                   <text
                     x={node.x}
-                    y={node.y + 32}
+                    y={node.y + 24}
                     textAnchor="middle"
                     fill="rgba(226,232,240,0.86)"
-                    fontSize="11"
+                    fontSize="10"
                     fontFamily="Pretendard"
                   >
                     {node.label}
@@ -158,7 +160,9 @@ export default function NodeNetwork() {
                 </motion.g>
               );
             })}
-          </svg>
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
     </motion.section>

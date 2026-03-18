@@ -58,7 +58,7 @@ export default function JackpotPool() {
                   repeat: Number.POSITIVE_INFINITY,
                   ease: "easeIn",
                 }}
-                className="absolute top-3 h-8 w-8 rounded-full border border-[#F5D57B]/45 bg-[radial-gradient(circle_at_30%_28%,#FFF0BF,#E5A000_58%,#996300_100%)] text-center font-display text-xs font-bold leading-8 text-[#231600] shadow-[0_0_14px_rgba(229,160,0,0.3)]"
+                className="absolute top-[-8px] h-8 w-8 rounded-full border border-[#F5D57B]/45 bg-[radial-gradient(circle_at_30%_28%,#FFF0BF,#E5A000_58%,#996300_100%)] text-center font-display text-xs font-bold leading-8 text-[#231600] shadow-[0_0_14px_rgba(229,160,0,0.3)]"
                 style={{ left: `${coin.left}%` }}
               >
                 J

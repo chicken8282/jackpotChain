@@ -13,10 +13,6 @@ function getStatusLabel(block: DashboardBlockDetail) {
   return block.status === "confirmed" ? "확정" : "후보";
 }
 
-function getShortHash(hash: string) {
-  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-}
-
 function getPalette(block: DashboardBlockDetail) {
   if (block.status === "confirmed") {
     return {
