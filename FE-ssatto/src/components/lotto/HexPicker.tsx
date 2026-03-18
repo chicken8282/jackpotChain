@@ -447,7 +447,7 @@ export default function HexPicker({
         title={
           <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <h2
-              className="ml-3 font-display text-3xl font-bold leading-[1] tracking-[-0.04em] text-white lg:ml-7"
+              className="ml-3 font-display text-[35px] font-black leading-[1] tracking-[-0.04em] text-white lg:ml-7"
             >
               {tab === "draw" ? "로또 추첨 참여" : "참여 내역"}
             </h2>
@@ -456,7 +456,7 @@ export default function HexPicker({
                 <button
                   type="button"
                   onClick={() => setTab("draw")}
-                  className={`rounded-lg px-5 py-2 text-sm font-bold transition-all ${
+                  className={`rounded-lg px-5 py-2 text-sm font-extrabold transition-all ${
                     tab === "draw"
                       ? "bg-white/10 text-white shadow-lg"
                       : "text-text-tertiary hover:text-text-secondary"
