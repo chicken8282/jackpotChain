@@ -36,6 +36,9 @@ export default function ActivityList({ activities }: ActivityListProps) {
                   <p className="mt-1 text-sm text-text-primary">{activity.description}</p>
                 </div>
                 <div className="text-left lg:text-right">
+                  {activity.amount ? (
+                    <p className="font-mono text-sm text-text-primary">{activity.amount}</p>
+                  ) : null}
                   {activity.jackAmount != null ? (
                     <p className={`font-mono text-sm ${activity.jackAmount >= 0 ? "text-accent-gold" : "text-text-secondary"}`}>
                       {activity.jackAmount >= 0 ? "+" : ""}{(activity.jackAmount / 1e8).toLocaleString("ko-KR")} JACK

@@ -12,6 +12,7 @@ export interface DashboardBlockDetail {
   confirmations: number;
   version: string;
   previousHash: string;
+  merkleRoot?: string;
   nonce: number;
   difficulty: string;
   minedAt: string;
@@ -19,6 +20,7 @@ export interface DashboardBlockDetail {
   isMainChain: boolean;
   isMine?: boolean;
   minerLabel: string;
+  coinbaseAddress?: string;
 }
 
 export const confirmedBlocks: DashboardBlockDetail[] = [

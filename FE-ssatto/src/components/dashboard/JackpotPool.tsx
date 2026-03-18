@@ -3,7 +3,11 @@ import AnimatedNumber from "../common/AnimatedNumber";
 import { useAnimateOnScroll } from "../../hooks/useAnimateOnScroll";
 import { dashboardStats } from "./dashboardMockData";
 
-export default function JackpotPool() {
+interface JackpotPoolProps {
+  className?: string;
+}
+
+export default function JackpotPool({ className = "" }: JackpotPoolProps) {
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
   const coins = Array.from({ length: 8 }, (_, index) => ({
     id: index,
@@ -15,7 +19,7 @@ export default function JackpotPool() {
   return (
     <section
       ref={ref}
-      className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.72),rgba(7,11,21,0.88))] px-5 py-6 sm:px-7 sm:py-7"
+      className={`relative w-full overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.72),rgba(7,11,21,0.88))] px-5 py-6 sm:px-7 sm:py-7 ${className}`}
     >
       <div className="absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top,rgba(229,160,0,0.12),transparent_68%)]" />
       <div className="mb-4">
@@ -67,7 +71,7 @@ export default function JackpotPool() {
           </div>
         </motion.div>
 
-        <div className="mt-4">
+        <div className="mt-[36px]">
           <div className="flex items-baseline gap-3">
             <p className="font-display text-5xl sm:text-[4.5rem] font-black tracking-[-0.04em] text-white drop-shadow-[0_0_30px_rgba(245,158,11,0.2)]">
               <AnimatedNumber value={dashboardStats.jackpotPool} delay={0.12} />
