@@ -13,6 +13,11 @@ function getStatusLabel(block: DashboardBlockDetail) {
   return block.status === "confirmed" ? "확정" : "후보";
 }
 
+function getSingleHexDigit(hash: string) {
+  const matches = hash.match(/[0-9a-f]/gi);
+  return matches?.at(-1)?.toLowerCase() ?? "0";
+}
+
 function getPalette(block: DashboardBlockDetail) {
   if (block.status === "confirmed") {
     return {
@@ -120,7 +125,7 @@ export default function BlockPrism({
                   해시
                 </p>
                 <p className={`mt-1 whitespace-nowrap font-mono font-bold leading-none ${size.footerValue} text-[#F86965]`}>
-                  {block.hash.slice(-6)}
+                  {getSingleHexDigit(block.hash)}
                 </p>
               </div>
             </div>

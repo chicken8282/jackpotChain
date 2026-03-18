@@ -10,6 +10,10 @@ interface MinedBlocksProps {
   blocks: MinedBlock[];
 }
 
+function getSingleHexDigit(hash: string) {
+  const matches = hash.match(/[0-9a-f]/gi);
+  return matches?.at(-1)?.toLowerCase() ?? "0";
+}
 function toBlockDetail(block: MinedBlock): DashboardBlockDetail {
   return {
     id: block.id,
@@ -94,9 +98,9 @@ export default function MinedBlocks({ blocks }: MinedBlocksProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                   onClick={() => setSelectedBlock(toBlockDetail(block))}
-                  className="h-44 w-[17rem] cursor-pointer rounded-[24px] border border-border bg-surface px-4 py-3 text-left shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-colors hover:border-accent-gold/40"
+                  className="h-44 w-[17rem] cursor-pointer overflow-hidden rounded-[24px] border border-border bg-surface px-4 py-4 text-left shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-colors hover:border-accent-gold/40"
                 >
-                  <div className="flex h-full flex-col justify-between">
+                  <div className="flex h-full flex-col">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-tertiary">블록 높이</p>
@@ -107,22 +111,22 @@ export default function MinedBlocks({ blocks }: MinedBlocksProps) {
                       <p className="font-mono text-sm font-medium text-text-secondary">{block.createdAt}</p>
                     </div>
 
-                    <div>
-                      <p className="truncate font-mono text-[11px] font-medium tracking-wide text-text-tertiary">
-                        {block.hash}
-                      </p>
-                    </div>
-
-                    <div className="flex items-end justify-between rounded-[16px] border border-accent-gold/30 bg-accent-gold/10 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_15px_rgba(245,158,11,0.1)]">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-accent-gold/80">보상</p>
-                        <p className="mt-1 font-display text-[1.4rem] font-extrabold leading-none text-accent-gold drop-shadow-sm">
-                          <AnimatedNumber value={block.reward} suffix=" JACK" delay={0.2 + index * 0.08} />
-                        </p>
+                    <div className="mt-auto rounded-[16px] border border-accent-gold/30 bg-accent-gold/10 px-4 pt-3 pb-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_4px_15px_rgba(245,158,11,0.1)]">
+                      <div className="flex h-[46px] flex-col">
+                        <div className="flex items-center justify-between gap-4">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-accent-gold/80">보상</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-accent-gold/80">해시</p>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-4">
+                          <p className="font-display text-[1.15rem] font-extrabold leading-none text-accent-gold drop-shadow-sm">
+                            <AnimatedNumber value={block.reward} suffix=" JACK" delay={0.2 + index * 0.08} />
+                          </p>
+                          <span className="font-mono text-base font-black lowercase leading-none text-accent-gold">
+                            {getSingleHexDigit(block.hash)}
+                          </span>
+                        </div>
+                        <div className="mt-auto h-px bg-accent-gold/15" />
                       </div>
-                      <span className="rounded-md border border-accent-gold/20 bg-accent-gold/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-accent-gold">
-                        상세 보기
-                      </span>
                     </div>
                   </div>
                 </motion.button>

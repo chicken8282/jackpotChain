@@ -33,7 +33,7 @@ export const INITIAL_ENTRIES: LottoEntry[] = [
   {
     id: "entry-001",
     createdAt: "03.16 13:20",
-    numbers: ["0A", "1F", "2B", "3D", "44", "5E"],
+    numbers: ["a", "f", "b", "d", "4", "e"],
     jackpotSnapshot: 1241500,
     status: "당첨",
     reward: 380,
@@ -42,7 +42,7 @@ export const INITIAL_ENTRIES: LottoEntry[] = [
   {
     id: "entry-002",
     createdAt: "03.16 11:45",
-    numbers: ["09", "11", "2A", "31", "47", "5B"],
+    numbers: ["9", "1", "a", "1", "7", "b"],
     jackpotSnapshot: 1238800,
     status: "추첨중",
     reward: 0,
@@ -51,7 +51,7 @@ export const INITIAL_ENTRIES: LottoEntry[] = [
   {
     id: "entry-003",
     createdAt: "03.15 21:12",
-    numbers: ["03", "15", "27", "38", "4A", "5F"],
+    numbers: ["3", "5", "7", "8", "a", "f"],
     jackpotSnapshot: 1231200,
     status: "미당첨",
     reward: 0,
@@ -89,6 +89,12 @@ export const INITIAL_MINED_BLOCKS: MinedBlock[] = [
   { id: "mine-922", height: 922, hash: "0x8A22CF", reward: 50, createdAt: "03.15 18:44" },
   { id: "mine-917", height: 917, hash: "0x8A179B", reward: 50, createdAt: "03.15 08:21" },
 ];
+
+export const LOTTO_TIER_RANKING = [
+  { rank: 1, nickname: "hashnova", reward: 182000, matchCount: 6 },
+  { rank: 2, nickname: "abcd", reward: 142000, matchCount: 5 },
+  { rank: 3, nickname: "mymy", reward: 142000, matchCount: 4 },
+] as const;
 
 export const PRIZE_ROWS = [
   { label: "6개 일치", reward: "잭팟 풀 100%" },

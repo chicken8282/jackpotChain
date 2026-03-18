@@ -62,8 +62,8 @@ const slotThemes = [
 const fallbackHistory: HistoryEntry[] = [
   {
     id: "history-1",
-    numbers: ["0A", "1F", "2B", "3D", "44", "5E"],
-    resultNumbers: ["0A", "10", "2B", "4C", "44", "EF"],
+    numbers: ["a", "f", "b", "d", "4", "e"],
+    resultNumbers: ["a", "0", "b", "c", "4", "f"],
     date: "2026.03.15 14:30",
     statusLabel: "WINNING",
     rewardLabel: "2,500 POT",
@@ -71,19 +71,28 @@ const fallbackHistory: HistoryEntry[] = [
   },
   {
     id: "history-2",
-    numbers: ["12", "A3", "45", "78", "BC", "09"],
-    resultNumbers: ["11", "A3", "40", "79", "BC", "08"],
+    numbers: ["2", "3", "5", "8", "c", "9"],
+    resultNumbers: ["1", "3", "0", "9", "c", "8"],
     date: "2026.03.14 09:15",
     statusLabel: "LOSING",
     claimable: false,
   },
 ];
 
+function normalizeHexDigit(value: string) {
+  const numeric = Number.parseInt(value, 16);
+  if (Number.isNaN(numeric)) {
+    return "0";
+  }
+
+  return (numeric % 16).toString(16);
+}
+
 function buildResultNumbers(numbers: string[], seed: string) {
   return numbers.map((value, index) => {
-    const numeric = Number.parseInt(value, 16);
+    const numeric = Number.parseInt(value, 16) % 16;
     const offset = (seed.charCodeAt(index % seed.length) + index * 7) % 16;
-    return ((numeric + offset) % 256).toString(16).toUpperCase().padStart(2, "0");
+    return ((numeric + offset) % 16).toString(16);
   });
 }
 
@@ -93,15 +102,13 @@ function countMatches(numbers: string[], resultNumbers: string[]) {
 
 function getNeighborValue(hex: string, delta: number) {
   let value = Number.parseInt(hex, 16);
-  value = (value + delta + 256) % 256;
-  return value.toString(16).toUpperCase().padStart(2, "0");
+  value = (value + delta + 16) % 16;
+  return value.toString(16);
 }
 
 function generateRandomHex() {
-  return Math.floor(Math.random() * 256)
+  return Math.floor(Math.random() * 16)
     .toString(16)
-    .toUpperCase()
-    .padStart(2, "0");
 }
 
 function HistoryModal({
@@ -187,7 +194,7 @@ function HistoryModal({
               비교 결과
             </span>
             <p className="font-bold text-white">
-              {matches} / 6 일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
+              {matches}/6일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
             </p>
             {entry.rewardLabel ? (
               <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
@@ -256,7 +263,7 @@ export default function HexPicker({
   const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
 
   const [tab, setTab] = useState<"draw" | "history">("draw");
-  const [selected, setSelected] = useState(["0A", "1F", "2B", "3C", "4D", "5E"]);
+  const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
   const [randomizing, setRandomizing] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<HistoryEntry | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
@@ -325,18 +332,19 @@ export default function HexPicker({
   const mergedHistory = useMemo(() => {
     const storeHistory: HistoryEntry[] =
       entries?.map((entry) => {
-        const resultNumbers = buildResultNumbers(entry.numbers, entry.id);
+        const numbers = entry.numbers.map(normalizeHexDigit);
+        const resultNumbers = buildResultNumbers(numbers, entry.id);
         const rewardLabel = entry.reward > 0 ? `${entry.reward.toLocaleString("ko-KR")} JACK` : undefined;
 
         return {
           id: entry.id,
-          numbers: entry.numbers,
+          numbers,
           resultNumbers,
           date: entry.createdAt,
           statusLabel:
-            entry.status === "WINNING" ? "WINNING" : entry.status === "LOSING" ? "LOSING" : "DRAWING",
+            entry.status === "당첨" ? "WINNING" : entry.status === "미당첨" ? "LOSING" : "DRAWING",
           rewardLabel,
-          claimable: entry.isClaimable,
+          claimable: entry.status === "당첨" && !entry.claimed,
         };
       }) ?? [];
 
@@ -411,8 +419,8 @@ export default function HexPicker({
     setSelected((current) => {
       const next = [...current];
       let value = Number.parseInt(next[index], 16);
-      value = (value + delta + 256) % 256;
-      next[index] = value.toString(16).toUpperCase().padStart(2, "0");
+      value = (value + delta + 16) % 16;
+      next[index] = value.toString(16);
       return next;
     });
     triggerSlotPulse(index);
@@ -439,7 +447,7 @@ export default function HexPicker({
         title={
           <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
             <h2
-              className="ml-3 font-display text-3xl font-bold leading-[1] tracking-[-0.04em] text-white lg:ml-7"
+              className="ml-3 font-display text-[35px] font-black leading-[1] tracking-[-0.04em] text-white lg:ml-7"
             >
               {tab === "draw" ? "로또 추첨 참여" : "참여 내역"}
             </h2>
@@ -448,7 +456,7 @@ export default function HexPicker({
                 <button
                   type="button"
                   onClick={() => setTab("draw")}
-                  className={`rounded-lg px-5 py-2 text-sm font-bold transition-all ${
+                  className={`rounded-lg px-5 py-2 text-sm font-extrabold transition-all ${
                     tab === "draw"
                       ? "bg-white/10 text-white shadow-lg"
                       : "text-text-tertiary hover:text-text-secondary"
@@ -639,7 +647,7 @@ export default function HexPicker({
                       ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     {entry.claimable && onClaim ? (
                       <button
                         type="button"
@@ -653,7 +661,7 @@ export default function HexPicker({
                       </button>
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
-                      {countMatches(entry.numbers, entry.resultNumbers)} / 6 일치
+                      {countMatches(entry.numbers, entry.resultNumbers)}/6일치
                     </span>
                     <svg
                       className="h-4 w-4 text-text-tertiary transition-transform group-hover:translate-x-0.5"
