@@ -1,0 +1,38 @@
+spring:
+  # 활성화할 프로파일 선택 (local / prod)
+  profiles:
+    active: local
+
+  # JPA 공통 설정
+  jpa:
+    open-in-view: false          # OSIV 비활성화 — 트랜잭션 범위를 명확히 하기 위해
+    properties:
+      hibernate:
+        format_sql: true         # SQL 로그 포맷팅
+        default_batch_fetch_size: 100  # N+1 방지를 위한 배치 페치 사이즈
+
+  # Jackson 날짜/시간 직렬화 설정
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # ISO 8601 형식으로 날짜 직렬화
+    time-zone: Asia/Seoul
+
+# Swagger / SpringDoc OpenAPI 설정
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+
+# JWT 설정 (공통 — 시크릿은 각 프로파일에서 환경변수로)
+jwt:
+  expiration: 86400000  # 24시간 (밀리초)
+
+# 공통 로깅 설정
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

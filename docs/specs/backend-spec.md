@@ -1,437 +1,251 @@
-# Backend Spec
-## Project
-JackpotChain Blockchain Lottery Experience
+# Backend Spec — JackpotChain
+
+> Source of truth: `docs/reviews/api.md` (API), `docs/reviews/erd.md` (DB schema), `AGENTS.md` (agent rules)
 
 ---
 
-## 1. Goal
+## 1. Hard Rules (Boundaries)
 
-Build a backend service layer that can safely expose JackpotChain functionality to the frontend while preserving correct boundaries between:
+**Backend owns:** API shaping, service orchestration, projection/aggregation, cache, node/RPC adapter.
+**Backend does NOT own:** blockchain canonical truth, private keys, chain validity re-implementation.
 
-- blockchain node truth,
-- service-layer projections,
-- cache and async infrastructure,
-- frontend-friendly APIs.
-
-The backend must make it possible to support:
-- Dashboard
-- Lottery
-- Wallet
-- Mining
-- Admin / operations visibility
-
-without turning the service layer into the canonical blockchain authority.
+**Forbidden:**
+- Never store private keys
+- Never treat PostgreSQL or Redis as blockchain truth
+- Never expose node-internal details to the frontend
+- Never inject another module's Repository across domain boundaries (reference by ID only)
+- Never re-implement chain validity without explicit documentation
 
 ---
 
-## 2. Scope
+## 2. API Families
 
-Included in this phase:
-- backend-facing API design
-- service / controller / adapter boundaries
-- node integration boundary
-- wallet / lottery / mining / dashboard query shapes
-- projection and cache-friendly response design
-- observability-ready service points
-- future MQ / Redis / DB extension points
+> Full contract in `docs/reviews/api.md`. Paths below are the exact endpoints to implement.
 
-Excluded for now:
-- full production security hardening
-- final distributed deployment
-- complete event-driven production topology
-- final real-time websocket architecture
-- complete admin console implementation
-
----
-
-## 3. Core Backend Role
-
-The backend is responsible for:
-- frontend-facing API shaping
-- service orchestration
-- projection and aggregation
-- admin / operations API support
-- cache integration
-- monitoring integration
-- node/RPC adapter behavior
-
-The backend is not responsible for:
-- owning blockchain canonical truth
-- storing private keys
-- replacing node validation rules
-- inventing chain state locally
+| Domain | Method | Path |
+|---|---|---|
+| Blockchain | GET | `/api/blockchain/dashboard` |
+| Blockchain | GET | `/api/blockchain/blocks/{blockHash}` |
+| Blockchain | GET | `/api/blockchain/transactions` |
+| Auth | POST | `/api/auth/token` |
+| Lotto | GET | `/api/lotto/status` |
+| Lotto | POST | `/api/lotto/entries` |
+| Lotto | GET | `/api/lotto/entries` |
+| Lotto | GET | `/api/lotto/entries/{entryId}/claim` |
+| Wallet | GET | `/api/wallet` |
+| Wallet | GET | `/api/wallet/activities` |
+| Exchange | POST | `/api/exchange` |
+| Mining | GET | `/api/mining/blocks` |
 
 ---
 
-## 4. Domain Boundaries
+## 3. Data & Integration Rules
 
-### Node-owned truth
-The blockchain node should remain the canonical source for:
-- block chain state
-- transaction validity
-- mining-related chain updates
-- lottery-related on-chain truth
-- claim validation if node logic owns it
+**Per-endpoint decisions (must be explicit):** source of truth · cacheability · fallback strategy · staleness tolerance.
 
-### Service-layer responsibilities
-The backend may:
-- aggregate node + DB + cache data
-- expose frontend-friendly summaries
-- maintain projection data
-- maintain admin/ops summaries
-- provide paginated read models
-- provide controlled orchestration endpoints
+**Node integration:**
+- Controller → Service → Adapter/Client (never controller-to-node directly)
+- Read ops: bounded retry + degraded fallback allowed
+- Write ops (lottery entry, claim): idempotency required · no duplicate execution · never fake success on uncertain node result
 
-### Forbidden boundary violations
-- never store private keys
-- do not treat PostgreSQL or Redis as blockchain truth
-- do not re-implement final chain validity in the service layer unless explicitly required and documented
-- do not expose unsafe internal details to the frontend
+**Cache (cache-aside):**
 
----
+| Target | TTL |
+|---|---|
+| dashboard summary | 5–15s |
+| recent blocks | 5–10s |
+| wallet summary | 5–10s |
+| mining summary | 5–15s |
+| admin summary | 10–30s |
 
-## 5. Backend Functional Areas
+Rules: define TTL + invalidation trigger explicitly · never treat cache as canonical truth.
 
-### 5.1 Dashboard
-Backend should support:
-- current height
-- recent blocks
-- recent transactions
-- confirmed / candidate block distinction
-- network/node summaries
-- jackpot pool summary
-- block detail modal data
+**Persistence layers:**
+- PostgreSQL — service metadata, projections
+- Redis — cache, short-lived state
+- node `data_dir` — canonical blockchain (do not duplicate into service DB)
 
-### 5.2 Lottery
-Backend should support:
-- participation/entry orchestration
-- selected number submission
-- entry cost information
-- current round or active round status
-- participation history
-- result / claimable state
-- reward tier info
-- pool contribution visibility
-
-### 5.3 Wallet
-Backend should support:
-- wallet summary
-- JACK / POT balances
-- activity timeline
-- reward history
-- exchange history
-- recent status
-- wallet-related projections
-
-### 5.4 Mining
-Backend should support:
-- mined block summaries
-- reward per block
-- mining pipeline data
-- recent mining reward events
-- mining-related operational summaries
-- technical rule/policy summaries if needed
-
-### 5.5 Admin / Operations
-Backend should support:
-- chain status
-- node status
-- anomaly detection surfaces
-- commit/claim counts
-- reward event counts
-- operational summaries
+**MQ (RabbitMQ) — async only:**
+Events: `block.confirmed` · `reward.settled` · `lotto.entry.processed` · `claim.available` · `claim.completed` · `mining.reward.reflected` · `node.anomaly`.
+Not a replacement for synchronous query paths.
 
 ---
 
-## 6. Suggested API Families
+## 4. Package Structure
 
-### Dashboard APIs
-- GET /api/dashboard/summary
-- GET /api/dashboard/blocks/recent
-- GET /api/dashboard/blocks/{blockId}
-- GET /api/dashboard/network-summary
+Base package: `ssatto.BE_ssatto`
 
-### Lottery APIs
-- GET /api/lottery/summary
-- POST /api/lottery/entries
-- GET /api/lottery/entries/{walletAddress}
-- GET /api/lottery/prize-tiers
-- GET /api/lottery/claimables/{walletAddress}
-- POST /api/lottery/claims
+```
+src/main/java/ssatto/BE_ssatto/
+  ├── Application.java
+  ├── global/
+  │   ├── config/         SwaggerConfig.java · SecurityConfig.java
+  │   ├── response/       ApiResponse.java · PageResponse.java
+  │   ├── exception/      ErrorCode.java · BusinessException.java · GlobalExceptionHandler.java
+  │   └── util/           JwtUtil.java
+  └── domain/
+      ├── blockchain/     controller/ · service/ · repository/ · domain/
+      ├── wallet/         controller/ · service/ · repository/ · domain/
+      ├── exchange/       controller/ · service/ · repository/ · domain/
+      ├── lotto/          controller/ · service/ · repository/ · domain/
+      ├── mining/         controller/ · service/ · repository/ · domain/
+      └── ops/            controller/ · service/ · domain/
+```
 
-### Wallet APIs
-- GET /api/wallets/{walletAddress}/summary
-- GET /api/wallets/{walletAddress}/timeline
-- GET /api/wallets/{walletAddress}/assets
-- POST /api/wallets/{walletAddress}/swap
-
-### Mining APIs
-- GET /api/mining/summary
-- GET /api/mining/blocks/{walletAddress}
-- GET /api/mining/rewards/{walletAddress}
-- GET /api/mining/pipeline
-
-### Admin APIs
-- GET /api/admin/summary
-- GET /api/admin/node-status
-- GET /api/admin/anomalies
-- GET /api/admin/reward-events
-
-These are working API suggestions and may be adapted after node analysis.
+**Module communication:**
+```
+✅ intra-module: Controller → Service → Repository
+✅ cross-module: internal service interface (same transaction) or RabbitMQ (async)
+❌ cross-module: direct Repository injection · direct Entity reference
+```
 
 ---
 
-## 7. Data Source Strategy
+## 5. Error Handling
 
-Backend responses may come from:
-- direct node query / JSON-RPC style integration
-- database projections
-- Redis cache
-- derived service-layer aggregation
+**Response format (`ApiResponse<T>`):**
+```json
+{ "code": "SUCCESS",           "message": "...", "data": { }   }   // success
+{ "code": "WALLET_NOT_FOUND",  "message": "...", "data": null  }   // error
+{ "code": "SUCCESS", "message": "...", "data": { "content": [...], "page": 0, "size": 20, "totalElements": 100, "totalPages": 5, "hasNext": true } }  // paginated
+```
 
-For each endpoint, the implementation should explicitly decide:
-- source of truth
-- cacheability
-- fallback strategy
-- staleness tolerance
-- whether projection is needed
+**ErrorCode naming:** `{DOMAIN}_{PROBLEM}` (e.g. `WALLET_NOT_FOUND`, `LOTTO_INSUFFICIENT_FEE`)
 
----
+| Prefix | Scope | HTTP |
+|---|---|---|
+| `COMMON_` | invalid request / server error | 400 / 500 |
+| `AUTH_` | JWT missing / expired / invalid | 401 |
+| `WALLET_` | wallet errors | 404 / 409 |
+| `LOTTO_` | lottery errors | 400 / 404 / 409 |
+| `EXCHANGE_` | exchange errors | 400 / 409 |
+| `MINING_` | mining errors | 404 |
+| `BLOCKCHAIN_` | node / RPC errors | 404 / 503 |
 
-## 8. Node Integration Principles
-
-- The node integration layer must be isolated from controller logic.
-- Controllers should call services, and services should use adapters/clients for node communication.
-- Read and write node operations must be treated differently.
-
-### Read operations
-Examples:
-- get current height
-- get block details
-- get recent chain status
-
-Rules:
-- may allow bounded retry
-- may allow degraded fallback if safe
-- may allow cached summary in controlled cases
-
-### Write/orchestration operations
-Examples:
-- lottery entry
-- claim
-- wallet-affecting reward settlement actions if externalized
-
-Rules:
-- retry must be cautious
-- idempotency must be considered
-- duplicate execution must be prevented where needed
-- success must not be faked if node result is uncertain
+**BusinessException rules:**
+- Service layer throws `BusinessException(ErrorCode)` — never catch in Controller
+- `GlobalExceptionHandler` handles all: `BusinessException` → WARN log (no stack trace), unhandled `Exception` → ERROR log (with stack trace)
+- Wrap infra exceptions (`IOException`, `TimeoutException`) into `BusinessException` before propagating
 
 ---
 
-## 9. Projection Strategy
+## 6. Development Standards
 
-The backend should be ready to maintain projection-friendly models for:
-- recent blocks list
-- block detail summary
-- wallet activity timeline
-- lottery participation history
-- reward history
-- mining reward history
-- admin/ops counts and summaries
+### TDD cycle (core logic — mandatory)
+```
+Write test → ./gradlew test → confirm failure → implement → re-run → confirm pass
+```
 
-Projection candidates should be designed so the frontend does not need to understand node-internal complexity.
+| Layer | Test approach | Required |
+|---|---|---|
+| Controller | `MockMvcBuilders.standaloneSetup()` + `setControllerAdvice()` | ✅ |
+| Service | `@ExtendWith(MockitoExtension.class)` | ✅ |
+| Repository | `@DataJpaTest` + H2 | complex queries only |
+| Integration | `@SpringBootTest` | critical scenarios only |
 
----
+Test file mirrors main path:
+```
+main: ssatto/BE_ssatto/domain/wallet/service/WalletService.java
+test: ssatto/BE_ssatto/domain/wallet/service/WalletServiceTest.java
+```
 
-## 10. Cache Strategy
+### Comments (required on all classes and public methods)
+```java
+/**
+ * Wallet domain service.
+ * Handles wallet creation, balance queries, and state transitions
+ * (issued → pending_commit → committed → ready_to_claim → claimed).
+ * Never injects another module's Repository.
+ */
 
-Initial assumption:
-- cache-aside strategy
+/**
+ * @param walletAddress wallet address including 0x prefix
+ * @throws BusinessException WALLET_NOT_FOUND if address does not exist
+ */
 
-Good cache candidates:
-- dashboard summary
-- current height summary
-- recent block summary
-- recent transaction summary
-- wallet summary snapshot
-- admin summary snapshot
-- mining summary snapshot
+// Reject if wallet is not in 'issued' status (state transition policy)
+```
 
-Rules:
-- define TTL explicitly
-- define stale tolerance explicitly
-- define invalidation triggers explicitly
-- never treat cache as canonical truth
+### Swagger (on all Controllers)
+```java
+@Tag(name = "Wallet", description = "Wallet-related APIs")
+@Operation(summary = "...", description = "...")
+@ApiResponses({ @ApiResponse(responseCode = "200", ...), @ApiResponse(responseCode = "404", ...) })
+public ResponseEntity<ApiResponse<WalletBalanceResponse>> getBalance(...) { ... }
+```
+UI: `http://localhost:8080/swagger-ui/index.html` · JSON: `http://localhost:8080/v3/api-docs`
 
-Suggested early TTL assumptions:
-- dashboard summary: 5–15 seconds
-- recent blocks summary: 5–10 seconds
-- wallet summary: 5–10 seconds
-- admin summary: 10–30 seconds
-- mining summary: 5–15 seconds
-
----
-
-## 11. MQ / Event Strategy
-
-The backend should remain ready for event-driven extensions.
-
-Potential MQ event families:
-- block confirmed
-- reward settled
-- lottery entry processed
-- claim available
-- claim completed
-- mining reward reflected
-- node anomaly detected
-- RPC error threshold exceeded
-
-MQ should be used for:
-- async side effects
-- notifications
-- fan-out
-- operational logging/event distribution
-- aggregation updates
-
-MQ should not be used as a replacement for all synchronous query paths.
+### Result documentation
+After each task, write `docs/result/구현작업.md`:
+```markdown
+## Date / Implemented Items (table) / Test Results (table) / Swagger check / Checklist vs request
+```
 
 ---
 
-## 12. Persistence Strategy
+## 7. DB / JPA Rules
 
-Expected persistence layers:
-- PostgreSQL for service metadata and projections
-- Redis for cache / short-lived support state
-- node data_dir for canonical blockchain persistence
+**Flyway:** `src/main/resources/db/migration/V{n}__{description}.sql` — never modify applied files.
 
-Rules:
-- do not mix canonical blockchain truth into service DB
-- DB should store service-friendly models
-- schemas should support pagination and timeline views
-- balances exposed to UI should be clearly sourced or projected
+**Entity pattern:**
+```java
+@Entity @Table(name = "wallet") @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Wallet {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    public static Wallet create(String address) { ... }  // static factory only
+}
+```
 
----
-
-## 13. Validation and Error Strategy
-
-### Request validation
-- validate all external inputs
-- use typed request DTOs
-- reject malformed requests early
-
-### Error exposure
-- errors returned to clients must be safe and structured
-- internal implementation details must not leak
-- user-facing errors should distinguish:
-  - invalid request
-  - insufficient balance/resource
-  - temporary system delay
-  - unavailable dependency
-  - operation not allowed
-
-### Domain-sensitive validation
-- lottery entry validation
-- claim eligibility validation
-- wallet-related operation validation
-- mining/reward visibility validation where applicable
+**Test DB:** H2 (`application-test.yaml`, `ddl-auto=create-drop`, Flyway disabled) · Prod: PostgreSQL.
 
 ---
 
-## 14. Non-Functional Requirements
+## 8. Build & Config
 
-### 14.1 Scalability
-- APIs must support future growth without redesigning basic contracts
-- list-style endpoints must support pagination
-- avoid local in-memory assumptions for cross-instance state
-- keep service boundaries compatible with future horizontal scaling
-- design read-heavy responses for cache/projection use
+**build.gradle key dependencies:**
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-web'
+implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+implementation 'org.springframework.boot:spring-boot-starter-validation'
+implementation 'org.springframework.boot:spring-boot-starter-security'
+implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+runtimeOnly  'io.jsonwebtoken:jjwt-impl:0.12.6'
+runtimeOnly  'io.jsonwebtoken:jjwt-jackson:0.12.6'
+runtimeOnly  'org.postgresql:postgresql'
+implementation 'org.flywaydb:flyway-core'
+implementation 'org.flywaydb:flyway-database-postgresql'
+implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+implementation 'org.springframework.boot:spring-boot-starter-amqp'
+compileOnly   'org.projectlombok:lombok'
+annotationProcessor 'org.projectlombok:lombok'
+testImplementation 'org.springframework.boot:spring-boot-starter-test'
+testImplementation 'com.h2database:h2'
+testImplementation 'org.springframework.security:spring-security-test'
+```
 
-### 14.2 Availability
-- prefer bounded failure over cascading failure
-- keep secondary side effects separate from primary request success paths
-- external dependency calls must define timeout behavior
-- safe degraded read responses may be allowed where clearly defined
-- admin failures should not automatically break user product APIs
-
-### 14.3 Reliability
-- transaction boundaries must be explicit
-- idempotency must be considered for mutation-like actions
-- read retry and write retry must be separated conceptually
-- duplicate execution risk must be identified
-- no unsafe assumptions about node success may leak into user-visible success
-
-### 14.4 Performance
-- dashboard summary target: P95 <= 500ms under normal local/staging baseline
-- detail and list summary APIs target: P95 <= 700ms
-- mutation orchestration target: P95 <= 1000ms excluding external chain confirmation uncertainty
-- hot paths must avoid oversized payloads
-- projection and caching should be used where justified
-
-These are initial working assumptions and should be revised after real measurement.
-
----
-
-## 15. Observability Requirements
-
-Important backend boundaries that must be observable:
-- controller entry
-- service orchestration
-- node/RPC adapter boundary
-- DB boundary
-- Redis boundary
-- MQ producer/consumer boundary
-
-Metrics to plan for:
-- request latency
-- error rate
-- node/RPC failures
-- cache hit/miss
-- queue backlog
-- lottery entry count
-- claim count
-- reward reflection count
-- recent anomaly count
-
-Logging rules:
-- structured logs preferred
-- preserve trace/correlation identifiers where possible
-- do not log sensitive data carelessly
+**Config files:**
+```
+application.yaml          # common (profile, JPA, Jackson, Swagger)
+application-local.yaml    # PostgreSQL localhost, debug SQL
+application-prod.yaml     # all secrets via env vars
+application-test.yaml     # H2, Flyway off, ddl-auto=create-drop
+```
 
 ---
 
-## 16. Security Rules
+## 9. NFR & Checklist
 
-- never store private keys
-- validate all client input
-- minimize trust boundaries
-- expose only necessary information
-- admin/ops APIs must remain clearly separated from user-facing APIs
-- do not expose internal node details beyond what the product actually needs
+**Performance targets:** dashboard P95 ≤ 500ms · list/detail P95 ≤ 700ms · mutations P95 ≤ 1000ms (excl. chain confirmation).
 
----
-
-## 17. Review Checklist
-
-- Does the backend keep node truth separate from service projections?
-- Are controllers/services/adapters clearly separated?
-- Are list endpoints pagination-ready?
-- Are cache and projection opportunities identified?
-- Are write-like actions reviewed for idempotency and duplicate handling?
-- Are timeout/retry/fallback assumptions explicit?
-- Are errors safe and structured?
-- Are observability points identified?
-- Are APIs frontend-friendly without leaking node-internal complexity?
-
----
-
-## 18. Done Criteria
-
-This backend phase is complete only if:
-- service boundaries are defined clearly
-- API families for Dashboard / Lottery / Wallet / Mining exist
-- node integration boundary is isolated
-- projection and cache seams are prepared
-- validation and error strategies are defined
-- observability points are identified
-- no canonical blockchain truth is incorrectly moved into the service layer
+**Before marking any task done:**
+- [ ] Node truth kept separate from service projections
+- [ ] No cross-module Repository injection
+- [ ] List endpoints are pagination-ready
+- [ ] Write ops reviewed for idempotency
+- [ ] Core Service methods have unit tests (passing)
+- [ ] Controllers have MockMvc tests (passing)
+- [ ] All classes and public methods have comments
+- [ ] Swagger UI documents all new endpoints
+- [ ] `docs/result/구현작업.md` updated

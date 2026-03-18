@@ -1,0 +1,46 @@
+spring:
+  # 운영 환경 — 모든 민감 정보는 환경변수로 주입
+  datasource:
+    url: ${DB_URL}               # 환경변수: jdbc:postgresql://host:5432/jackpotchain
+    username: ${DB_USERNAME}     # 환경변수
+    password: ${DB_PASSWORD}     # 환경변수
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate         # 운영에서 절대 create/drop 사용 금지
+    show-sql: false              # 운영에서 SQL 로그 비활성화
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  # Redis 운영 설정
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # RabbitMQ 운영 설정
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+# JWT 시크릿 — 반드시 환경변수로 주입
+jwt:
+  secret: ${JWT_SECRET}
+
+# 운영 로깅 — INFO 레벨, SQL 로그 비활성화
+logging:
+  level:
+    ssatto.jackpotchain: INFO
+    org.hibernate.SQL: WARN
