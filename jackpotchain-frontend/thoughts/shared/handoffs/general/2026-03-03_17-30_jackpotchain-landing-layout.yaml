@@ -1,0 +1,87 @@
+---
+session: jackpotchain-frontend-development
+date: 2026-03-03
+status: partial
+outcome: PARTIAL_MINUS
+---
+
+goal: Build Vue 3 frontend for JackpotChain blockchain education site with 5 screens
+now: Fix landing page layout - content cut in half on right side despite overflow fixes
+
+done_this_session:
+  - task: Created Vue 3 project with router and 5 view components
+    files: [jackpotchain-frontend/src/router/index.ts, jackpotchain-frontend/src/App.vue]
+  - task: Implemented LandingView with particle canvas background
+    files: [jackpotchain-frontend/src/views/LandingView.vue]
+  - task: Implemented LotteryInputView with hex 6-digit input
+    files: [jackpotchain-frontend/src/views/LotteryInputView.vue]
+  - task: Implemented EducationView with 5 chapters and scroll animations
+    files: [jackpotchain-frontend/src/views/EducationView.vue]
+  - task: Implemented HashRevealView with block comparison
+    files: [jackpotchain-frontend/src/views/HashRevealView.vue]
+  - task: Implemented ResultView with jackpot/rank screens
+    files: [jackpotchain-frontend/src/views/ResultView.vue]
+
+blockers:
+  - Landing page content (hero text + buttons) cut in half horizontally - right side not visible
+  - Multiple CSS fixes attempted (overflow-x hidden, canvas positioning, flexbox) but issue persists
+  - Canvas particle background may be affecting layout despite position:fixed
+  - Node.js version 18.19.1 too old for Vite 7 (requires 20.19+) but dev server runs
+
+questions:
+  - Why does content get cut despite Canvas being position:fixed with pointer-events:none?
+  - Is there a root-level CSS issue causing viewport width miscalculation?
+  - Should we revert to simpler layout without Canvas background?
+
+decisions:
+  - vue_composition_api: Using Vue 3 Composition API with script setup for cleaner, more maintainable code
+  - component_structure: Screen-per-route with views/ directory, no shared components yet
+  - canvas_background: Using HTML5 Canvas with requestAnimationFrame for particle network (60 particles, 150px connection distance)
+  - design_system: Inline in each component for now - Google Fonts (Syne/Noto Sans KR/JetBrains Mono), colors (#0A0A0F bg, #F0B429 gold)
+  - session_storage: User numbers and match count stored in sessionStorage for cross-screen data
+
+findings:
+  - Canvas with position:absolute caused flex layout issues - switched to position:fixed
+  - overflow-x:hidden on parent containers cuts content instead of preventing scroll
+  - Need fullscreen event listeners (fullscreenchange, webkitfullscreenchange) for F11 support
+  - Vue 3 + TypeScript setup works despite Node version warnings
+
+worked:
+  - Particle canvas animation with mouse interaction
+  - Route-based navigation between 5 screens
+  - Hex input validation and auto-focus in LotteryInputView
+  - IntersectionObserver for scroll-triggered animations in EducationView
+  - SHA-256 hash demo using Web Crypto API
+
+failed:
+  - Multiple overflow-x:hidden attempts created layout bugs instead of fixing scroll
+  - Canvas position:absolute made it a flex child, breaking layout
+  - Setting max-width:100vw on #app caused content to be cut
+  - Direct CSS width/height on Canvas conflicted with JS-set dimensions
+
+next:
+  - Debug landing page layout using browser DevTools - inspect computed styles and box model
+  - Check if Canvas is still affecting layout despite position:fixed
+  - Consider temporary Canvas removal to isolate CSS issue
+  - Test with simplified hero-content positioning (remove flexbox wrapper)
+  - Verify viewport meta tag in index.html
+  - Test in different browsers to rule out browser-specific issue
+
+files:
+  created:
+    - jackpotchain-frontend/src/views/LandingView.vue
+    - jackpotchain-frontend/src/views/LotteryInputView.vue
+    - jackpotchain-frontend/src/views/EducationView.vue
+    - jackpotchain-frontend/src/views/HashRevealView.vue
+    - jackpotchain-frontend/src/views/ResultView.vue
+  modified:
+    - jackpotchain-frontend/src/router/index.ts
+    - jackpotchain-frontend/src/App.vue
+
+test: cd jackpotchain-frontend && npm run dev
+
+context:
+  project_spec: jackpotchain_cui_guide.md
+  tech_stack: Vue 3, TypeScript, Vite, Vue Router
+  user_notes: Education content (Chapter 1-5) is placeholder - will be revised later
+  current_issue: Landing page image.png shows content cut in half on right side

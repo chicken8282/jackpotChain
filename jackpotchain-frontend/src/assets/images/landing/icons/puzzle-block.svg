@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 64">
+  <defs>
+    <linearGradient id="gold-gradient-puzzle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0B429;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+
+  <style>
+    @keyframes word-appear {
+      0% {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .word {
+      opacity: 0;
+      animation: word-appear 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+    }
+
+    .word-1 { animation-delay: 0.1s; }
+    .word-2 { animation-delay: 0.3s; }
+    .word-3 { animation-delay: 0.5s; }
+    .word-4 { animation-delay: 0.2s; }
+    .word-5 { animation-delay: 0.6s; }
+    .word-6 { animation-delay: 0.4s; }
+  </style>
+
+  <!-- 블록체인 용어들이 훨씬 더 멀리 떨어져 있음 -->
+  <!-- 분산원장 (맨 왼쪽) -->
+  <text x="5" y="18" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-1">분산원장</text>
+  <!-- 해시함수 (왼쪽) -->
+  <text x="25" y="52" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-2">해시함수</text>
+  <!-- 합의 (중앙 왼쪽) -->
+  <text x="75" y="22" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-3">합의</text>
+  <!-- P2P (중앙) -->
+  <text x="100" y="56" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-4">P2P</text>
+  <!-- 탈중앙화 (오른쪽) -->
+  <text x="135" y="26" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-5">탈중앙화</text>
+  <!-- 채굴 (맨 오른쪽) -->
+  <text x="170" y="48" font-family="Noto Sans KR, sans-serif" font-size="12" fill="url(#gold-gradient-puzzle)" font-weight="500" class="word word-6">채굴</text>
+</svg>
