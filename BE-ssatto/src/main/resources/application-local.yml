@@ -1,8 +1,10 @@
 spring:
+  config:
+    import: optional:file:.env.local[.properties],optional:file:../.env.local[.properties]
   datasource:
-    url: jdbc:postgresql://localhost:5432/jackpotchain
-    username: jackpot
-    password: jackpot1234
+    url: ${SPRING_DATASOURCE_URL:${LOCAL_DB_URL:jdbc:postgresql://localhost:5432/jackpotchain}}
+    username: ${SPRING_DATASOURCE_USERNAME:${LOCAL_DB_USERNAME:jackpot}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${LOCAL_DB_PASSWORD:jackpot1234}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -23,16 +25,20 @@ spring:
     baseline-on-migrate: true
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:${LOCAL_REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${LOCAL_REDIS_PORT:6379}}
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${SPRING_RABBITMQ_HOST:${LOCAL_RABBITMQ_HOST:localhost}}
+    port: ${SPRING_RABBITMQ_PORT:${LOCAL_RABBITMQ_PORT:5672}}
+    username: ${SPRING_RABBITMQ_USERNAME:${LOCAL_RABBITMQ_USERNAME:guest}}
+    password: ${SPRING_RABBITMQ_PASSWORD:${LOCAL_RABBITMQ_PASSWORD:guest}}
+
+jackpotchain:
+  rpc:
+    url: ${JACKPOTCHAIN_RPC_URL:${LOCAL_JACKPOTCHAIN_RPC_URL:http://localhost:8332}}
 
 jwt:
-  secret: local-dev-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256
+  secret: ${JWT_SECRET:${LOCAL_JWT_SECRET:local-dev-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256}}
 
 logging:
   level:

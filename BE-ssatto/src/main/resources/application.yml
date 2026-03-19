@@ -27,6 +27,12 @@ springdoc:
 jwt:
   expiration: 86400000
 
+jackpotchain:
+  rpc:
+    url: ${JACKPOTCHAIN_RPC_URL:http://localhost:8332}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
 management:
   endpoints:
     web:

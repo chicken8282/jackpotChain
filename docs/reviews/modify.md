@@ -1,539 +1,317 @@
-# 코드 수정 계획 (FE + JackpotChain)
+# 코드 수정 계획
+# FE + JackpotChain 정합화 기준
 
-> api.md · erd.md · funtional-spec.md · architecture.md 기반으로 도출한 수정 사항 정리
 > 작성 기준일: 2026-03-19
-> FE-ssatto 소스코드 직접 분석 + jackpotchain 소스코드 직접 분석 반영
+> 기준 소스: `FE-ssatto`, `jackpotchain`
+> 목적: 실제 구현 기준으로 수정 범위를 다시 줄이고 우선순위를 명확히 한다.
 
 ---
 
-## 목차
+## 1. FE 수정 사항
 
-1. [FE-ssatto 수정 사항](#1-fe-ssatto-수정-사항)
-   - 1-1. API 서비스 레이어 신규 구축
-   - 1-2. API 엔드포인트 변경 대응
-   - 1-3. 컴포넌트별 수정 사항
-   - 1-4. 클라이언트 사이드 서명 구현
-2. [JackpotChain 수정 사항](#2-jackpotchain-수정-사항)
-   - 2-1. `constants.py`
-   - 2-2. `consensus/miner.py`
-   - 2-3. `network/node.py` (Webhook 연동)
+### 1-1. 핵심 방향
 
----
+FE는 현재 구조를 유지하되 아래 네 축으로 정리하는 것이 맞다.
 
-## 1. FE-ssatto 수정 사항
+1. 서비스 레이어 신설 또는 정비
+2. API 타입을 실제 응답 계약에 맞게 재정의
+3. 로또 상태값과 응답 필드 정합화
+4. 클라이언트 서명/키 저장 전략 확정
 
-### 현재 상태 분석 (소스코드 기반)
+### 1-2. 우선 수정 대상
 
-| 항목 | 현재 상태 | 목표 |
-|------|---------|------|
-| API 호출 | 없음 — 전체 목업 데이터 (`lib/constants.ts`, `dashboardMockData.ts`) | 실제 BE API 연동 |
-| 서비스 레이어 | 없음 (`services/`, `api/` 디렉토리 미존재) | `src/services/` 신규 생성 |
-| 인증 | 없음 | JWT + localStorage 관리 모듈 |
-| 타입 정의 | `types/index.ts`에 일부 정의 (api.md와 불일치) | api.md 기준 재정의 |
-| 상태 관리 | `useWalletStore.ts` (Zustand) | 서버 상태 연동으로 확장 |
-| 로또 status 값 | `PENDING` / `WON` / `LOST` / `EXPIRED` | `DRAWING` / `WINNING` / `LOSING` / `EXPIRED` |
+| 우선순위 | 대상 | 수정 항목 |
+|:--------:|------|------|
+| 🔴 1 | `src/services/*` | BE REST 호출 계층 정리 |
+| 🔴 2 | `types/index.ts` | API 응답 타입 재정의 |
+| 🔴 3 | 대시보드/지갑/로또 페이지 | mock 데이터 제거, 실제 API 연결 |
+| 🟡 4 | 상태 enum | `DRAWING/WINNING/LOSING/EXPIRED` 기준 정리 |
+| 🟡 5 | 키 저장소 | IndexedDB 기반 개인키 저장 또는 MVP 대안 확정 |
 
----
+### 1-3. FE에서 특히 주의할 점
 
-### 1-1. API 서비스 레이어 신규 구축
-
-> 현재 FE에 API 호출 코드가 전혀 없음. `src/services/` 디렉토리를 새로 생성한다.
-
-#### API 클라이언트 기반 설정 (`src/services/apiClient.ts`)
-
-```ts
-// Base URL: /api/v1 (vite.config.ts proxy 설정)
-// JWT 자동 첨부, 401 자동 처리
-
-const apiClient = axios.create({ baseURL: '/api/v1' });
-
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('jwt_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-apiClient.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('jwt_token');
-      // 재발급 플로우 또는 지갑 선택 화면 이동
-    }
-    return Promise.reject(err);
-  }
-);
-```
-
-#### 서비스 파일 구성
-
-| 파일 | 담당 API |
-|------|---------|
-| `src/services/authService.ts` | `POST /auth/token` |
-| `src/services/blockchainService.ts` | `GET /blockchain/dashboard`, `GET /blockchain/blocks/{height}` |
-| `src/services/walletService.ts` | `POST /wallet`, `GET /wallet`, `GET /wallet/{address}/activities` |
-| `src/services/exchangeService.ts` | `GET /exchange/info`, `POST /exchange/jack-to-pot` |
-| `src/services/lottoService.ts` | `GET /lotto`, `POST /lotto/commit`, `GET /lotto/entries`, `GET /lotto/entries/{commitHash}/result`, `POST /lotto/claim` |
-| `src/services/miningService.ts` | `GET /mining/blocks` |
-
-#### 인증 서비스 (`src/services/authService.ts`)
-
-```ts
-export const issueToken = async (address: string): Promise<string> => {
-  const res = await apiClient.post('/auth/token', { address });
-  const token = res.data.data.token;
-  localStorage.setItem('jwt_token', token);
-  return token;
-};
-```
-
----
-
-### 1-2. API 엔드포인트 변경 대응
-
-#### 대시보드 (DashboardPage)
-
-| 기존 (funtional-spec.md 구버전) | 변경 후 (api.md 1-1) | 변경 이유 |
-|-------------------------------|----------------------|----------|
-| `GET /blockchain/info` + `GET /blockchain/blocks` + `GET /network/info` (3회 호출) | `GET /blockchain/dashboard?limit=10` (단일 호출) | 초기 로딩 네트워크 요청 수 최소화 |
-| `GET /blockchain/candidate-blocks` | **제거** — FE 자체 프로젝션으로 대체 | 후보 블록은 미확정 데이터, API 미제공 |
-
-- `DashboardPage.tsx` 초기화 시 `GET /blockchain/dashboard` 단일 호출
-- 응답에서 `isOn`, `height`, `blocks[]`, `nodes[]`, `pooledTxCount` 분기하여 각 컴포넌트에 전달
-- 후보 블록은 `dashboard.height + 1`, `+2` ... FE에서 직접 프로젝션 생성
-
-#### 지갑 (WalletPage)
-
-| 기존 | 변경 후 (api.md 2-2) | 변경 이유 |
-|------|----------------------|----------|
-| `GET /wallet/{address}/balance` (지갑마다 1회 호출) | `GET /wallet?addresses=addr1,addr2,...` (단일 호출) | 다중 지갑 일괄 조회 |
-
-- WalletInfo 컴포넌트에서 IndexedDB의 모든 지갑 주소를 쉼표 조합 → 단일 API 호출
-- 응답 `wallets[]` 배열을 캐러셀 상태에 매핑 (jackBalance, potBalance 포함)
-
-#### 로또 (LottoPage)
-
-| 기존 | 변경 후 (api.md 4-1) | 변경 이유 |
-|------|----------------------|----------|
-| `GET /lotto/pool` | `GET /lotto?address={address}` | 잭팟 풀 + 사용자 잔액 + 랭킹 통합 단일 조회 |
-
-- `LottoPage.tsx` 초기화 시 `GET /lotto?address={currentWallet}` 호출
-- 응답에서 `jackBalance`, `potBalance`, `poolBalanceJack`, `totalEntries`, `totalWinners`, `prizeTiers` 모두 수신
-
-#### 로또 참여 응답 변경 (api.md 4-2)
-
-- `POST /lotto/commit` 성공 응답 `data: null`
-- FE에서 응답 data로 entryId·claimableFromHeight를 읽던 코드 **제거**
-- 성공 후 `GET /lotto/entries?address={address}` 폴링으로 상태 확인
-
-#### 로또 참여 내역 상태값 전면 변경 (api.md 4-3, 4-5)
-
-| 기존 | 변경 후 |
-|------|--------|
-| `PENDING` | `DRAWING` |
-| `WON` | `WINNING` |
-| `LOST` | `LOSING` |
-| `EXPIRED` | `EXPIRED` (유지) |
-
-```ts
-// HexPicker.tsx, HistoryModal 내 교체
-const STATUS_LABEL: Record<string, string> = {
-  DRAWING:  '추첨 중',
-  WINNING:  '당첨',
-  LOSING:   '미당첨',
-  EXPIRED:  '만료',
-};
-```
-
-#### 교환 정보 단순화 (api.md 3-2)
-
-- `GET /exchange/info` 응답: `jackBalance`, `potBalance` 두 필드만 사용
-- 기존에 있던 `jackPerPot`, `minJackAmount`, `direction` 필드 참조 코드 제거
-
-#### 채굴 정보 API 제거 (api.md 5 서두)
-
-- `GET /mining/info` 엔드포인트 없음 — `GET /blockchain/dashboard` 응답 재사용
-- `MiningGuide.tsx`에서 별도 `/mining/info` 호출 → dashboard 캐시 데이터 사용으로 교체
-
-#### 활동 내역 커서 페이지네이션 (api.md 2-3)
-
-- `GET /wallet/{address}/activities?size=20&lastActivityId={cursor}`
-- 무한 스크롤: `hasNext=true`이면 스크롤 하단 도달 시 `nextCursor` 사용하여 추가 조회
-
----
-
-### 1-3. 컴포넌트별 수정 사항
-
-#### `types/index.ts` 전면 재정의
-
-```ts
-// api.md 기준으로 재정의
-
-export interface BlockSummary {
-  height: number;
-  hash: string;
-  txCount: number;
-  minedAt: string;
-  minerLabel: string | null;
-  rewardJack: number;
-  confirmations: number;
-}
-
-export interface BlockDetail {
-  height: number;
-  hash: string;
-  reward: number;
-  feeReward: number;
-  txCount: number;
-  confirmations: number;
-  minedAt: string;
-  miningElapsed: number;
-  version: string;
-  previousHash: string;
-  nonce: number;
-  difficulty: string;
-  minerName: string | null;
-  isMainChain: boolean;
-}
-
-export interface LottoEntry {
-  entryId: number;
-  commitHash: string;
-  chosenNumbers: number[];
-  status: 'DRAWING' | 'WINNING' | 'LOSING' | 'EXPIRED';
-  matchCount: number | null;
-  rewardJack: number | null;
-  claimed: boolean;
-  isClaimable: boolean;
-  createdAt: string;
-}
-
-export interface WalletActivity {
-  activityId: number;
-  type: 'WALLET_CREATED' | 'EXCHANGE' | 'LOTTO_COMMIT' | 'LOTTO_CLAIM' | 'MINING' | 'TRANSFER';
-  description: string;
-  txId: string | null;
-  createdAt: string;
-}
-
-export interface WalletInfo {
-  address: string;
-  nickname: string | null;
-  walletColor: string;
-  jackBalance: number;
-  potBalance: number;
-  createdAt: string;
-}
-```
-
-#### `lib/constants.ts` 목업 데이터 제거
-
-```ts
-// 제거 대상: dashboardMockData, lottoMockData, walletMockData, miningMockData
-// 유지 대상: 순수 UI 상수 (walletThemes 색상, 당첨 구조 고정 상수 등)
-```
-
-#### BlockchainVisualizer (`DashboardPage`)
-
-| 항목 | 현재 목업 | 수정 방향 |
-|------|----------|----------|
-| 후보 블록 hash | 임의 hex 문자열 | `"(미확정)"` |
-| 후보 블록 coinbaseAddress | 임의 hex | 제거 (minerName으로 대체, 후보는 `"Pending Queue"`) |
-| 후보 블록 minedAt | 고정 문자열 | 이전 블록 `minedAt` + 평균 30초 기반 예상 시각 |
-| 블록 상세 모달 — 후보 블록 | 모든 필드 표시 | 미확정 필드는 `—` 표시 |
-| 후보 블록 전용 API | `GET /blockchain/candidate-blocks` | **제거** — FE height 기반 프로젝션 |
-
-#### BlockDetailModal (Dashboard + Mining 공통)
-
-| 항목 | 수정 방향 |
-|------|---------|
-| `merkleRoot` (copy 버튼) | **제거** — api.md 1-2 응답에 없음, DB 미저장 |
-| `coinbaseAddress` (copy 버튼) | **제거** — api.md 1-2에서 제거됨 |
-| `minerName` | **추가** — `wallet.nickname` lookup 결과 (null이면 미표시) |
-
-#### NodeNetwork (`DashboardPage`)
-
-| 항목 | 현재 | 수정 방향 |
-|------|------|---------|
-| nodes 데이터 | 상세 피어 정보 (IP, port, version, connectedAt) | `GET /blockchain/dashboard` → `nodes[]` (Integer 배열) 기반으로 단순화 |
-| 그래프 렌더링 | 상세 정보 포함 | 노드 ID 기반 그래프만 표시 (`connections` 수 카운트) |
-
-#### HexPicker — 참여 내역 탭 (LottoPage)
-
-- 커서 기반 페이지네이션 없음 → 전체 목록 단일 조회 (`GET /lotto/entries?address={address}&status=ALL`)
-- status 필터 쿼리 파라미터 지원 (`ALL` / `DRAWING` / `WINNING` / `LOSING` / `EXPIRED`)
-- `isClaimable=true` 항목에만 "수령" 버튼 렌더링
-
-#### HistoryModal — 비교 블록 해시 섹션 제거 (api.md 4-3)
-
-- `resultBlockHashes` 관련 표시 섹션 **완전 제거**
-- `chosenNumbers` vs `resultNumbers` 6자리 비교 그리드만 유지
-- `resultNumbers`가 null이면 "추첨 중..." 플레이스홀더 표시
-
-#### WalletInfo / Exchange (WalletPage)
-
-- 교환 방향 UI: `JACK → POT` 단방향만 표시
-- 역방향 (`POT → JACK`) 버튼 **완전 제거**
-- 교환 버튼 클릭 시 플로우:
-  1. `GET /exchange/info?address={address}` 로 현재 잔액 확인
-  2. JACK 잔액 ≥ 100 JACK 확인
-  3. 클라이언트 사이드 서명 (version=2 TX)
-  4. `POST /exchange/jack-to-pot { fromAddress, jackAmount, signedTxHex }`
-
-#### `useWalletStore.ts` 확장
-
-```ts
-// 추가해야 할 상태
-interface WalletStore {
-  // 기존
-  wallets: WalletInfo[];
-  currentAddress: string | null;
-
-  // 신규 추가
-  jwtToken: string | null;
-  setJwtToken: (token: string | null) => void;
-
-  // 서버 상태 동기화 메서드
-  fetchWallets: (addresses: string[]) => Promise<void>;
-  fetchActivities: (address: string, cursor?: number) => Promise<void>;
-  issueToken: (address: string) => Promise<void>;
-}
-```
-
----
-
-### 1-4. 클라이언트 사이드 서명 구현
-
-> blockchain.md §4: private key는 브라우저 IndexedDB에만 보관, 서명은 브라우저에서 수행
-
-#### 의존 라이브러리 추가
-
-```bash
-npm install @noble/secp256k1 @noble/hashes
-```
-
-#### IndexedDB 키 관리 모듈 (`src/lib/wallet/keyStore.ts`)
-
-```ts
-// IndexedDB DB명: "JackpotWallet", ObjectStore: "keys"
-// 키: address, 값: { address, privKeyHex }
-
-export async function savePrivateKey(address: string, privKeyHex: string): Promise<void>
-export async function loadPrivateKey(address: string): Promise<string>  // hex
-export async function listAddresses(): Promise<string[]>
-export async function deletePrivateKey(address: string): Promise<void>
-```
-
-#### 지갑 생성 플로우 (`WalletCreate.tsx`)
-
-```ts
-import * as secp from '@noble/secp256k1';
-
-// 1. 키페어 생성
-const privKey = secp.utils.randomPrivateKey();
-const pubKey  = secp.getPublicKey(privKey, true); // 압축 공개키 33 bytes
-
-// 2. address 유도 (jackpotchain 주소 포맷)
-const address = deriveJackpotAddress(pubKey);
-
-// 3. IndexedDB에 private key 저장
-await savePrivateKey(address, toHex(privKey));
-
-// 4. 서버에 메타데이터 등록 + JWT 발급
-await walletService.register({ address, nickname, walletColor });
-await authService.issueToken(address);
-```
-
-#### TX 서명 플로우 (Exchange / Lotto Commit / Lotto Claim)
-
-```ts
-// 1. 현재 지갑 잔액/UTXO 확인 (GET /wallet?addresses=...)
-// 2. TX 구조 조립
-const tx = buildTx({
-  version,       // 2=교환, 3=로또커밋, 5=로또클레임
-  inputs: utxos,
-  outputs: [...],
-});
-
-// 3. IndexedDB에서 private key 로드
-const privKey = await loadPrivateKey(fromAddress);
-
-// 4. secp256k1으로 서명
-const signedTxHex = signTransaction(tx, privKey);
-
-// 5. Backend 전송
-await lottoService.commit({ fromAddress, chosenNumbers, signedTxHex });
-```
-
-> **MVP 타협안**: 일정 내 서명 구현 불가 시, `signedTxHex = ""` 빈 문자열로 전송 → Backend가 Server Node 내부 지갑으로 RPC 직접 처리. 고도화 단계에서 클라이언트 서명으로 전환.
-
----
-
-## 수정 우선순위 요약 (FE)
-
-| 우선순위 | 대상 파일 | 항목 | 난이도 |
-|:--------:|----------|------|:------:|
-| 🔴 1 | `src/services/` (신규) | API 서비스 레이어 전체 구축 | ⭐⭐ |
-| 🔴 2 | `types/index.ts` | api.md 기준 타입 재정의 | ⭐ |
-| 🔴 3 | `DashboardPage.tsx` | dashboard 단일 API 호출 + 후보 블록 FE 프로젝션 | ⭐⭐ |
-| 🔴 4 | `WalletInfo.tsx`, `WalletCreate.tsx` | 다중 지갑 일괄 조회 + JWT 발급 플로우 | ⭐⭐ |
-| 🔴 5 | `LottoPage.tsx`, `HexPicker.tsx` | lotto 통합 API + status 값 교체 | ⭐⭐ |
-| 🟡 6 | `HexPicker.tsx` (status) | `PENDING/WON/LOST` → `DRAWING/WINNING/LOSING` | ⭐ |
-| 🟡 7 | `HistoryModal` | `resultBlockHashes` 섹션 제거 | ⭐ |
-| 🟡 8 | `BlockDetailModal.tsx` | `merkleRoot`, `coinbaseAddress` 제거 / `minerName` 추가 | ⭐ |
-| 🟡 9 | `Exchange.tsx` | 역방향 UI 완전 제거 | ⭐ |
-| 🟡 10 | `NodeNetwork.tsx` | Integer 배열 기반 노드 그래프로 단순화 | ⭐ |
-| 🟠 11 | `MiningPage.tsx`, `MiningGuide.tsx` | `/mining/info` → dashboard 캐시 데이터 | ⭐ |
-| 🟠 12 | `ActivityList.tsx` | 커서 기반 무한 스크롤 | ⭐⭐ |
-| 🟠 13 | `src/lib/wallet/keyStore.ts` (신규) | IndexedDB 키 관리 모듈 | ⭐⭐ |
-| 🟠 14 | 전체 서명 플로우 | 클라이언트 사이드 secp256k1 서명 구현 | ⭐⭐⭐ |
+- JackpotChain은 직접 REST를 제공하지 않는다.
+- FE는 반드시 BE의 `/api/v1/...` 계층을 통해 접근해야 한다.
+- `POST /lotto/claim`는 현재 JackpotChain 실제 계약과 충돌 가능성이 있으므로, FE 구현 전에 BE/체인 정책을 확정해야 한다.
 
 ---
 
 ## 2. JackpotChain 수정 사항
 
-### 현재 상태 분석 (소스코드 기반)
+### 2-1. 재검토 결과 요약
 
-| 파일 | 현재 상태 | 필요 변경 |
-|------|---------|---------|
-| `constants.py` | `BLOCK_REWARD = 50 JACK`, `FEE_MINER_RATIO = 0.50` | 100 JACK, 1.00으로 변경 |
-| `consensus/miner.py` | git에서 수정됨 (상세 확인 필요) | Coinbase TX 단순화 (채굴자 100% 단일 output) |
-| `network/node.py` | Webhook 코드 없음 (`_on_block` 콜백은 존재) | Webhook HTTP POST 추가 |
-| `rpc/server.py` | `getlottoinfo`, `getjackpotpool`, `lottocommit`, `lottoclaim`, `lottocheckresult` 이미 구현됨 | 변경 없음 |
+기존 문서의 JackpotChain 분석에는 과거 오판이 섞여 있었다. 이번에 다시 확인한 실제 상태는 아래와 같다.
 
----
+| 항목 | 실제 상태 | 의미 |
+|------|---------|------|
+| 패키지 구조 | `jackpotchain/` 단일 루트 패키지 | 과거 분산 구조 가정 제거 |
+| 핵심 모듈 | `difficulty.py`, `peer.py`, `standard.py`, `tui/app.py` 등 존재 | "누락 모듈 복구"가 핵심 blocker는 아님 |
+| RPC | JSON-RPC 구현 다수 존재 | FE/BE는 이 계약 기준으로 재설계 필요 |
+| 로또 | 자동 지급 모델 | `lottoclaim` RPC 없음 |
+| Docker 산출물 | `jackpotchain/Dockerfile`, `.dockerignore`, `entrypoint.sh` 없음 | 현재 실제 Docker blocker |
 
-### 2-1. `jackpotchain/constants.py`
+### 2-2. 실제로 먼저 손봐야 하는 항목
 
-> blockchain.md §12 확정: 블록 보상 100 JACK / 채굴자 100% / 로또 참여비 Pool 80% · 소각 19% · 채굴자 1%
+#### A. `jackpotchain/cli/main.py`
+
+**문제**
+
+- `node` 서브커맨드가 `--rpc-host`를 받지 않는다.
+- `RPCServer`는 기본적으로 `127.0.0.1`에 바인드된다.
+- 현재 `docker-compose.local.yml`의 `NODE_RPC_HOST=0.0.0.0`는 실제 실행 로직에 반영되지 않는다.
+
+**수정 방향**
 
 ```python
-# 현재 값                              # 변경 후
-BLOCK_REWARD      = 50 * COIN          # → 100 * COIN   (10_000_000_000 satoshi)
-
-# 블록 수수료 분배 (채굴자 100%)
-FEE_MINER_RATIO   = 0.50               # → 1.00
-FEE_JACKPOT_RATIO = 0.30               # → 0.00   (블록 수수료에서 잭팟 Pool 분배 제거)
-FEE_BURN_RATIO    = 0.20               # → 0.00   (블록 수수료에서 소각 제거)
-
-# 로또 참여비 분배 — 변경 없음 (유지)
-LOTTO_POOL_RATIO  = 0.80               # 유지
-LOTTO_BURN_RATIO  = 0.19               # 유지
-LOTTO_MINER_RATIO = 0.01               # 유지
+node_parser.add_argument('--rpc-host', default='127.0.0.1', help='RPC host')
 ```
 
-**수정 위치**: `jackpotchain/constants.py` 상단 상수 정의 블록
-
----
-
-### 2-2. `jackpotchain/consensus/miner.py`
-
-> 블록 Coinbase TX의 Jackpot Pool / Burn output 생성 로직 제거 → 채굴자 100% 단일 output으로 단순화
-
 ```python
-# Before: create_coinbase_tx() 내부 (추정)
-miner_reward  = int((block_reward + total_fees) * FEE_MINER_RATIO)    # 50%
-jackpot_share = int((block_reward + total_fees) * FEE_JACKPOT_RATIO)  # 30%
-burn_share    = (block_reward + total_fees) - miner_reward - jackpot_share  # 20%
-
-outputs = [
-    TxOutput(jack_value=miner_reward,  script_pubkey=miner_script),
-    TxOutput(jack_value=jackpot_share, script_pubkey=jackpot_pool_script),
-    TxOutput(jack_value=burn_share,    script_pubkey=op_return_script),  # 소각
-]
-
-# After: create_coinbase_tx() 내부
-total_reward = block_reward + total_fees  # 채굴자 100%
-
-outputs = [
-    TxOutput(jack_value=total_reward, script_pubkey=miner_script),
-    # Jackpot Pool output 제거
-    # OP_RETURN(소각) output 제거
-]
-```
-
-**수정 위치**: `jackpotchain/consensus/miner.py` → `create_coinbase_tx()` 함수
-
-> ⚠️ git에서 `miner.py`가 이미 수정된 상태. 현재 코드에서 위 변경이 반영됐는지 확인 필수.
-
----
-
-### 2-3. `jackpotchain/network/node.py` (Webhook 연동)
-
-> blockchain.md §9 선택된 방안: Server Node가 블록 수신 시 Backend 내부 엔드포인트로 HTTP POST
-
-**현재 상태**: `_on_block(block, peer)` 콜백은 존재하나 Webhook 코드 없음.
-
-```python
-# node.py에 추가 — _on_block 콜백에서 Backend Webhook 호출
-
-import aiohttp
-import os
-
-# 환경변수로 외부화 (기본값: 로컬 개발)
-BACKEND_WEBHOOK_URL = os.getenv(
-    "BACKEND_WEBHOOK_URL",
-    "http://localhost:8080/internal/webhook/block"
+rpc = RPCServer(
+    blockchain=blockchain,
+    mempool=mempool,
+    wallet=wallet,
+    node=node,
+    data_dir=data_dir,
+    wallet_dir=wallet_dir,
+    host=args.rpc_host,
+    port=args.rpc_port,
 )
-
-async def notify_backend(block: Block, peer: PeerInfo) -> None:
-    """블록 수신 시 Backend에 Webhook POST. 실패해도 P2P 처리는 계속 진행."""
-    payload = serialize_block_to_json(block)
-    try:
-        async with aiohttp.ClientSession() as session:
-            resp = await session.post(
-                BACKEND_WEBHOOK_URL,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
-            )
-            if resp.status not in (200, 202):
-                logger.warning(
-                    f"[Webhook] Backend returned {resp.status} for block {block.height}"
-                )
-    except Exception as e:
-        logger.error(f"[Webhook] Failed for block {block.height}: {e}")
-        # 실패는 로그만 남기고 P2P 처리 계속
-
-# _on_block 콜백 내에 추가
-async def _on_block(self, block: Block, peer: PeerInfo) -> None:
-    # 기존 블록 처리 로직 ...
-    await notify_backend(block, peer)  # Webhook 발행
 ```
 
-**직렬화 함수**: `serialize_block_to_json(block: Block) -> dict`
+그리고 실행 로그도 실제 bind 주소를 출력하도록 바꾼다.
 
-```python
-def serialize_block_to_json(block: Block) -> dict:
-    return {
-        "height":     block.height,
-        "hash":       block.hash.hex(),
-        "prevHash":   block.prev_hash.hex(),
-        "version":    block.version,
-        "minedAt":    block.timestamp,          # Unix timestamp (int)
-        "nonce":      block.nonce,
-        "difficulty": block.bits,               # raw bits
-        "txList": [
-            {
-                "txId":     tx.txid().hex(),
-                "version":  tx.version,
-                "inputs":   [serialize_input(inp) for inp in tx.inputs],
-                "outputs":  [serialize_output(out) for out in tx.outputs],
-            }
-            for tx in block.transactions
-        ],
-    }
+#### B. `jackpotchain/Dockerfile`
+
+**문제**
+
+- 로컬 compose가 이 파일을 참조하지만 실제 파일이 없다.
+
+**수정 방향**
+
+- Python 런타임 이미지
+- `requirements.txt` 설치
+- healthcheck용 `curl` 포함
+- non-root 사용자
+- `ENTRYPOINT` 또는 `CMD`에서 `python -m jackpotchain.cli.main node ...`
+
+#### C. `jackpotchain/entrypoint.sh`
+
+**문제**
+
+- Compose 환경변수를 실제 CLI 인자로 바꿔주는 계층이 없다.
+- `NODE_DATA_DIR`, `NODE_WALLET_DIR`, `NODE_RPC_HOST`, `NODE_RPC_PORT`, `NODE_P2P_PORT`가 현재는 사실상 죽은 설정이다.
+
+**수정 방향**
+
+- 환경변수를 `node` 실행 인자로 변환
+- wallet 파일은 `/wallets/default.json`처럼 명시 경로로 고정
+- seed, mine 옵션도 후속 확장 가능하게 구성
+
+#### D. `jackpotchain/.dockerignore`
+
+**문제**
+
+- 빌드 컨텍스트가 불필요하게 커질 수 있다.
+
+**수정 방향**
+
+- `.venv`, `__pycache__`, `.pytest_cache`, `data`, `build`, `dist` 제외
+
+### 2-3. 기존 노드 통신 상태 판단
+
+질문하신 1번에 대해서는, 현재 코드를 기준으로 보면 **기존 블록체인 네트워크 통신이 바로 깨져 있다고 볼 근거는 부족하지만, 완전히 안전하다고 단정할 단계도 아니다.**
+
+| 영역 | 현재 코드 근거 | 판단 |
+|------|---------------|------|
+| 지갑 생성/선택 | `wallet/wallet.py`, `rpc/server.py`의 `getnewaddress`, `listwallets`, `setwallet`, `getactivewallet` | 기본 지갑 생성/선택 경로는 구현되어 있음 |
+| 로또 참여/조회 | `rpc/server.py`의 `lottocommit`, `lottocheckresult`, `listlottocommits`, `tests/test_e2e_lotto.py` | 참여와 결과 조회의 핵심 경로는 구현 및 테스트 흔적이 있음 |
+| 피어 연결/주소 교환 | `network/node.py`, `tests/test_network.py`, `tests/test_peer_discovery.py` | 기본 P2P 메시지 처리와 peer discovery 흐름은 구현되어 있음 |
+| 블록 동기화/재조직 | `network/node.py`, `sync/manager.py`, `tests/test_reorg.py` | 기본 sync 경로는 있으나 장기 안정성은 추가 확인 필요 |
+
+특히 주의할 부분은 아래 두 가지다.
+
+1. `sync/manager.py`의 `on_headers_received()`에는 아직 `# TODO: 헤더 검증 및 저장`이 남아 있다.
+2. `tests/test_reorg.py`에는 reorg 이후 UTXO 기대값이 "현재 구현에서 실패할 것"이라는 주석이 남아 있다.
+
+즉, **지갑 생성, 로또 참여, 기본 peer 통신은 당장 전면 재작업 대상으로 보이지 않지만**, 다중 노드 장기 동기화와 reorg 안정성은 "문제 없음"이라고 확정하기 전에 반드시 재검증해야 한다.
+
+### 2-4. 문서/계약 정합화가 필요한 항목
+
+#### 1. 로또 Claim 방식
+
+현재 실제 RPC:
+
+- `lottocommit`
+- `lottocheckresult`
+- `listlottocommits`
+
+없는 것:
+
+- `lottoclaim`
+
+즉, 현재 체인 모델은 자동 지급이다. 따라서 아래 둘 중 하나를 선택해야 한다.
+
+1. FE/BE도 자동 지급 UX로 맞춘다.
+2. 수동 Claim을 유지하려면 JackpotChain에 신규 RPC와 플로우를 추가한다.
+
+#### 2. 토크노믹스
+
+현재 실제 코드:
+
+- `BLOCK_REWARD = 50 JACK`
+- 블록 수수료 분배 = 채굴자 50% / 잭팟풀 30% / 소각 20%
+- 로또 참여비 분배 = 80% / 19% / 1%
+
+따라서 과거 문서의 "100 JACK, 블록 수수료 100% 채굴자" 가정은 현재 코드와 다르다. 이 항목은 즉시 수정 대상이 아니라 **제품 규칙 재확정 후 반영할 스펙 갭**으로 보는 것이 맞다.
+
+#### 3. Webhook 연동
+
+현재 `network/node.py`는 block callback 구조는 갖고 있지만 backend webhook push는 없다.
+
+권장 판단:
+
+- 1차는 backend가 RPC polling + DB read model 방식으로 구현
+- webhook은 후속 고도화에서 선택 적용
+
+### 2-5. plan.md 2단계 이후 작업에서 추가 블록체인 수정 필요 여부
+
+질문하신 2번에 대한 답은 **"아직 일부는 더 수정해야 한다"** 이다. 다만 과거 문서처럼 대규모 재구현이 필요한 것은 아니고, 범위가 더 명확해졌다.
+
+#### 반드시 반영해야 하는 수정
+
+1. `cli/main.py`
+   - `node` 서브커맨드에 `--rpc-host` 추가
+   - 현재는 `tui`에만 있고 `node`에는 없어 Docker 환경의 `0.0.0.0` 바인드가 직접 연결되지 않는다.
+2. `jackpotchain/Dockerfile`
+   - 현재 compose가 참조할 실제 이미지 정의가 없다.
+3. `jackpotchain/entrypoint.sh`
+   - Compose 환경변수와 실제 CLI 인자를 연결하는 계층이 필요하다.
+4. `jackpotchain/.dockerignore`
+   - 빌드 컨텍스트 최소화가 필요하다.
+
+#### 설계 결정을 먼저 해야 하는 수정
+
+1. 로또 Claim 모델
+   - 현재 체인은 자동 지급 모델이다.
+   - `POST /lotto/claim`를 유지하려면 BE 계약 변경 또는 체인 RPC 확장이 필요하다.
+2. 토크노믹스 변경 여부
+   - 현재 코드는 일정한 분배 규칙을 이미 갖고 있다.
+   - 이 부분은 즉시 수정이라기보다 제품 정책 확정 후 변경 여부를 판단해야 한다.
+
+#### 지금 당장 blocker는 아니지만, 이후 안정성을 위해 재검토가 필요한 수정
+
+1. 동기화 보강
+   - `sync/manager.py`의 헤더 검증/저장 TODO 정리 여부 검토
+2. reorg 회귀 검증
+   - `tests/test_reorg.py`와 실제 `consensus/chain.py` 동작이 현재도 일치하는지 확인
+
+정리하면, **plan.md의 3단계와 4단계를 진행하는 동안에는 블록체인 코드 수정이 더 필요하다.** 다만 그 수정은 "네트워크 전체를 뜯어고치는 작업"이 아니라, Docker 실행 경로 정리와 RPC/REST 계약 정합화, 그리고 sync/reorg 리스크 점검 쪽에 집중된다.
+
+### 2-6. 수정 시 기존 노드 통신 영향 및 주의사항
+
+이번에 반영해야 하는 수정이 기존 네트워크 노드 통신에 미칠 수 있는 영향은 위험도별로 나눠서 보는 것이 맞다.
+
+#### 저위험 수정
+
+- `--rpc-host` 추가
+- `Dockerfile`, `entrypoint.sh`, `.dockerignore` 추가
+
+이 변경들은 **합의, 지갑, peer 통신 로직 자체를 바꾸는 수정은 아니므로 원칙적으로는 저위험**이다.  
+다만 아래 조건을 지키지 않으면 실제 운영에서는 기존 통신 문제가 새로 생길 수 있다.
+
+1. 기본값 유지
+   - 기본 RPC host는 계속 `127.0.0.1`
+   - 기존 wallet/data 기본 경로는 유지
+2. Docker 전용 오버라이드만 추가
+   - 로컬 CLI 사용자가 쓰던 실행 방식이 깨지지 않아야 한다.
+3. startup 로그 확인
+   - 실제 bind host/port, wallet path, data dir가 로그에 명확히 보여야 한다.
+
+이 조건을 어기면 아래 문제가 생길 수 있다.
+
+- RPC가 외부에서 아예 열리지 않음
+- 잘못된 wallet path로 인해 지갑 생성/조회가 실패함
+- 다른 노드와는 정상 연결되는데 backend만 RPC 접속 실패
+
+#### 중위험 이상 수정
+
+- `lottoclaim` 신규 도입 등 로또 플로우 자체 변경
+- sync/reorg 로직 수정
+- 토크노믹스 및 수수료 분배 규칙 변경
+
+이 변경들은 **기존 로또 참여, 잔액 계산, 블록 동기화, 재조직 후 상태 일관성에 직접 영향을 줄 수 있으므로 주의 필요**라고 문서에 명시해야 한다.
+
+따라서 modify 단계에서 아래 경고를 함께 유지하는 것이 맞다.
+
+> 동기화, reorg, 로또 지급 플로우를 건드리는 수정은 기존 노드 간 통신과 상태 일관성에 영향을 줄 수 있으므로, Docker 실행 확인만으로 완료 처리하면 안 된다. 네트워크/로또 회귀 테스트와 다중 노드 수동 검증을 함께 수행해야 한다.
+
+### 2-7. 권장 테스트
+
+#### RPC 스모크 테스트
+
+```bash
+python -m jackpotchain.cli.main node --port 18333 --rpc-port 18332 --data-dir tmp/jackpotchain-data
 ```
 
-**수정 위치**: `jackpotchain/network/node.py` + 필요 시 `jackpotchain/utils/serializer.py` 별도 분리
+```bash
+curl -X POST http://127.0.0.1:18332/ -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"help\",\"params\":[],\"id\":1}"
+```
 
----
+```bash
+curl -X POST http://127.0.0.1:18332/ -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getlottoinfo\",\"params\":[],\"id\":1}"
+```
 
-## 수정 우선순위 요약 (JackpotChain)
+#### 테스트 코드 재검증
+
+```bash
+pytest jackpotchain/tests/test_network.py jackpotchain/tests/test_peer_discovery.py jackpotchain/tests/test_e2e_lotto.py
+```
+
+```bash
+pytest jackpotchain/tests/test_reorg.py -v -s
+```
+
+```bash
+python -m jackpotchain.scripts.test_multinode all
+```
+
+#### Docker 스모크 테스트
+
+```bash
+docker compose -f docker-compose.local.yml config
+docker compose -f docker-compose.local.yml up -d jackpotchain-node
+docker compose -f docker-compose.local.yml logs -f jackpotchain-node
+```
+
+확인 포인트:
+
+- node 컨테이너가 즉시 종료되지 않음
+- `getblockcount` healthcheck 통과
+- backend에서 `JACKPOTCHAIN_RPC_URL` 접근 가능
+
+추가 확인 포인트:
+
+- 로또 참여 후 commit 조회와 결과 조회가 계속 정상 동작하는지
+- 지갑 생성 후 재기동해도 wallet 파일이 유지되는지
+- 2개 이상 노드에서 블록 높이 차이가 줄어드는지
+- reorg 또는 장기 sync 시 잔액/UTXO 불일치가 없는지
+
+### 2-8. 우선순위 요약
 
 | 우선순위 | 파일 | 항목 | 난이도 |
 |:--------:|------|------|:------:|
-| 🔴 1 | `constants.py` | `BLOCK_REWARD` 100 JACK / `FEE_MINER_RATIO` 1.00 수정 | ⭐ |
-| 🔴 2 | `consensus/miner.py` | Coinbase TX 단순화 (채굴자 100% 단일 output) — 현재 수정 상태 확인 후 보완 | ⭐⭐ |
-| 🔴 3 | `network/node.py` | `_on_block` 콜백에 Webhook POST 추가 | ⭐⭐ |
-| 🟡 4 | `utils/serializer.py` (신규) | `serialize_block_to_json()` 함수 구현 | ⭐⭐ |
-| 🟠 5 | `rpc/server.py` | 기존 RPC 메서드 동작 검증 (변경 없음이 목표) | ⭐ |
+| 🔴 1 | `jackpotchain/cli/main.py` | `node`용 `--rpc-host` 지원 추가 | ⭐ |
+| 🔴 2 | `jackpotchain/Dockerfile` | 이미지 빌드 정의 | ⭐⭐ |
+| 🔴 3 | `jackpotchain/entrypoint.sh` | 환경변수 → CLI 인자 연결 | ⭐⭐ |
+| 🔴 4 | `jackpotchain/.dockerignore` | 빌드 컨텍스트 최적화 | ⭐ |
+| 🟡 5 | API/BE 설계 | 자동 지급 모델과 REST 계약 정리 | ⭐ |
+| 🟠 6 | `sync/manager.py`, `tests/test_reorg.py` | sync/reorg 안정성 재검증 및 필요 시 보강 | ⭐⭐ |
+| 🟠 7 | `constants.py`, `consensus/miner.py` | 토크노믹스 재확정 후 변경 여부 결정 | ⭐⭐ |
+| 🟢 8 | `network/node.py` | webhook push는 후속 선택 과제 | ⭐⭐ |
+
+---
+
+## 결론
+
+JackpotChain 수정 계획의 핵심은 과거처럼 "없는 모듈을 채우는 것"이 아니라, **실제 존재하는 코드가 Docker와 BE 연동 환경에서 그대로 동작하도록 실행 경로와 계약을 정리하는 것**이다. 당장 필요한 수정은 `cli/main.py`, Docker 산출물, 그리고 API 문서 정합화다.

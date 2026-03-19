@@ -33,7 +33,3 @@ create index idx_transactions_to_address
 
 create index idx_lotto_ranking_reward_jack_desc
     on lotto_ranking (reward_jack desc);
-
-create index idx_outbox_events_pending_status_created_at
-    on outbox_events (status, created_at)
-    where status = 'PENDING';

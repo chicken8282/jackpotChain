@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import ssatto.BE_ssatto.domain.auth.exception.EmailDuplicateException;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -92,7 +91,7 @@ class GlobalExceptionHandlerTest {
          */
         @GetMapping("/business")
         void business() {
-            throw new EmailDuplicateException();
+            throw new BusinessException(ErrorCode.AUTH_EMAIL_DUPLICATE);
         }
 
         /**

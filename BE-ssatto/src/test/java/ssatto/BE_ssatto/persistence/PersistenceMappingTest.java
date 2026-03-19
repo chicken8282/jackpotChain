@@ -22,9 +22,6 @@ import ssatto.BE_ssatto.domain.lotto.entity.LottoRanking;
 import ssatto.BE_ssatto.domain.lotto.repository.JackpotPoolRepository;
 import ssatto.BE_ssatto.domain.lotto.repository.LottoEntryRepository;
 import ssatto.BE_ssatto.domain.lotto.repository.LottoRankingRepository;
-import ssatto.BE_ssatto.domain.ops.entity.OutboxEvent;
-import ssatto.BE_ssatto.domain.ops.entity.OutboxEventStatus;
-import ssatto.BE_ssatto.domain.ops.repository.OutboxEventRepository;
 import ssatto.BE_ssatto.domain.wallet.entity.Wallet;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivity;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivityType;
@@ -66,13 +63,10 @@ class PersistenceMappingTest {
     private LottoRankingRepository lottoRankingRepository;
 
     @Autowired
-    private OutboxEventRepository outboxEventRepository;
-
-    @Autowired
     private EntityManager entityManager;
 
     /**
-     * 지갑 활동 조회가 최신순 정렬을 유지하고 연관 엔티티가 지연 로딩되는지 확인한다.
+     * 지갑 활동 조회가 최신순 정렬과 LAZY 연관관계를 지원하는지 확인한다.
      */
     @Test
     @DisplayName("지갑 활동은 최신순 조회와 LAZY 연관관계를 지원한다")
@@ -149,7 +143,7 @@ class PersistenceMappingTest {
     }
 
     /**
-     * backend spec에 맞는 논리 테이블명을 사용하고 있는지 확인한다.
+     * 블록체인 엔티티가 backend spec의 논리 테이블명을 따르는지 확인한다.
      */
     @Test
     @DisplayName("블록체인 엔티티는 backend spec의 논리 테이블명을 따른다")
@@ -161,7 +155,7 @@ class PersistenceMappingTest {
     }
 
     /**
-     * 로또 이력 조회와 청구 가능 엔트리 조회가 저장소 메서드로 표현되는지 확인한다.
+     * 로또 엔트리 저장소가 최신순 이력 조회와 청구 가능 조회를 지원하는지 확인한다.
      */
     @Test
     @DisplayName("로또 엔트리는 지갑별 최신순 조회와 청구 가능 조회를 지원한다")
@@ -273,10 +267,10 @@ class PersistenceMappingTest {
     }
 
     /**
-     * 잭팟 풀, 랭킹, 아웃박스 이벤트 저장소가 기본 저장과 정렬 조회를 지원하는지 확인한다.
+     * 잭팟 풀과 랭킹 저장소가 핵심 영속 동작을 지원하는지 확인한다.
      */
     @Test
-    @DisplayName("잭팟 풀, 랭킹, 아웃박스 저장소가 핵심 영속 동작을 지원한다")
+    @DisplayName("잭팟 풀과 랭킹 저장소가 핵심 영속 동작을 지원한다")
     void auxiliaryRepositoriesSupportCorePersistenceUseCases() {
         Wallet wallet = walletRepository.save(
             Wallet.create("wallet-address-5", "순돌", "GREEN", LocalDateTime.of(2026, 3, 19, 11, 0))
@@ -355,37 +349,12 @@ class PersistenceMappingTest {
                 LocalDateTime.of(2026, 3, 19, 11, 10)
             )
         );
-        outboxEventRepository.save(
-            OutboxEvent.create(
-                "LOTTO",
-                lottoEntry.getCommitHash(),
-                "LOTTO_WIN_CONFIRMED",
-                "{\"commitHash\":\"tx-ranking-commit\"}",
-                OutboxEventStatus.PENDING,
-                LocalDateTime.of(2026, 3, 19, 11, 11)
-            )
-        );
-        outboxEventRepository.save(
-            OutboxEvent.create(
-                "LOTTO",
-                "processed-entry",
-                "LOTTO_CLAIMED",
-                "{\"commitHash\":\"processed-entry\"}",
-                OutboxEventStatus.PROCESSED,
-                LocalDateTime.of(2026, 3, 19, 11, 12)
-            ).markProcessed(LocalDateTime.of(2026, 3, 19, 11, 13))
-        );
 
         entityManager.flush();
         entityManager.clear();
 
         assertThat(jackpotPoolRepository.findById(1L)).isPresent();
-        assertThat(lottoRankingRepository.findByRank(1)).isPresent();
-        assertThat(outboxEventRepository.findTop100ByStatusOrderByCreatedAtAsc(OutboxEventStatus.PENDING))
-            .hasSize(1)
-            .first()
-            .extracting(OutboxEvent::getAggregateId)
-            .isEqualTo("tx-ranking-commit");
+        assertThat(lottoRankingRepository.findByRank(1).orElseThrow().getRewardJack()).isEqualTo(250_000L);
     }
 
     /**

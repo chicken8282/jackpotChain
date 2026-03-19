@@ -9,31 +9,44 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 요청한 모듈러 모놀리식 패키지 골격이 존재하는지 검증한다.
+ * API와 ERD 기준으로 필요한 도메인 폴더 구조만 존재하는지 검증한다.
  */
 class PackageStructureTest {
 
     /**
-     * 각 도메인이 요청된 패키지 디렉터리 구조를 포함하는지 확인한다.
+     * API 기반 도메인과 ERD 기반 하위 폴더 구조를 확인한다.
      */
     @Test
     void requestedDomainDirectoriesExist() {
         Path domainRoot = Path.of("src", "main", "java", "ssatto", "BE_ssatto", "domain");
-        List<String> domains = List.of("auth", "blockchain", "wallet", "exchange", "lotto", "mining", "ops");
-        List<String> subDirectories = List.of("controller", "service", "repository", "entity", "dto", "exception");
+        List<String> entityDomains = List.of("blockchain", "wallet", "lotto");
+        List<String> apiOnlyDomains = List.of("auth", "exchange", "mining");
+        List<String> entitySubDirectories = List.of("controller", "service", "repository", "entity", "dto", "exception");
+        List<String> apiOnlySubDirectories = List.of("controller", "service", "dto", "exception");
 
-        for (String domain : domains) {
+        for (String domain : entityDomains) {
             Path domainPath = domainRoot.resolve(domain);
-            assertThat(Files.isDirectory(domainPath))
-                .as("도메인 디렉터리가 존재해야 한다: %s", domainPath)
-                .isTrue();
+            assertThat(Files.isDirectory(domainPath)).isTrue();
 
-            for (String subDirectory : subDirectories) {
-                Path subDirectoryPath = domainPath.resolve(subDirectory);
-                assertThat(Files.isDirectory(subDirectoryPath))
-                    .as("하위 디렉터리가 존재해야 한다: %s", subDirectoryPath)
-                    .isTrue();
+            for (String subDirectory : entitySubDirectories) {
+                assertThat(Files.isDirectory(domainPath.resolve(subDirectory))).isTrue();
             }
         }
+
+        assertThat(Files.isDirectory(domainRoot.resolve("blockchain").resolve("rpc"))).isTrue();
+
+        for (String domain : apiOnlyDomains) {
+            Path domainPath = domainRoot.resolve(domain);
+            assertThat(Files.isDirectory(domainPath)).isTrue();
+
+            for (String subDirectory : apiOnlySubDirectories) {
+                assertThat(Files.isDirectory(domainPath.resolve(subDirectory))).isTrue();
+            }
+
+            assertThat(Files.exists(domainPath.resolve("entity"))).isFalse();
+            assertThat(Files.exists(domainPath.resolve("repository"))).isFalse();
+        }
+
+        assertThat(Files.exists(domainRoot.resolve("ops"))).isFalse();
     }
 }

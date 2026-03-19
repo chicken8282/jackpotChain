@@ -27,6 +27,10 @@ jwt:
   secret: test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256
   expiration: 86400000
 
+jackpotchain:
+  rpc:
+    url: http://localhost:8332
+
 management:
   endpoints:
     web:

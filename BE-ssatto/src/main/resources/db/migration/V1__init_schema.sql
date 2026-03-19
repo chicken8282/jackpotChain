@@ -107,15 +107,3 @@ create table lotto_ranking (
     constraint fk_lotto_ranking_commit_hash
         foreign key (commit_hash) references lotto_entry (commit_hash)
 );
-
-create table outbox_events (
-    id uuid primary key,
-    aggregate_type varchar(50) not null,
-    aggregate_id varchar(100) not null,
-    event_type varchar(100) not null,
-    payload text not null,
-    status varchar(20) not null default 'PENDING',
-    error_message varchar(500),
-    created_at timestamp not null default current_timestamp,
-    processed_at timestamp
-);
