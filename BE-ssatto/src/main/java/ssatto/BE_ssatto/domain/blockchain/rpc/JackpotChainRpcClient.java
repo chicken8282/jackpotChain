@@ -22,6 +22,22 @@ public interface JackpotChainRpcClient {
     JackpotChainBlockchainInfo getBlockchainInfo();
 
     /**
+     * 특정 높이의 블록 해시를 조회한다.
+     *
+     * @param height 블록 높이
+     * @return 블록 해시
+     */
+    String getBlockHash(long height);
+
+    /**
+     * 블록 해시 기준으로 단일 블록 상세 정보를 조회한다.
+     *
+     * @param blockHash 블록 해시
+     * @return 블록 상세 정보
+     */
+    JackpotChainBlock getBlock(String blockHash);
+
+    /**
      * 노드가 연결한 피어 정보를 조회한다.
      *
      * @return 피어 목록

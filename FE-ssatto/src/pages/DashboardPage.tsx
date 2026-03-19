@@ -3,8 +3,11 @@ import BlockchainVisualizer from "../components/dashboard/BlockchainVisualizer";
 import BlockHeight from "../components/dashboard/BlockHeight";
 import NodeNetwork from "../components/dashboard/NodeNetwork";
 import { GradientDots } from "../components/common/GradientDots";
+import { useDashboardData } from "../hooks/useDashboardData";
 
 export default function DashboardPage() {
+  const { blocks, currentHeight, activeNodes } = useDashboardData();
+
   return (
     <PageLayout>
       <GradientDots
@@ -13,10 +16,14 @@ export default function DashboardPage() {
         dotSize={1.5}
       />
 
-      <BlockchainVisualizer />
+      <BlockchainVisualizer
+        blocks={blocks}
+        currentHeight={currentHeight}
+        activeNodes={activeNodes}
+      />
       <section className="grid gap-5 lg:grid-cols-[0.84fr_1.16fr]">
-        <BlockHeight />
-        <NodeNetwork />
+        <BlockHeight currentHeight={currentHeight} />
+        <NodeNetwork activeNodes={activeNodes} />
       </section>
     </PageLayout>
   );

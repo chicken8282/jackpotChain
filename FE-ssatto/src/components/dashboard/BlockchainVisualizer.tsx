@@ -10,6 +10,12 @@ import {
   type DashboardBlockDetail,
 } from "./dashboardMockData";
 
+interface BlockchainVisualizerProps {
+  blocks?: DashboardBlockDetail[];
+  currentHeight?: number;
+  activeNodes?: number;
+}
+
 interface DashboardBlockProps {
   block: DashboardBlockDetail;
   hoveredId: string | null;
@@ -64,7 +70,11 @@ function ChainLink({
   );
 }
 
-export default function BlockchainVisualizer() {
+export default function BlockchainVisualizer({
+  blocks = confirmedBlocks,
+  currentHeight = dashboardStats.currentHeight,
+  activeNodes = dashboardStats.activeNodes,
+}: BlockchainVisualizerProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<DashboardBlockDetail | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
@@ -275,11 +285,11 @@ export default function BlockchainVisualizer() {
           <div className="flex flex-row items-center gap-4">
             <div className="flex flex-col items-center justify-center rounded-[16px] border border-border bg-surface px-5 py-4 shadow-sm min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1">현재 높이</span>
-              <span className="font-display text-2xl font-bold text-text-primary">#{dashboardStats.currentHeight}</span>
+              <span className="font-display text-2xl font-bold text-text-primary">#{currentHeight}</span>
             </div>
             <div className="flex flex-col items-center justify-center rounded-[16px] border border-info/30 bg-info/5 px-5 py-4 shadow-[0_4px_24px_rgba(59,130,246,0.1)] min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-info uppercase tracking-widest mb-1">활성 노드</span>
-              <span className="font-display text-2xl font-bold text-text-primary">{dashboardStats.activeNodes}</span>
+              <span className="font-display text-2xl font-bold text-text-primary">{activeNodes}</span>
             </div>
           </div>
         </div>
@@ -296,7 +306,7 @@ export default function BlockchainVisualizer() {
           >
 
             <div ref={contentRef} className="flex min-w-max items-center will-change-transform xl:px-[18vw]">
-              {confirmedBlocks.map((block, index) => (
+              {blocks.map((block, index) => (
                 <div key={block.id} className="group flex items-center">
                   <DashboardBlock
                     block={block}
@@ -304,10 +314,10 @@ export default function BlockchainVisualizer() {
                     onHover={setHoveredId}
                     onSelect={handleSelect}
                   />
-                  {index < confirmedBlocks.length - 1 ? (
+                  {index < blocks.length - 1 ? (
                     <div className="-mx-[6px] z-0">
                       <ChainLink
-                        active={hoveredId === block.id || hoveredId === confirmedBlocks[index + 1].id}
+                        active={hoveredId === block.id || hoveredId === blocks[index + 1].id}
                       />
                     </div>
                   ) : null}

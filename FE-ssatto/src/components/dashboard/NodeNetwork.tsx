@@ -28,7 +28,11 @@ const links = [
   ["n5", "n7"],
 ] as const;
 
-export default function NodeNetwork() {
+interface NodeNetworkProps {
+  activeNodes?: number;
+}
+
+export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }: NodeNetworkProps) {
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
   const [activeNode, setActiveNode] = useState<string | null>(null);
 
@@ -57,7 +61,7 @@ export default function NodeNetwork() {
         <div className="flex items-center justify-between gap-4">
           <h3 className="font-display text-[1.5rem] font-bold text-white">노드 네트워크</h3>
           <span className="rounded-full border border-info/30 bg-info/10 px-2.5 py-1 text-[10px] uppercase tracking-wider font-bold text-info">
-            활성 노드 {dashboardStats.activeNodes}개
+            활성 노드 {activeNodes}개
           </span>
         </div>
 

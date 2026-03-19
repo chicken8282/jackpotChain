@@ -85,6 +85,47 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     }
 
     /**
+     * 블록 높이 기준 해시를 조회한다.
+     *
+     * @param height 블록 높이
+     * @return 블록 해시
+     */
+    @Override
+    public String getBlockHash(long height) {
+        JsonNode resultNode = invoke("getblockhash", List.of(height));
+        return asRequiredText(resultNode, "result");
+    }
+
+    /**
+     * 블록 해시 기준 상세 정보를 조회한다.
+     *
+     * @param blockHash 블록 해시
+     * @return 블록 상세 정보
+     */
+    @Override
+    public JackpotChainBlock getBlock(String blockHash) {
+        JsonNode resultNode = invoke("getblock", List.of(blockHash, 1));
+        return new JackpotChainBlock(
+            asRequiredText(resultNode, "hash"),
+            asRequiredInt(resultNode, "confirmations"),
+            asRequiredLong(resultNode, "height"),
+            asRequiredInt(resultNode, "version"),
+            asRequiredText(resultNode, "versionHex"),
+            asRequiredText(resultNode, "merkleroot"),
+            asRequiredLong(resultNode, "time"),
+            asRequiredLong(resultNode, "nonce"),
+            asRequiredLong(resultNode, "difficulty"),
+            asRequiredText(resultNode, "difficultyDisplay"),
+            asRequiredInt(resultNode, "nTx"),
+            asRequiredText(resultNode, "previousblockhash"),
+            asRequiredLong(resultNode, "rewardJack"),
+            asRequiredLong(resultNode, "feeRewardJack"),
+            asOptionalText(resultNode, "minerAddress"),
+            asRequiredBoolean(resultNode, "isMainChain")
+        );
+    }
+
+    /**
      * 노드가 연결한 피어 정보를 조회한다.
      *
      * @return 피어 목록
@@ -154,7 +195,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
                 JsonNode errorNode = responseNode.path("error");
                 String message = errorNode.path("message").asText("unknown rpc error");
                 log.error("JACKPOTCHAIN_RPC_FAILURE method={} message={}", method, message);
-                throw new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED);
+                throw mapRpcError(message);
             }
 
             return responseNode;
@@ -170,6 +211,17 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     }
 
     private BusinessException invalidResponse() {
+        return new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED);
+    }
+
+    private BusinessException mapRpcError(String message) {
+        String normalizedMessage = message == null ? "" : message.toLowerCase();
+        if (normalizedMessage.contains("block not found")) {
+            return new BusinessException(ErrorCode.BLOCKCHAIN_BLOCK_NOT_FOUND);
+        }
+        if (normalizedMessage.contains("transaction not found")) {
+            return new BusinessException(ErrorCode.BLOCKCHAIN_TX_NOT_FOUND);
+        }
         return new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED);
     }
 
@@ -199,6 +251,39 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
             throw invalidResponse();
         }
         return fieldNode.asLong();
+    }
+
+    private int asRequiredInt(JsonNode responseNode, String fieldName) {
+        JsonNode resultNode = responseNode.path("result");
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.canConvertToInt()) {
+            log.error("JACKPOTCHAIN_RPC_FAILURE field={} message={}", fieldName, "response field is invalid");
+            throw invalidResponse();
+        }
+        return fieldNode.asInt();
+    }
+
+    private boolean asRequiredBoolean(JsonNode responseNode, String fieldName) {
+        JsonNode resultNode = responseNode.path("result");
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isBoolean()) {
+            log.error("JACKPOTCHAIN_RPC_FAILURE field={} message={}", fieldName, "response field is invalid");
+            throw invalidResponse();
+        }
+        return fieldNode.asBoolean();
+    }
+
+    private String asOptionalText(JsonNode responseNode, String fieldName) {
+        JsonNode resultNode = responseNode.path("result");
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull()) {
+            return null;
+        }
+        if (!fieldNode.isTextual()) {
+            log.error("JACKPOTCHAIN_RPC_FAILURE field={} message={}", fieldName, "response field is invalid");
+            throw invalidResponse();
+        }
+        return fieldNode.asText();
     }
 
     private JsonNode findPeerNode(JsonNode resultNode, String address) {

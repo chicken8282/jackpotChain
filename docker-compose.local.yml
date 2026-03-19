@@ -64,7 +64,7 @@ services:
 
   jackpotchain-node:
     build:
-      context: ./jackpotchain
+      context: ./blockchain
       dockerfile: Dockerfile
     container_name: jc-node-local
     restart: unless-stopped
