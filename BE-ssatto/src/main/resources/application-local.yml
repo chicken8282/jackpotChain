@@ -1,41 +1,41 @@
 spring:
-  # 로컬 개발 환경 — PostgreSQL 직접 연결
   datasource:
     url: jdbc:postgresql://localhost:5432/jackpotchain
     username: jackpot
     password: jackpot1234
     driver-class-name: org.postgresql.Driver
-
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   jpa:
     hibernate:
-      ddl-auto: validate         # Flyway가 스키마를 관리하므로 validate 사용
-    show-sql: true               # 개발 환경에서 SQL 로그 출력
-
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-
-  # Redis 로컬 설정
   data:
     redis:
       host: localhost
       port: 6379
-
-  # RabbitMQ 로컬 설정
   rabbitmq:
     host: localhost
     port: 5672
     username: guest
     password: guest
 
-# JWT 시크릿 (로컬 개발용 — 운영에서는 환경변수로 교체)
 jwt:
   secret: local-dev-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256
 
-# 로컬 환경 로깅 — DEBUG 레벨
 logging:
   level:
-    ssatto.jackpotchain: DEBUG
+    ssatto.BE_ssatto: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
