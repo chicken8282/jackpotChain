@@ -224,7 +224,7 @@ curl -X POST http://localhost:8332/ -H "Content-Type: application/json" -d "{\"j
 - `getblockcount` 정상 응답
 - `startmining` 후 `getmininginfo` 변화 확인
 
-### 5. 핵심 REST API 구현 `[대기]`
+### 5. 핵심 REST API 구현 `[완료]`
 
 #### 범위
 
@@ -234,17 +234,17 @@ curl -X POST http://localhost:8332/ -H "Content-Type: application/json" -d "{\"j
 
 #### 구현 체크
 
-- [ ] `GET /blockchain/dashboard`
-- [ ] `GET /blockchain/blocks/{height}`
-- [ ] `GET /wallet`
-- [ ] `GET /wallet/{address}/activities`
-- [ ] `GET /exchange/info`
-- [ ] `POST /exchange/jack-to-pot`
-- [ ] `GET /lotto`
-- [ ] `POST /lotto/commit`
-- [ ] `GET /lotto/entries`
-- [ ] `GET /lotto/entries/{txId}/result`
-- [ ] 인증/메타데이터용 API (`POST /auth/token`, `POST /wallet`)
+- [x] `GET /blockchain/dashboard`
+- [x] `GET /blockchain/blocks/{height}`
+- [x] `GET /wallet`
+- [x] `GET /wallet/{address}/activities`
+- [x] `GET /exchange/info`
+- [x] `POST /exchange/jack-to-pot`
+- [x] `GET /lotto`
+- [x] `POST /lotto/commit`
+- [x] `GET /lotto/entries`
+- [x] `GET /lotto/entries/{txId}/result`
+- [x] 인증/메타데이터용 API (`POST /auth/token`, `POST /wallet`)
 
 #### 추천 테스트
 

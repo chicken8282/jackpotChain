@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import ssatto.BE_ssatto.domain.lotto.entity.LottoEntry;
 import ssatto.BE_ssatto.domain.lotto.entity.LottoEntryStatus;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,6 +30,23 @@ public interface LottoEntryRepository extends JpaRepository<LottoEntry, Long> {
      * @return 최신순 로또 기록 페이지
      */
     Page<LottoEntry> findByWalletAddressOrderByCreatedAtDesc(String walletAddress, Pageable pageable);
+
+    /**
+     * 지갑 주소 기준으로 로또 참여 기록을 최신순 조회한다.
+     *
+     * @param walletAddress 지갑 주소
+     * @return 최신순 로또 기록 목록
+     */
+    List<LottoEntry> findByWalletAddressOrderByCreatedAtDesc(String walletAddress);
+
+    /**
+     * 지갑 주소와 상태 기준으로 로또 참여 기록을 최신순 조회한다.
+     *
+     * @param walletAddress 지갑 주소
+     * @param status 상태
+     * @return 최신순 로또 기록 목록
+     */
+    List<LottoEntry> findByWalletAddressAndStatusOrderByCreatedAtDesc(String walletAddress, LottoEntryStatus status);
 
     /**
      * 특정 높이까지 청구 가능한 엔트리를 상태 기준으로 조회한다.

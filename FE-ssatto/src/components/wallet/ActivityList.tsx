@@ -18,7 +18,12 @@ export default function ActivityList({ activities }: ActivityListProps) {
         </div>
       }
     >
-      <div className="space-y-3 max-h-[400px] hover:overflow-y-auto overflow-y-hidden subtle-scroll pr-2">
+      {activities.length === 0 ? (
+        <div className="flex items-center justify-center rounded-[22px] border border-white/6 bg-white/[0.02] px-4 py-10 text-sm font-bold text-text-secondary">
+          활동 내역은 read-model 구축 이후 제공됩니다.
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[400px] hover:overflow-y-auto overflow-y-hidden subtle-scroll pr-2">
         <AnimatePresence initial={false}>
           {activities.map((activity, index) => (
             <motion.div
@@ -55,7 +60,8 @@ export default function ActivityList({ activities }: ActivityListProps) {
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+        </div>
+      )}
     </Card>
   );
 }

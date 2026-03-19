@@ -22,6 +22,14 @@ public interface JackpotChainRpcClient {
     JackpotChainBlockchainInfo getBlockchainInfo();
 
     /**
+     * 주소 기준 JACK/POT 잔액을 조회한다.
+     *
+     * @param address 지갑 주소
+     * @return 잔액 정보
+     */
+    JackpotChainBalances getBalances(String address);
+
+    /**
      * 특정 높이의 블록 해시를 조회한다.
      *
      * @param height 블록 높이
@@ -38,6 +46,20 @@ public interface JackpotChainRpcClient {
     JackpotChainBlock getBlock(String blockHash);
 
     /**
+     * 로또 개요 정보를 조회한다.
+     *
+     * @return 로또 개요 정보
+     */
+    JackpotChainLottoInfo getLottoInfo();
+
+    /**
+     * 잭팟 풀 상태를 조회한다.
+     *
+     * @return 잭팟 풀 상태
+     */
+    JackpotChainJackpotPool getJackpotPool();
+
+    /**
      * 노드가 연결한 피어 정보를 조회한다.
      *
      * @return 피어 목록
@@ -50,6 +72,21 @@ public interface JackpotChainRpcClient {
      * @return mempool 트랜잭션 수
      */
     int getMempoolTransactionCount();
+
+    /**
+     * 로또 결과를 조회한다.
+     *
+     * @param commitHash 커밋 트랜잭션 해시
+     * @return 로또 결과
+     */
+    JackpotChainLottoResult checkLottoResult(String commitHash);
+
+    /**
+     * 교환 규칙을 조회한다.
+     *
+     * @return 교환 정보
+     */
+    JackpotChainExchangeInfo getExchangeInfo();
 
     /**
      * 서명된 원시 트랜잭션을 체인 노드에 제출한다.

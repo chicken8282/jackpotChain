@@ -14,6 +14,9 @@ import ssatto.BE_ssatto.global.exception.BusinessException;
 import ssatto.BE_ssatto.global.exception.ErrorCode;
 
 import java.net.URI;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -85,6 +88,21 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     }
 
     /**
+     * 주소 기준 JACK/POT 잔액을 조회한다.
+     *
+     * @param address 지갑 주소
+     * @return 잔액 정보
+     */
+    @Override
+    public JackpotChainBalances getBalances(String address) {
+        JsonNode resultNode = invoke("getbalances", List.of(address));
+        return new JackpotChainBalances(
+            asRequiredLong(resultNode, "jack_satoshi"),
+            asRequiredLong(resultNode, "pot_satoshi")
+        );
+    }
+
+    /**
      * 블록 높이 기준 해시를 조회한다.
      *
      * @param height 블록 높이
@@ -126,6 +144,39 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     }
 
     /**
+     * 로또 개요 정보를 조회한다.
+     *
+     * @return 로또 개요 정보
+     */
+    @Override
+    public JackpotChainLottoInfo getLottoInfo() {
+        JsonNode resultNode = invoke("getlottoinfo", List.of());
+        return new JackpotChainLottoInfo(
+            asRequiredLong(resultNode, "pool_balance_satoshi"),
+            asCoinToSatoshi(resultNode, "next_jackpot"),
+            asRequiredLong(resultNode, "total_entries"),
+            asRequiredLong(resultNode, "payout_count")
+        );
+    }
+
+    /**
+     * 잭팟 풀 상태를 조회한다.
+     *
+     * @return 잭팟 풀 상태
+     */
+    @Override
+    public JackpotChainJackpotPool getJackpotPool() {
+        JsonNode resultNode = invoke("getjackpotpool", List.of());
+        return new JackpotChainJackpotPool(
+            asRequiredLong(resultNode, "balance_satoshi"),
+            asRequiredLong(resultNode, "next_jackpot_satoshi"),
+            asLongOrZero(resultNode, "total_entries"),
+            asCoinToSatoshi(resultNode, "total_collected"),
+            asLongOrZero(resultNode, "snapshot_count")
+        );
+    }
+
+    /**
      * 노드가 연결한 피어 정보를 조회한다.
      *
      * @return 피어 목록
@@ -159,6 +210,44 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     public int getMempoolTransactionCount() {
         JsonNode resultNode = invoke("getmempoolinfo", List.of());
         return resultNode.path("size").asInt(0);
+    }
+
+    /**
+     * 로또 결과를 조회한다.
+     *
+     * @param commitHash 커밋 트랜잭션 해시
+     * @return 로또 결과
+     */
+    @Override
+    public JackpotChainLottoResult checkLottoResult(String commitHash) {
+        JsonNode resultNode = invoke("lottocheckresult", List.of(commitHash));
+        JsonNode payload = resultNode.path("result");
+
+        return new JackpotChainLottoResult(
+            payload.path("success").asBoolean(false),
+            asOptionalIntegerList(payload, "chosen_numbers"),
+            asOptionalIntegerList(payload, "result_digits"),
+            asOptionalInteger(payload, "matches"),
+            asOptionalCoinToSatoshi(payload, "payout_jack"),
+            asOptionalCoinToSatoshi(payload, "payout_pot"),
+            payload.path("paid").asBoolean(false),
+            asOptionalLong(payload, "payout_block"),
+            payload.path("status").asText("")
+        );
+    }
+
+    /**
+     * 교환 규칙을 조회한다.
+     *
+     * @return 교환 정보
+     */
+    @Override
+    public JackpotChainExchangeInfo getExchangeInfo() {
+        JsonNode resultNode = invoke("getexchangeinfo", List.of());
+        return new JackpotChainExchangeInfo(
+            asRequiredInt(resultNode, "jack_per_pot"),
+            asRequiredInt(resultNode, "min_jack")
+        );
     }
 
     /**
@@ -295,6 +384,67 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
 
         log.error("JACKPOTCHAIN_RPC_FAILURE field={} message={}", "addr", "peer entry is invalid");
         throw invalidResponse();
+    }
+
+    private long asCoinToSatoshi(JsonNode responseNode, String fieldName) {
+        JsonNode resultNode = responseNode.path("result");
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isNumber()) {
+            log.error("JACKPOTCHAIN_RPC_FAILURE field={} message={}", fieldName, "response field is invalid");
+            throw invalidResponse();
+        }
+        return BigDecimal.valueOf(fieldNode.asDouble())
+            .multiply(BigDecimal.valueOf(100_000_000L))
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValue();
+    }
+
+    private Long asOptionalCoinToSatoshi(JsonNode resultNode, String fieldName) {
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isNumber()) {
+            return null;
+        }
+        return BigDecimal.valueOf(fieldNode.asDouble())
+            .multiply(BigDecimal.valueOf(100_000_000L))
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValue();
+    }
+
+    private long asLongOrZero(JsonNode responseNode, String fieldName) {
+        JsonNode resultNode = responseNode.path("result");
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isNumber()) {
+            return 0L;
+        }
+        return fieldNode.asLong();
+    }
+
+    private Long asOptionalLong(JsonNode resultNode, String fieldName) {
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isNumber()) {
+            return null;
+        }
+        return fieldNode.asLong();
+    }
+
+    private Integer asOptionalInteger(JsonNode resultNode, String fieldName) {
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isNumber()) {
+            return null;
+        }
+        return fieldNode.asInt();
+    }
+
+    private List<Integer> asOptionalIntegerList(JsonNode resultNode, String fieldName) {
+        JsonNode fieldNode = resultNode.path(fieldName);
+        if (fieldNode.isMissingNode() || fieldNode.isNull() || !fieldNode.isArray()) {
+            return List.of();
+        }
+        List<Integer> values = new ArrayList<>();
+        for (JsonNode elementNode : fieldNode) {
+            values.add(elementNode.asInt());
+        }
+        return values;
     }
 
     private record JsonRpcRequest(

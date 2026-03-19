@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
 import InteractiveHoverButton from "../common/InteractiveHoverButton";
-import { useWalletStore } from "../../stores/useWalletStore";
 import type { LottoEntry as StoreLottoEntry } from "../../types";
 
 interface HistoryEntry {
@@ -21,7 +20,10 @@ interface HistoryEntry {
 
 interface HexPickerProps {
   disabled?: boolean;
-  onCommit?: (hexNumbers: string[]) => void;
+  jackBalance: number;
+  potBalance: number;
+  onExchangeJackToPot?: () => void;
+  onCommit?: (chosenNumbers: number[]) => void;
   entries?: StoreLottoEntry[];
   onClaim?: (entryId: string) => void;
 }
@@ -56,26 +58,6 @@ const slotThemes = [
     border: "1px solid rgba(249,115,22,0.9)",
     bg: "linear-gradient(180deg, rgba(199,92,18,0.60) 0%, rgba(12,40,90,0.18) 100%)",
     glow: "rgba(249,115,22,0.25)",
-  },
-];
-
-const fallbackHistory: HistoryEntry[] = [
-  {
-    id: "history-1",
-    numbers: ["a", "f", "b", "d", "4", "e"],
-    resultNumbers: ["a", "0", "b", "c", "4", "f"],
-    date: "2026.03.15 14:30",
-    statusLabel: "WINNING",
-    rewardLabel: "2,500 POT",
-    claimable: false,
-  },
-  {
-    id: "history-2",
-    numbers: ["2", "3", "5", "8", "c", "9"],
-    resultNumbers: ["1", "3", "0", "9", "c", "8"],
-    date: "2026.03.14 09:15",
-    statusLabel: "LOSING",
-    claimable: false,
   },
 ];
 
@@ -254,14 +236,13 @@ function SuccessModal({ open }: { open: boolean }) {
 
 export default function HexPicker({
   disabled = false,
+  jackBalance,
+  potBalance,
+  onExchangeJackToPot,
   onCommit,
   entries,
   onClaim,
 }: HexPickerProps) {
-  const jackBalance = useWalletStore((state) => state.jackBalance);
-  const potBalance = useWalletStore((state) => state.potBalance);
-  const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
-
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
   const [randomizing, setRandomizing] = useState(false);
@@ -348,14 +329,7 @@ export default function HexPicker({
         };
       }) ?? [];
 
-    const seen = new Set<string>();
-    return [...storeHistory, ...fallbackHistory].filter((entry) => {
-      if (seen.has(entry.id)) {
-        return false;
-      }
-      seen.add(entry.id);
-      return true;
-    });
+    return storeHistory;
   }, [entries]);
 
   const handleRandomize = () => {
@@ -407,8 +381,7 @@ export default function HexPicker({
       return;
     }
 
-    exchangeJackToPot(100);
-    showNotice("100 JACK을 1 POT로 교환했습니다.");
+    onExchangeJackToPot?.();
   };
 
   const cycleSlot = (index: number, delta: number) => {
@@ -436,7 +409,7 @@ export default function HexPicker({
       return;
     }
 
-    onCommit?.(selected);
+    onCommit?.(selected.map((value) => Number.parseInt(value, 16)));
     setShowSuccessModal(true);
   };
 
@@ -617,7 +590,11 @@ export default function HexPicker({
             </>
           ) : (
             <div className="subtle-scroll max-h-[480px] space-y-3 overflow-y-auto pr-2">
-              {mergedHistory.map((entry) => (
+              {mergedHistory.length === 0 ? (
+                <div className="flex items-center justify-center rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-10 text-sm font-bold text-text-secondary">
+                  참여 내역 read-model은 아직 준비 중입니다.
+                </div>
+              ) : mergedHistory.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"

@@ -3,7 +3,6 @@ import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AnimatedNumber from "../common/AnimatedNumber";
 import GoldButton from "../common/GoldButton";
-import { useWalletStore } from "../../stores/useWalletStore";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
 
 interface WalletEntry {
@@ -24,6 +23,7 @@ interface WalletInfoProps {
     payload?: { address?: string; privateKey?: string },
     color?: WalletThemeId,
   ) => void;
+  onExchangeJackToPot?: (walletAddress: string) => void;
 }
 
 function generateAddress() {
@@ -39,9 +39,8 @@ export default function WalletInfo({
   activeIndex,
   onChangeIndex,
   onAddWallet,
+  onExchangeJackToPot,
 }: WalletInfoProps) {
-  const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
-
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"choose" | "create" | "restore">("choose");
   const [newNickname, setNewNickname] = useState("");
@@ -80,19 +79,13 @@ export default function WalletInfo({
   };
 
   const handleExchangeJackToPot = () => {
-    if (activeIndex !== 0) {
-      setExchangeError("추가된 Mock 지갑에서는 교환 기능을 사용할 수 없습니다.");
-      setTimeout(() => setExchangeError(null), 2500);
-      return;
-    }
-
     if (activeWallet.jackBalance < 100) {
       setExchangeError("JACK 잔액이 부족합니다. 최소 100 JACK이 필요합니다.");
       setTimeout(() => setExchangeError(null), 2500);
       return;
     }
 
-    exchangeJackToPot(100);
+    onExchangeJackToPot?.(activeWallet.address);
   };
 
   const handleAdd = () => {

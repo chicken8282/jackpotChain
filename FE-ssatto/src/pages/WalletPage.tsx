@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageLayout from "../components/layout/PageLayout";
 import ActivityList from "../components/wallet/ActivityList";
 import WalletCreate from "../components/wallet/WalletCreate";
 import WalletInfo from "../components/wallet/WalletInfo";
 import type { WalletThemeId } from "../components/wallet/walletThemes";
+import { issueAuthToken } from "../services/authService";
+import { getWallets, registerWallet, type WalletSummary } from "../services/walletService";
+import { ApiError } from "../lib/api";
 import { useWalletStore } from "../stores/useWalletStore";
 
 interface WalletViewModel {
@@ -12,53 +15,140 @@ interface WalletViewModel {
   color: WalletThemeId;
   jackBalance: number;
   potBalance: number;
-  activities: ReturnType<typeof useWalletStore.getState>["activities"];
+  activities: [];
 }
 
 export default function WalletPage() {
-  const {
-    isConnected,
-    nickname,
-    address,
-    walletColor,
-    jackBalance,
-    potBalance,
-    activities,
-    createWallet,
-    restoreWallet,
-  } = useWalletStore();
+  const wallets = useWalletStore((state) => state.wallets);
+  const activeAddress = useWalletStore((state) => state.activeAddress);
+  const createWallet = useWalletStore((state) => state.createWallet);
+  const restoreWallet = useWalletStore((state) => state.restoreWallet);
+  const setActiveAddress = useWalletStore((state) => state.setActiveAddress);
+  const setToken = useWalletStore((state) => state.setToken);
 
+  const [walletSummaries, setWalletSummaries] = useState<WalletSummary[]>([]);
   const [activeWalletIndex, setActiveWalletIndex] = useState(0);
-  const [extraWallets, setExtraWallets] = useState<WalletViewModel[]>([
-    {
-      nickname: "서브 지갑 (Mock)",
-      address: "0x1A2B3C4D5E6F7A8B9C0D11112222333344445555",
-      color: "blue",
-      jackBalance: 2500,
-      potBalance: 12,
-      activities: [],
-    },
-    {
-      nickname: "콜드 지갑 (Mock)",
-      address: "0x9A0B1C2D3E4F5A6B7C8D11112222333344445555",
-      color: "green",
-      jackBalance: 8000,
-      potBalance: 5,
-      activities: [],
-    },
-  ]);
 
-  const baseWallet: WalletViewModel = {
-    nickname,
-    address,
-    color: walletColor,
-    jackBalance,
-    potBalance,
-    activities,
+  useEffect(() => {
+    if (wallets.length === 0) {
+      setWalletSummaries([]);
+      return;
+    }
+
+    let cancelled = false;
+    void getWallets(wallets.map((wallet) => wallet.address))
+      .then((response) => {
+        if (!cancelled) {
+          setWalletSummaries(response.wallets);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWalletSummaries([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wallets]);
+
+  useEffect(() => {
+    if (!activeAddress) {
+      setActiveWalletIndex(0);
+      return;
+    }
+
+    const nextIndex = wallets.findIndex((wallet) => wallet.address === activeAddress);
+    if (nextIndex >= 0) {
+      setActiveWalletIndex(nextIndex);
+    }
+  }, [activeAddress, wallets]);
+
+  useEffect(() => {
+    const currentWallet = wallets[activeWalletIndex];
+    if (!currentWallet) {
+      return;
+    }
+
+    setActiveAddress(currentWallet.address);
+    void issueAuthToken({ address: currentWallet.address })
+      .then((response) => setToken(response.token))
+      .catch(() => setToken(null));
+  }, [activeWalletIndex, setActiveAddress, setToken, wallets]);
+
+  const allWallets = useMemo<WalletViewModel[]>(
+    () =>
+      wallets.map((wallet) => {
+        const summary = walletSummaries.find((item) => item.address === wallet.address);
+        return {
+          nickname: summary?.nickname ?? wallet.nickname,
+          address: wallet.address,
+          color: wallet.walletColor,
+          jackBalance: Math.floor((summary?.jackBalance ?? 0) / 100_000_000),
+          potBalance: Math.floor((summary?.potBalance ?? 0) / 100_000_000),
+          activities: [],
+        };
+      }),
+    [walletSummaries, wallets],
+  );
+
+  const currentWallet = allWallets[activeWalletIndex];
+
+  const persistWallet = async (
+    walletNickname: string,
+    type: "create" | "restore",
+    payload?: { address?: string; privateKey?: string },
+    color: WalletThemeId = "gray",
+  ) => {
+    const address = payload?.address;
+    if (!address) {
+      return;
+    }
+
+    if (type === "create") {
+      createWallet(walletNickname, color, payload);
+    } else if (payload.privateKey) {
+      restoreWallet(payload.privateKey, address, walletNickname, color);
+    }
+
+    try {
+      await registerWallet({
+        address,
+        nickname: walletNickname,
+        walletColor: color.toUpperCase(),
+      });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) {
+        throw error;
+      }
+    }
+
+    const tokenResponse = await issueAuthToken({ address });
+    setToken(tokenResponse.token);
   };
 
-  const allWallets = [baseWallet, ...extraWallets];
-  const currentWallet = allWallets[activeWalletIndex];
+  const handleCreateWallet = (
+    walletNickname?: string,
+    color?: WalletThemeId,
+    payload?: { address?: string; privateKey?: string },
+  ) => {
+    void persistWallet(walletNickname ?? "내 지갑", "create", payload, color ?? "gray");
+  };
+
+  const handleRestoreWallet = (
+    privateKey: string,
+    address: string,
+    walletNickname?: string,
+    color?: WalletThemeId,
+  ) => {
+    void persistWallet(
+      walletNickname ?? "기존 지갑",
+      "restore",
+      { address, privateKey },
+      color ?? "gray",
+    );
+  };
 
   const handleAddWallet = (
     walletNickname: string,
@@ -66,34 +156,13 @@ export default function WalletPage() {
     payload?: { address?: string; privateKey?: string },
     color: WalletThemeId = "gray",
   ) => {
-    const newWallet: WalletViewModel = {
-      nickname: walletNickname,
-      address:
-        payload?.address ??
-        `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`,
-      color,
-      jackBalance: type === "restore" ? 220 : 0,
-      potBalance: type === "restore" ? 3 : 0,
-      activities:
-        type === "restore"
-          ? [
-              {
-                id: `act-${Math.random().toString(16).slice(2, 8)}`,
-                type: "지갑 등록",
-                description: "기존 지갑을 주소와 private key로 추가했습니다.",
-                createdAt: "03.17 12:00",
-              },
-            ]
-          : [],
-    };
-
-    setExtraWallets((prev) => [...prev, newWallet]);
+    void persistWallet(walletNickname, type, payload, color);
   };
 
   return (
     <PageLayout>
-      {!isConnected ? (
-        <WalletCreate onCreate={createWallet} onRestore={restoreWallet} />
+      {wallets.length === 0 ? (
+        <WalletCreate onCreate={handleCreateWallet} onRestore={handleRestoreWallet} />
       ) : (
         <div className="mx-auto w-full max-w-5xl px-6 lg:px-2">
           <WalletInfo
@@ -101,9 +170,12 @@ export default function WalletPage() {
             activeIndex={activeWalletIndex}
             onChangeIndex={setActiveWalletIndex}
             onAddWallet={handleAddWallet}
+            onExchangeJackToPot={() => {
+              window.alert("서명 기반 교환 기능은 아직 준비 중입니다.");
+            }}
           />
           <div className="mt-6">
-            <ActivityList activities={currentWallet.activities} />
+            <ActivityList activities={currentWallet?.activities ?? []} />
           </div>
         </div>
       )}
