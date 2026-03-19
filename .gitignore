@@ -9,3 +9,4 @@ AGENTS.md
 tmp/
 .claire/
 .claude/
+.env.local.example
