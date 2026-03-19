@@ -68,25 +68,25 @@ P4 (Dispatcher 배치)
 
 > DB 스키마를 코드로 관리
 
-- [ ] `docs/reviews/erd.md` 기반으로 엔티티 클래스 작성
-  - [ ] `Wallet` (지갑 메타데이터)
-  - [ ] `Block` (블록 인덱싱)
-  - [ ] `Transaction` (TX 인덱싱, version별)
-  - [ ] `WalletActivity` (지갑 활동 내역)
-  - [ ] `LottoEntry` (로또 참여 기록)
-  - [ ] `JackpotPool` (잭팟 풀 캐시, 단일 레코드)
-  - [ ] `LottoRanking` (역대 Top 3 랭킹)
-  - [ ] `OutboxEvent` (Outbox 패턴용)
-- [ ] Flyway 의존성 추가
-- [ ] `V1__init_schema.sql` 작성 (최초 스키마)
-- [ ] `V2__add_indexes.sql` 작성 (복합 인덱스, 부분 인덱스)
-  - [ ] `wallet_activity(wallet_address, created_at DESC)` 복합 인덱스
-  - [ ] `lotto_entry(wallet_address, created_at DESC)` 복합 인덱스
-  - [ ] `lotto_entry(status, claimable_from_height)` 복합 인덱스
-  - [ ] `block(miner_address)`, `block(mined_at DESC)` 인덱스
-  - [ ] `outbox_events(status, created_at)` 부분 인덱스 (`WHERE status = 'PENDING'`)
-- [ ] 엔티티 연관관계 매핑 확인 (Lazy 로딩 기본값 설정)
-- [ ] Repository 인터페이스 작성 (JpaRepository 상속)
+- [x] `docs/reviews/erd.md` 기반으로 엔티티 클래스 작성
+  - [x] `Wallet` (지갑 메타데이터)
+  - [x] `Block` (블록 인덱싱)
+  - [x] `Transaction` (TX 인덱싱, version별)
+  - [x] `WalletActivity` (지갑 활동 내역)
+  - [x] `LottoEntry` (로또 참여 기록)
+  - [x] `JackpotPool` (잭팟 풀 캐시, 단일 레코드)
+  - [x] `LottoRanking` (역대 Top 3 랭킹)
+  - [x] `OutboxEvent` (Outbox 패턴용)
+- [x] Flyway 의존성 추가
+- [x] `V1__init_schema.sql` 작성 (최초 스키마)
+- [x] `V2__add_indexes.sql` 작성 (복합 인덱스, 부분 인덱스)
+  - [x] `wallet_activity(wallet_address, created_at DESC)` 복합 인덱스
+  - [x] `lotto_entry(wallet_address, created_at DESC)` 복합 인덱스
+  - [x] `lotto_entry(status, claimable_from_height)` 복합 인덱스
+  - [x] `block(miner_address)`, `block(mined_at DESC)` 인덱스
+  - [x] `outbox_events(status, created_at)` 부분 인덱스 (`WHERE status = 'PENDING'`)
+- [x] 엔티티 연관관계 매핑 확인 (Lazy 로딩 기본값 설정)
+- [x] Repository 인터페이스 작성 (JpaRepository 상속)
 
 ---
 

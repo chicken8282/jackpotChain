@@ -1,8 +1,0 @@
-.venv
-gs_test
-.CLAUDE
-__pycache__/
-*.pyc
-*.pyo
-data/
-wallet.json
