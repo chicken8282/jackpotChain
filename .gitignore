@@ -5,10 +5,7 @@ AGENTS.md
 **/dist/
 **/.vite/
 **/claude
-.env.prod
 .env.local
-!jackpotchain/
-jackpotchain/**
-!jackpotchain/Dockerfile
-!jackpotchain/.dockerignore
-!jackpotchain/entrypoint.sh
+tmp/
+.claire/
+.claude/
