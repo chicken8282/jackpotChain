@@ -22,8 +22,6 @@ from ..constants import DEFAULT_RPC_PORT, LOTTO_MIN_CLAIM_GAP, TX_VERSION_GACHA_
 from ..gacha.game import GachaGame
 from ..gacha.service import GachaService, create_gacha_service
 from ..script.standard import is_commit_script
-from ..script.standard import get_address_from_script_pubkey
-from ..constants import BLOCK_REWARD
 
 
 @dataclass
@@ -262,7 +260,7 @@ class RPCServer:
 
     def _getblock(self, blockhash: str, verbosity: int = 1) -> Any:
         """블록 조회"""
-        block_hash = bytes.fromhex(blockhash)[::-1]
+        block_hash = bytes.fromhex(blockhash)
         block = self.blockchain.get_block(block_hash)
 
         if block is None:
@@ -272,34 +270,17 @@ class RPCServer:
             return block.serialize().hex()
 
         index = self.blockchain.get_block_index(block_hash)
-        coinbase = block.get_coinbase()
-        miner_address = None
-        reward_jack = BLOCK_REWARD
-        fee_reward_jack = 0
-
-        if coinbase and coinbase.outputs:
-            miner_output = coinbase.outputs[0]
-            miner_address = get_address_from_script_pubkey(miner_output.script_pubkey)
-            reward_jack = BLOCK_REWARD
-            fee_reward_jack = max(0, miner_output.jack_value - BLOCK_REWARD)
-
         return {
             'hash': block.get_hash_hex(),
             'confirmations': self.blockchain.get_confirmations(block_hash),
             'height': index.height if index else 0,
             'version': block.header.version,
-            'versionHex': f"0x{block.header.version:08X}",
             'merkleroot': block.header.merkle_root.hex(),
             'time': block.header.timestamp,
             'nonce': block.header.nonce,
             'difficulty': block.header.difficulty_target,
-            'difficultyDisplay': f"0x{block.header.difficulty_target:08X}",
             'nTx': len(block.transactions),
-            'previousblockhash': block.header.prev_block_hash[::-1].hex(),
-            'rewardJack': reward_jack,
-            'feeRewardJack': fee_reward_jack,
-            'minerAddress': miner_address,
-            'isMainChain': index.is_in_main_chain if index else False,
+            'previousblockhash': block.header.prev_block_hash.hex(),
             'tx': [tx.get_txid().hex() for tx in block.transactions] if verbosity > 1 else [],
         }
 
