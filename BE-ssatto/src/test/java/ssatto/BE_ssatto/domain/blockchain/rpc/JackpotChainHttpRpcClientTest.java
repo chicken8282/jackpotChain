@@ -112,4 +112,32 @@ class JackpotChainHttpRpcClientTest {
         assertThat(exchangeInfo.jackPerPot()).isEqualTo(100);
         assertThat(exchangeInfo.minJack()).isEqualTo(100);
     }
+
+    @Test
+    @DisplayName("피어 목록을 result 배열 기준으로 파싱한다")
+    void getPeerInfoReturnsParsedPeers() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8332");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        JackpotChainHttpRpcClient client = JackpotChainHttpRpcClient.createForTest(builder.build());
+
+        server.expect(requestTo("http://localhost:8332/"))
+            .andRespond(withSuccess("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "getpeerinfo",
+                  "result": [
+                    {
+                      "addr": "10.0.0.12:8333",
+                      "version": 70015,
+                      "subver": "/JackpotChain:0.1.0/",
+                      "inbound": false
+                    }
+                  ]
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.getPeerInfo())
+            .extracting(JackpotChainPeerInfo::address)
+            .containsExactly("10.0.0.12:8333");
+    }
 }

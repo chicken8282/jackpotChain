@@ -34,101 +34,159 @@
 
 ## 인증 (Auth)
 
-> 이 프로젝트는 로그인/회원가입이 없다. **지갑 선택이 곧 로그인**이다.
-> Bearer Token은 "이 요청이 해당 지갑 주소의 등록자에게서 왔는가"를 검증하기 위한 수단이다.
-> 인증이 필요한 API는 토큰 payload에 담긴 `address`와 요청의 `fromAddress`(또는 PathVariable `address`)를 비교하여 불일치 시 401을 반환한다.
+> Login is wallet-based. The server never receives a private key.
+> The authentication flow is `challenge -> sign -> verify -> refresh`.
+> `POST /auth/token` is removed from the active contract.
 
-### 토큰 발급
+### Auth Model
 
-> 지갑 주소를 전달하면 서버가 해당 주소를 `wallet` 테이블에서 확인 후 JWT를 발급한다.
-> 발급된 토큰은 FE에서 `localStorage`에 저장하며, 이후 인증이 필요한 모든 API 호출 시 `Authorization: Bearer {token}` 헤더에 포함한다.
+- Access token: JWT, short-lived, sent as `Authorization: Bearer ...`
+- Refresh token: opaque random token, stored only in an `HttpOnly` cookie
+- Refresh session handle: wallet-scoped handle persisted by FE metadata
+- Protected APIs compare `JWT subject == request wallet address`
 
-```
-POST /auth/token
-```
+### `POST /auth/challenge`
 
-**Request Body:**
+Issues a one-time canonical message for wallet signing.
 
-| 파라미터 | 의미 | 타입 | 필수 여부 |
-|----------|------|------|:--------:|
-| address | 지갑 주소 | String | 필수 |
+Request:
 
 ```json
 {
-  "address": "JackpotAC34EF78B2D1..."
+  "address": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"
 }
 ```
 
-**Response** 응답 코드: 200 / 400 / 404 / 500
-
-| 파라미터 | 의미 | 타입 | 필수 여부 |
-|----------|------|------|:--------:|
-| token | JWT Bearer Token | String | 필수 |
-| address | 발급 대상 지갑 주소 | String | 필수 |
-| expiresAt | 토큰 만료 일시 | DateTime | 필수 |
+Response:
 
 ```json
 {
   "code": 200,
-  "message": "토큰이 발급되었습니다.",
+  "message": "인증 챌린지가 발급되었습니다.",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "address": "JackpotAC34EF78B2D1...",
-    "expiresAt": "2026-03-18T10:23:44"
+    "challengeId": "challenge-001",
+    "address": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+    "nonce": "nonce-001",
+    "message": "SSATTO Login\naddress=XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82\nchallengeId=challenge-001\nnonce=nonce-001\nissuedAt=2026-03-20T10:00:00\nexpiresAt=2026-03-20T10:05:00\npurpose=wallet-auth",
+    "expiresAt": "2026-03-20T10:05:00"
   }
 }
 ```
 
-> **404**: `wallet` 테이블에 등록되지 않은 주소로 요청한 경우. 지갑 생성(`POST /wallet`) 후 재시도.
+Notes:
 
-### 토큰 발급 및 사용 플로우
+- Challenge TTL: 5 minutes
+- Single-use only
+- The wallet must already be registered in `wallet`
 
-```
-사이트 접속
-  └─▶ IndexedDB 지갑 목록 있음?
-        │
-        ├─ YES │ 지갑 선택
-        │      └─ POST /auth/token { address }
-        │            └─ JWT → localStorage 저장 → 메인 화면 진입
-        │
-        └─ NO  │ 지갑 생성 화면으로 이동
-               └─ 키페어 생성 → IndexedDB 저장
-                     └─ POST /wallet { address, nickname, ... }
-                           └─ POST /auth/token { address }
-                                 └─ JWT → localStorage 저장 → 메인 화면 진입
-```
+### `POST /auth/verify`
 
-```
-인증이 필요한 API 호출 시:
+Verifies the signed challenge and starts a wallet session.
 
-POST /lotto/commit
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-{
-  "fromAddress": "JackpotAC34EF78B2D1...",
-  ...
-}
-
-Backend 검증:
-  token.payload.address == request.fromAddress ?
-    ✅ 일치 → 처리
-    ❌ 불일치 → 401
-```
-
-### Backend JWT Payload 구조
+Request:
 
 ```json
 {
-  "address": "JackpotAC34EF78B2D1...",
-  "iat": 1742200000,
-  "exp": 1742286400
+  "challengeId": "challenge-001",
+  "address": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+  "publicKey": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+  "signature": "304402204787ca19d3d8c713eb3ae9b6fb6c7d943fb2e0b61f8eb9c3db78911b87a2c20102205e925f9aae2caa3025714c047faa8c8a3bbf7986a37b2814a49f36d1b695e38f"
 }
 ```
 
-| 필드 | 의미 |
-|------|------|
-| `address` | 발급 대상 지갑 주소 |
-| `iat` | 발급 시각 (Unix timestamp) |
-| `exp` | 만료 시각 (발급 후 24시간) |
+Response:
+
+```json
+{
+  "code": 200,
+  "message": "인증이 완료되었습니다.",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "walletAddress": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+    "accessTokenExpiresAt": "2026-03-20T10:15:00",
+    "refreshSessionHandle": "session-handle-001",
+    "refreshToken": "opaque-refresh-token"
+  }
+}
+```
+
+Cookie:
+
+- `Set-Cookie: ssatto_refresh_{sessionHandle}=...; HttpOnly; Path=/api/v1/auth`
+
+### `POST /auth/refresh`
+
+Rotates the refresh token and reissues the access token.
+
+Request:
+
+```json
+{
+  "sessionHandle": "session-handle-001"
+}
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "message": "세션이 복구되었습니다.",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "walletAddress": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+    "accessTokenExpiresAt": "2026-03-20T10:30:00",
+    "refreshSessionHandle": "session-handle-001",
+    "refreshToken": "rotated-refresh-token"
+  }
+}
+```
+
+Rules:
+
+- FE sends only `sessionHandle`
+- BE reads the raw refresh token from cookie
+- BE stores only the refresh token hash
+- Rotation happens on every successful refresh
+
+### `POST /auth/logout`
+
+Revokes the wallet refresh session and expires the refresh cookie.
+
+Request:
+
+```json
+{
+  "sessionHandle": "session-handle-001"
+}
+```
+
+Response:
+
+```json
+{
+  "code": 200,
+  "message": "로그아웃이 완료되었습니다.",
+  "data": null
+}
+```
+
+### Protected API Rule
+
+These endpoints require a valid access token:
+
+- `GET /wallet/{address}/activities`
+- `GET /lotto?address=...`
+- `GET /lotto/entries?address=...`
+- `POST /lotto/commit`
+- `GET /exchange/info?address=...`
+- `POST /exchange/jack-to-pot`
+
+Authorization rule:
+
+- `JWT subject` must equal the request wallet address
+- mismatch returns `403`
+- missing or invalid token returns `401`
 
 ---
 

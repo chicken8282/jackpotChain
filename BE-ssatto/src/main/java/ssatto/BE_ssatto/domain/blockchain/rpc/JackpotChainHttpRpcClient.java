@@ -183,7 +183,8 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
      */
     @Override
     public List<JackpotChainPeerInfo> getPeerInfo() {
-        JsonNode resultNode = invoke("getpeerinfo", List.of());
+        JsonNode responseNode = invoke("getpeerinfo", List.of());
+        JsonNode resultNode = responseNode.path("result");
         if (!resultNode.isArray()) {
             throw invalidResponse();
         }

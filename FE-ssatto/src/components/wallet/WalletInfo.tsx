@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { createWalletCredentials, deriveWalletCredentials } from "../../lib/crypto/wallet";
 import AnimatedNumber from "../common/AnimatedNumber";
 import GoldButton from "../common/GoldButton";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
@@ -20,18 +21,10 @@ interface WalletInfoProps {
   onAddWallet?: (
     nickname: string,
     type: "create" | "restore",
-    payload?: { address?: string; privateKey?: string },
+    payload?: { address?: string; privateKey?: string; password?: string },
     color?: WalletThemeId,
   ) => void;
   onExchangeJackToPot?: (walletAddress: string) => void;
-}
-
-function generateAddress() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`;
-}
-
-function generatePrivateKey() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(64, "A").slice(0, 64)}`;
 }
 
 export default function WalletInfo({
@@ -45,10 +38,12 @@ export default function WalletInfo({
   const [addMode, setAddMode] = useState<"choose" | "create" | "restore">("choose");
   const [newNickname, setNewNickname] = useState("");
   const [newColor, setNewColor] = useState<WalletThemeId>("gray");
-  const [restoreAddress, setRestoreAddress] = useState("");
   const [restorePrivateKey, setRestorePrivateKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showTooltip, setShowTooltip] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const lastNavTime = useRef(0);
   const navCooldown = 350;
@@ -93,21 +88,40 @@ export default function WalletInfo({
       return;
     }
 
-    onAddWallet?.(
-      newNickname.trim(),
-      addMode === "restore" ? "restore" : "create",
-      addMode === "restore"
-        ? { address: restoreAddress.trim(), privateKey: restorePrivateKey.trim() }
-        : { address: generateAddress(), privateKey: generatePrivateKey() },
-      newColor,
-    );
-    setShowAddModal(false);
-    setAddMode("choose");
-    setNewNickname("");
-    setNewColor("gray");
-    setRestoreAddress("");
-    setRestorePrivateKey("");
-    onChangeIndex(wallets.length);
+    if (password.trim().length < 8) {
+      setModalError("지갑 비밀번호는 8자 이상이어야 합니다.");
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      setModalError("비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    try {
+      const credentials =
+        addMode === "restore"
+          ? deriveWalletCredentials(restorePrivateKey.trim())
+          : createWalletCredentials();
+
+      onAddWallet?.(
+        newNickname.trim(),
+        addMode === "restore" ? "restore" : "create",
+        { address: credentials.address, privateKey: credentials.privateKey, password: password.trim() },
+        newColor,
+      );
+      setShowAddModal(false);
+      setAddMode("choose");
+      setNewNickname("");
+      setNewColor("gray");
+      setRestorePrivateKey("");
+      setPassword("");
+      setPasswordConfirm("");
+      setModalError(null);
+      onChangeIndex(wallets.length);
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "지갑 처리에 실패했습니다.");
+    }
   };
 
   const getCardStyle = (index: number) => {
@@ -140,6 +154,9 @@ export default function WalletInfo({
             onClick={() => {
               setShowAddModal(true);
               setAddMode("choose");
+              setModalError(null);
+              setPassword("");
+              setPasswordConfirm("");
             }}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/8 text-xl text-white/60 shadow-sm transition-all hover:scale-110 hover:bg-white/20 hover:text-white"
           >
@@ -312,7 +329,12 @@ export default function WalletInfo({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 p-4 backdrop-blur-md sm:items-center"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setShowAddModal(false);
+                setModalError(null);
+                setPassword("");
+                setPasswordConfirm("");
+              }}
             >
               <motion.div
                 initial={{ y: 80, opacity: 0, scale: 0.96 }}
@@ -324,7 +346,12 @@ export default function WalletInfo({
               >
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setModalError(null);
+                    setPassword("");
+                    setPasswordConfirm("");
+                  }}
                   className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-text-secondary transition-colors hover:bg-white/15 hover:text-white"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -335,26 +362,36 @@ export default function WalletInfo({
                 <div className="relative">
                   <h3 className="font-display text-2xl font-bold text-white">지갑 추가</h3>
                   <p className="mt-1 text-sm text-text-secondary">
-                    새 지갑을 생성하거나 기존 지갑 주소와 private key로 등록할 수 있습니다.
+                    새 지갑을 생성하거나 private key로 기존 지갑을 다시 불러올 수 있습니다.
                   </p>
 
                   {addMode === "choose" && (
                     <div className="mt-6 flex flex-col gap-3">
                       <button
                         type="button"
-                        onClick={() => setAddMode("create")}
+                        onClick={() => {
+                          setAddMode("create");
+                          setModalError(null);
+                          setPassword("");
+                          setPasswordConfirm("");
+                        }}
                         className="rounded-[20px] border border-accent-gold/25 bg-accent-gold/8 px-6 py-5 text-left transition-all hover:border-accent-gold/50 hover:bg-accent-gold/12"
                       >
                         <p className="font-bold text-white">새 지갑 생성하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">생성 즉시 새 주소를 추가합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">실제 blockchain 주소 규칙으로 지갑을 생성합니다.</p>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAddMode("restore")}
+                        onClick={() => {
+                          setAddMode("restore");
+                          setModalError(null);
+                          setPassword("");
+                          setPasswordConfirm("");
+                        }}
                         className="rounded-[20px] border border-info/25 bg-info/8 px-6 py-5 text-left transition-all hover:border-info/50 hover:bg-info/12"
                       >
                         <p className="font-bold text-white">기존 지갑 등록하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">주소와 private key로 지갑을 등록합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">private key로 주소를 다시 계산해 지갑을 등록합니다.</p>
                       </button>
                     </div>
                   )}
@@ -363,7 +400,7 @@ export default function WalletInfo({
                     <div className="mt-6 space-y-4">
                       <div>
                         <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Nickname
+                          지갑 이름
                         </label>
                         <input
                           type="text"
@@ -389,38 +426,61 @@ export default function WalletInfo({
                       </div>
 
                       {addMode === "restore" && (
-                        <>
-                          <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                              Wallet Address
-                            </label>
-                            <input
-                              type="text"
-                              value={restoreAddress}
-                              onChange={(event) => setRestoreAddress(event.target.value)}
-                              placeholder="0x..."
-                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                              Private Key
-                            </label>
-                            <input
-                              type="text"
-                              value={restorePrivateKey}
-                              onChange={(event) => setRestorePrivateKey(event.target.value)}
-                              placeholder="0x..."
-                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                            />
-                          </div>
-                        </>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            개인 키
+                          </label>
+                          <input
+                            type="text"
+                            value={restorePrivateKey}
+                            onChange={(event) => setRestorePrivateKey(event.target.value)}
+                            placeholder="0x..."
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
                       )}
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                          지갑 비밀번호
+                        </label>
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="지갑 비밀번호를 입력하세요"
+                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                          비밀번호 확인
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordConfirm}
+                          onChange={(event) => setPasswordConfirm(event.target.value)}
+                          placeholder="비밀번호를 한 번 더 입력하세요"
+                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                        />
+                      </div>
+
+                      {modalError ? (
+                        <p className="rounded-[14px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+                          {modalError}
+                        </p>
+                      ) : null}
 
                       <div className="flex gap-3 pt-2">
                         <button
                           type="button"
-                          onClick={() => setAddMode("choose")}
+                          onClick={() => {
+                            setAddMode("choose");
+                            setModalError(null);
+                            setPassword("");
+                            setPasswordConfirm("");
+                          }}
                           className="flex-1 rounded-[16px] border border-white/10 bg-white/5 py-3.5 font-bold text-text-secondary transition-colors hover:bg-white/10"
                         >
                           이전

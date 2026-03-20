@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { createWalletCredentials, deriveWalletCredentials } from "../../lib/crypto/wallet";
 import Card from "../common/Card";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
 
@@ -8,32 +9,25 @@ interface WalletCreateProps {
   onCreate: (
     nickname?: string,
     color?: WalletThemeId,
-    credentials?: { address?: string; privateKey?: string },
+    credentials?: { address?: string; privateKey?: string; password?: string },
   ) => void;
   onRestore?: (
-    privateKey: string,
-    address: string,
     nickname?: string,
     color?: WalletThemeId,
+    credentials?: { address?: string; privateKey?: string; password?: string },
   ) => void;
-}
-
-function makeAddress() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`;
-}
-
-function makePrivateKey() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(64, "A").slice(0, 64)}`;
 }
 
 export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps) {
   const [selectedColor, setSelectedColor] = useState<WalletThemeId>("gray");
   const [open, setOpen] = useState<"create" | "restore" | null>(null);
   const [nickname, setNickname] = useState("내 지갑");
-  const [restoreAddress, setRestoreAddress] = useState("");
   const [restorePrivateKey, setRestorePrivateKey] = useState("");
-  const [generatedAddress, setGeneratedAddress] = useState(makeAddress());
-  const [generatedPrivateKey, setGeneratedPrivateKey] = useState(makePrivateKey());
+  const [generatedAddress, setGeneratedAddress] = useState("");
+  const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   const theme = getWalletTheme(selectedColor);
   const createActionButtonClassName =
@@ -41,37 +35,69 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
 
   useEffect(() => {
     if (open === "create") {
-      setGeneratedAddress(makeAddress());
-      setGeneratedPrivateKey(makePrivateKey());
+      const credentials = createWalletCredentials();
+      setGeneratedAddress(credentials.address);
+      setGeneratedPrivateKey(credentials.privateKey);
+      setFormError(null);
     }
   }, [open]);
 
   const handleClose = () => {
     setOpen(null);
-    setRestoreAddress("");
     setRestorePrivateKey("");
+    setPassword("");
+    setPasswordConfirm("");
+    setFormError(null);
+  };
+
+  const validatePassword = () => {
+    if (password.trim().length < 8) {
+      return "지갑 비밀번호는 8자 이상이어야 합니다.";
+    }
+    if (password !== passwordConfirm) {
+      return "비밀번호 확인이 일치하지 않습니다.";
+    }
+    return null;
   };
 
   const handleCreate = () => {
+    const passwordError = validatePassword();
+    if (passwordError) {
+      setFormError(passwordError);
+      return;
+    }
+
     onCreate(nickname.trim() || "내 지갑", selectedColor, {
       address: generatedAddress,
       privateKey: generatedPrivateKey,
+      password: password.trim(),
     });
     handleClose();
   };
 
   const handleRestore = () => {
-    if (!onRestore || !restoreAddress.trim() || !restorePrivateKey.trim()) {
+    if (!onRestore || !restorePrivateKey.trim()) {
       return;
     }
 
-    onRestore(
-      restorePrivateKey.trim(),
-      restoreAddress.trim(),
-      nickname.trim() || "기존 지갑",
-      selectedColor,
-    );
-    handleClose();
+    try {
+      const passwordError = validatePassword();
+      if (passwordError) {
+        setFormError(passwordError);
+        return;
+      }
+
+      const credentials = deriveWalletCredentials(restorePrivateKey.trim());
+      onRestore(nickname.trim() || "기존 지갑", selectedColor, {
+        address: credentials.address,
+        privateKey: credentials.privateKey,
+        password: password.trim(),
+      });
+      setGeneratedAddress(credentials.address);
+      handleClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "지갑 복구에 실패했습니다.");
+    }
   };
 
   const modal =
@@ -100,8 +126,8 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                     </h3>
                     <p className="mt-1 text-sm text-text-secondary">
                       {open === "create"
-                        ? "생성된 지갑 주소와 private key를 TUI에서 바로 사용할 수 있도록 표시합니다."
-                        : "기존 지갑의 private key와 지갑 주소를 입력해 등록합니다."}
+                        ? "blockchain과 동일한 secp256k1 주소 규칙으로 지갑을 생성합니다."
+                        : "private key를 입력하면 주소를 다시 계산해 기존 지갑을 등록합니다."}
                     </p>
                   </div>
                   <button
@@ -119,7 +145,7 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                   <div className="space-y-4">
                     <div>
                       <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                        Nickname
+                        지갑 이름
                       </label>
                       <input
                         type="text"
@@ -134,7 +160,7 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                       <>
                         <div>
                           <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                            Wallet Address
+                            지갑 주소
                           </label>
                           <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
                             {generatedAddress}
@@ -143,31 +169,44 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
 
                         <div>
                           <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                            Private Key
+                            개인 키
                           </label>
                           <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
                             {generatedPrivateKey}
                           </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            지갑 비밀번호
+                          </label>
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="지갑 비밀번호를 입력하세요"
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            비밀번호 확인
+                          </label>
+                          <input
+                            type="password"
+                            value={passwordConfirm}
+                            onChange={(event) => setPasswordConfirm(event.target.value)}
+                            placeholder="비밀번호를 한 번 더 입력하세요"
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                          />
                         </div>
                       </>
                     ) : (
                       <>
                         <div>
                           <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                            Wallet Address
-                          </label>
-                          <input
-                            type="text"
-                            value={restoreAddress}
-                            onChange={(event) => setRestoreAddress(event.target.value)}
-                            placeholder="0x..."
-                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                            Private Key
+                            개인 키
                           </label>
                           <input
                             type="text"
@@ -177,9 +216,41 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                             className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
                           />
                         </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            지갑 비밀번호
+                          </label>
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="지갑 잠금 해제에 사용할 비밀번호"
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            비밀번호 확인
+                          </label>
+                          <input
+                            type="password"
+                            value={passwordConfirm}
+                            onChange={(event) => setPasswordConfirm(event.target.value)}
+                            placeholder="비밀번호를 한 번 더 입력하세요"
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
                       </>
                     )}
                   </div>
+
+                  {formError ? (
+                    <p className="mt-4 rounded-[14px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+                      {formError}
+                    </p>
+                  ) : null}
 
                   <div className="flex justify-center pt-8">
                     <button
@@ -212,8 +283,8 @@ export default function WalletCreate({ onCreate, onRestore }: WalletCreateProps)
                 지갑 생성
               </h2>
               <p className="mt-2 text-sm text-text-secondary">
-                개발 중인 TUI에서 바로 사용할 수 있도록 생성한 지갑의 주소 해시값과 private key를
-                함께 제공합니다.
+                실제 blockchain 주소 규칙과 동일한 공개키 해시 주소를 생성하고, private key로
+                로그인 서명까지 이어집니다.
               </p>
             </div>
 

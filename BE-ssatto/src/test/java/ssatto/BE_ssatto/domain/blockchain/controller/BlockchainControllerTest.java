@@ -74,7 +74,8 @@ class BlockchainControllerTest {
                 .queryParam("limit", "3")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("대시보드 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.height").value(11))
             .andExpect(jsonPath("$.data.blocks[0].hash").value("hash-11"))
             .andExpect(jsonPath("$.data.nodes[0]").value(1));
@@ -89,7 +90,7 @@ class BlockchainControllerTest {
                 .queryParam("limit", "51")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("COMMON_INVALID_REQUEST"));
+            .andExpect(jsonPath("$.code").value(400));
     }
 
     /**
@@ -118,7 +119,8 @@ class BlockchainControllerTest {
         mockMvc.perform(get("/api/v1/blockchain/blocks/11")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value("SUCCESS"))
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("블록 상세 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.hash").value("hash-11"))
             .andExpect(jsonPath("$.data.miningElapsed").value(12))
             .andExpect(jsonPath("$.data.isMainChain").value(true));

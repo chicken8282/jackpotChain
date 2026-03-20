@@ -6,17 +6,7 @@ import { createPortal } from "react-dom";
 import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
 import InteractiveHoverButton from "../common/InteractiveHoverButton";
-import type { LottoEntry as StoreLottoEntry } from "../../types";
-
-interface HistoryEntry {
-  id: string;
-  numbers: string[];
-  resultNumbers: string[];
-  date: string;
-  statusLabel: "DRAWING" | "WINNING" | "LOSING";
-  rewardLabel?: string;
-  claimable: boolean;
-}
+import type { LottoHistoryDetail, LottoHistoryEntry } from "../../services/readModelAdapters";
 
 interface HexPickerProps {
   disabled?: boolean;
@@ -24,8 +14,9 @@ interface HexPickerProps {
   potBalance: number;
   onExchangeJackToPot?: () => void;
   onCommit?: (chosenNumbers: number[]) => void;
-  entries?: StoreLottoEntry[];
+  entries?: LottoHistoryEntry[];
   onClaim?: (entryId: string) => void;
+  onLoadResult?: (commitHash: string) => Promise<LottoHistoryDetail>;
 }
 
 const slotThemes = [
@@ -61,27 +52,6 @@ const slotThemes = [
   },
 ];
 
-function normalizeHexDigit(value: string) {
-  const numeric = Number.parseInt(value, 16);
-  if (Number.isNaN(numeric)) {
-    return "0";
-  }
-
-  return (numeric % 16).toString(16);
-}
-
-function buildResultNumbers(numbers: string[], seed: string) {
-  return numbers.map((value, index) => {
-    const numeric = Number.parseInt(value, 16) % 16;
-    const offset = (seed.charCodeAt(index % seed.length) + index * 7) % 16;
-    return ((numeric + offset) % 16).toString(16);
-  });
-}
-
-function countMatches(numbers: string[], resultNumbers: string[]) {
-  return numbers.filter((value, index) => value === resultNumbers[index]).length;
-}
-
 function getNeighborValue(hex: string, delta: number) {
   let value = Number.parseInt(hex, 16);
   value = (value + delta + 16) % 16;
@@ -98,12 +68,10 @@ function HistoryModal({
   onClose,
   onClaim,
 }: {
-  entry: HistoryEntry;
+  entry: LottoHistoryDetail;
   onClose: () => void;
   onClaim?: (entryId: string) => void;
 }) {
-  const matches = countMatches(entry.numbers, entry.resultNumbers);
-
   if (typeof document === "undefined") {
     return null;
   }
@@ -150,7 +118,7 @@ function HistoryModal({
           <div className="rounded-[24px] border border-info/20 bg-info/5 p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-widest text-info">블록 결과 번호</p>
             <div className="grid grid-cols-3 gap-3">
-              {entry.resultNumbers.map((number, index) => {
+              {(entry.resultNumbers ?? ["-", "-", "-", "-", "-", "-"]).map((number, index) => {
                 const matched = entry.numbers[index] === number;
 
                 return (
@@ -176,7 +144,7 @@ function HistoryModal({
               비교 결과
             </span>
             <p className="font-bold text-white">
-              {matches}/6일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
+              {(entry.matchCount ?? 0)}/6일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
             </p>
             {entry.rewardLabel ? (
               <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
@@ -242,15 +210,17 @@ export default function HexPicker({
   onCommit,
   entries,
   onClaim,
+  onLoadResult,
 }: HexPickerProps) {
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
   const [randomizing, setRandomizing] = useState(false);
-  const [selectedHistory, setSelectedHistory] = useState<HistoryEntry | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<LottoHistoryDetail | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
+  const [historyLoadingCommitHash, setHistoryLoadingCommitHash] = useState<string | null>(null);
   const randomizeSpinIntervalRef = useRef<number | null>(null);
   const randomizeRevealIntervalRef = useRef<number | null>(null);
   const randomizeFinalValuesRef = useRef<string[]>(selected);
@@ -310,27 +280,27 @@ export default function HexPicker({
     [],
   );
 
-  const mergedHistory = useMemo(() => {
-    const storeHistory: HistoryEntry[] =
-      entries?.map((entry) => {
-        const numbers = entry.numbers.map(normalizeHexDigit);
-        const resultNumbers = buildResultNumbers(numbers, entry.id);
-        const rewardLabel = entry.reward > 0 ? `${entry.reward.toLocaleString("ko-KR")} JACK` : undefined;
+  const mergedHistory = useMemo(() => entries ?? [], [entries]);
 
-        return {
-          id: entry.id,
-          numbers,
-          resultNumbers,
-          date: entry.createdAt,
-          statusLabel:
-            entry.status === "당첨" ? "WINNING" : entry.status === "미당첨" ? "LOSING" : "DRAWING",
-          rewardLabel,
-          claimable: entry.status === "당첨" && !entry.claimed,
-        };
-      }) ?? [];
+  const handleSelectHistory = async (entry: LottoHistoryEntry) => {
+    if (!onLoadResult) {
+      setSelectedHistory({
+        ...entry,
+        resultNumbers: null,
+      });
+      return;
+    }
 
-    return storeHistory;
-  }, [entries]);
+    setHistoryLoadingCommitHash(entry.commitHash);
+    try {
+      const detail = await onLoadResult(entry.commitHash);
+      setSelectedHistory(detail);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "로또 결과를 불러오지 못했습니다.");
+    } finally {
+      setHistoryLoadingCommitHash(null);
+    }
+  };
 
   const handleRandomize = () => {
     if (randomizing) {
@@ -592,13 +562,15 @@ export default function HexPicker({
             <div className="subtle-scroll max-h-[480px] space-y-3 overflow-y-auto pr-2">
               {mergedHistory.length === 0 ? (
                 <div className="flex items-center justify-center rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-10 text-sm font-bold text-text-secondary">
-                  참여 내역 read-model은 아직 준비 중입니다.
+                  참여 내역이 아직 없습니다.
                 </div>
               ) : mergedHistory.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => setSelectedHistory(entry)}
+                  onClick={() => {
+                    void handleSelectHistory(entry);
+                  }}
                   className="group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all hover:border-white/15 hover:bg-white/[0.04]"
                 >
                   <div className="flex flex-col gap-1">
@@ -610,10 +582,12 @@ export default function HexPicker({
                             ? "bg-accent-gold/20 text-accent-gold"
                             : entry.statusLabel === "DRAWING"
                               ? "bg-info/15 text-info"
+                              : entry.statusLabel === "EXPIRED"
+                                ? "bg-danger/15 text-danger"
                               : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
+                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -638,7 +612,11 @@ export default function HexPicker({
                       </button>
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
-                      {countMatches(entry.numbers, entry.resultNumbers)}/6일치
+                      {historyLoadingCommitHash === entry.commitHash
+                        ? "결과 조회 중"
+                        : entry.matchCount == null
+                          ? "추첨 대기"
+                          : `${entry.matchCount}/6일치`}
                     </span>
                     <svg
                       className="h-4 w-4 text-text-tertiary transition-transform group-hover:translate-x-0.5"

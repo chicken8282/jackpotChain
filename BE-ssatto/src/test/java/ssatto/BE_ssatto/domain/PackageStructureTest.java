@@ -20,9 +20,10 @@ class PackageStructureTest {
     void requestedDomainDirectoriesExist() {
         Path domainRoot = Path.of("src", "main", "java", "ssatto", "BE_ssatto", "domain");
         List<String> entityDomains = List.of("blockchain", "wallet", "lotto");
-        List<String> apiOnlyDomains = List.of("auth", "exchange", "mining");
+        List<String> apiOnlyDomains = List.of("exchange", "mining");
         List<String> entitySubDirectories = List.of("controller", "service", "repository", "entity", "dto", "exception");
         List<String> apiOnlySubDirectories = List.of("controller", "service", "dto", "exception");
+        List<String> authSubDirectories = List.of("controller", "service", "dto", "exception", "repository", "util", "model");
 
         for (String domain : entityDomains) {
             Path domainPath = domainRoot.resolve(domain);
@@ -34,6 +35,13 @@ class PackageStructureTest {
         }
 
         assertThat(Files.isDirectory(domainRoot.resolve("blockchain").resolve("rpc"))).isTrue();
+
+        Path authDomainPath = domainRoot.resolve("auth");
+        assertThat(Files.isDirectory(authDomainPath)).isTrue();
+        for (String subDirectory : authSubDirectories) {
+            assertThat(Files.isDirectory(authDomainPath.resolve(subDirectory))).isTrue();
+        }
+        assertThat(Files.exists(authDomainPath.resolve("entity"))).isFalse();
 
         for (String domain : apiOnlyDomains) {
             Path domainPath = domainRoot.resolve(domain);

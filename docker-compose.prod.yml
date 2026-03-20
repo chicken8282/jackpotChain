@@ -40,7 +40,11 @@ services:
     volumes:
       - postgresql-prod-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-jackpot} -d ${DB_NAME:-jackpotchain}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-jackpot} -d ${DB_NAME:-jackpotchain}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,7 +113,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sf -X POST http://localhost:8332 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"id\":1}' || exit 1"
+          'curl -sf -X POST http://localhost:8332 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
         ]
       interval: 15s
       timeout: 5s

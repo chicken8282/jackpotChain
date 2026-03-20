@@ -84,10 +84,10 @@ export const INITIAL_ACTIVITIES: Activity[] = [
 ];
 
 export const INITIAL_MINED_BLOCKS: MinedBlock[] = [
-  { id: "mine-928", height: 928, hash: "0x8A2840", reward: 50, createdAt: "03.16 15:22" },
-  { id: "mine-927", height: 927, hash: "0x8A27E9", reward: 50, createdAt: "03.16 12:05" },
-  { id: "mine-922", height: 922, hash: "0x8A22CF", reward: 50, createdAt: "03.15 18:44" },
-  { id: "mine-917", height: 917, hash: "0x8A179B", reward: 50, createdAt: "03.15 08:21" },
+  { id: "mine-928", blockId: 928, height: 928, hash: "0x8A2840", reward: 50, createdAt: "03.16 15:22" },
+  { id: "mine-927", blockId: 927, height: 927, hash: "0x8A27E9", reward: 50, createdAt: "03.16 12:05" },
+  { id: "mine-922", blockId: 922, height: 922, hash: "0x8A22CF", reward: 50, createdAt: "03.15 18:44" },
+  { id: "mine-917", blockId: 917, height: 917, hash: "0x8A179B", reward: 50, createdAt: "03.15 08:21" },
 ];
 
 export const LOTTO_TIER_RANKING = [

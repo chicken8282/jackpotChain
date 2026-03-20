@@ -21,12 +21,58 @@
 | 테이블명 | 역할 |
 |---------|------|
 | `wallet` | 지갑 주소, 닉네임, 테마 등 UI 메타데이터 |
+| `auth_challenge` | 인증용 nonce 챌린지 저장소 (Redis TTL, DB 테이블 아님) |
+| `auth_refresh_session` | refresh 세션 해시 저장소 |
 | `block` | 채굴된 블록 인덱싱 (Webhook 기반) |
 | `transaction` | 블록체인 TX 인덱싱 (version별 분류) |
 | `wallet_activity` | 지갑별 활동 내역 (GAP 1 해결: Webhook + DB 저장) |
 | `lotto_entry` | 로또 참여 기록 (선택번호, 결과, 상태, 보상) |
 | `jackpot_pool` | 잭팟 풀 잔액 캐싱 (빠른 조회용) |
 | `lotto_ranking` | 역대 Top 3 당첨자 랭킹 (read/write 분리 최적화) |
+
+---
+
+## 비관계 저장소
+
+### auth_challenge (Redis TTL)
+
+> `POST /auth/challenge`, `POST /auth/verify` 에서 사용하는 인증용 임시 저장소다.
+> DB 테이블이 아니라 Redis key-value TTL 저장소이며, 챌린지는 만료 또는 사용 완료 후 제거된다.
+
+| 필드명 | 의미 | 타입 |
+|--------|------|------|
+| challenge_id | 챌린지 식별자 | String |
+| address | 로그인 대상 지갑 주소 | String |
+| nonce | 서명용 난수 | String |
+| message | canonical 로그인 메시지 | String |
+| expires_at | 챌린지 만료 시각 | LocalDateTime |
+| used | 사용 여부 | Boolean |
+
+> Redis key 예시: `auth:challenge:{challengeId}`
+
+> private key, refresh token 원문은 여전히 서버 DB에 저장하지 않는다.
+
+### auth_refresh_session
+
+> `POST /auth/verify`, `POST /auth/refresh`, `POST /auth/logout` 에서 사용하는 wallet-scoped refresh 세션 저장소다.
+> raw refresh token은 저장하지 않고 SHA-256 hash만 저장한다.
+
+| 필드명 | 의미 | 타입 |
+|--------|------|------|
+| id | PK | Long |
+| session_handle | FE가 지갑 메타데이터에 보관하는 세션 핸들 | String |
+| wallet_address | 인증된 지갑 주소 | String |
+| refresh_token_hash | refresh token SHA-256 hash | String |
+| expires_at | 세션 만료 시각 | LocalDateTime |
+| created_at | 세션 생성 시각 | LocalDateTime |
+| revoked_at | 세션 폐기 시각 | LocalDateTime |
+
+Rules:
+
+- one session row per wallet session handle
+- refresh rotation updates only `refresh_token_hash` and `expires_at`
+- logout sets `revoked_at`
+- private key and raw refresh token are never stored in DB
 
 ---
 

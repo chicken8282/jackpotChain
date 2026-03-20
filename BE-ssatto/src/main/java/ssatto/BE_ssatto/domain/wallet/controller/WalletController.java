@@ -2,6 +2,8 @@ package ssatto.BE_ssatto.domain.wallet.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +26,11 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 @RequestMapping("/api/v1/wallet")
 public class WalletController {
 
+    private static final int SUCCESS_CODE = HttpStatus.OK.value();
+    private static final String CREATE_WALLET_SUCCESS_MESSAGE = "지갑이 등록되었습니다.";
+    private static final String GET_WALLETS_SUCCESS_MESSAGE = "지갑 목록 조회가 완료되었습니다.";
+    private static final String GET_ACTIVITIES_SUCCESS_MESSAGE = "활동 내역 조회가 완료되었습니다.";
+
     private final WalletService walletService;
 
     /**
@@ -34,7 +41,7 @@ public class WalletController {
      */
     @PostMapping
     public ApiResponse<CreateWalletResponse> createWallet(@Valid @RequestBody CreateWalletRequest request) {
-        return ApiResponse.success(walletService.createWallet(request));
+        return ApiResponse.success(SUCCESS_CODE, CREATE_WALLET_SUCCESS_MESSAGE, walletService.createWallet(request));
     }
 
     /**
@@ -45,7 +52,7 @@ public class WalletController {
      */
     @GetMapping
     public ApiResponse<WalletListResponse> getWallets(@RequestParam String addresses) {
-        return ApiResponse.success(walletService.getWallets(addresses));
+        return ApiResponse.success(SUCCESS_CODE, GET_WALLETS_SUCCESS_MESSAGE, walletService.getWallets(addresses));
     }
 
     /**
@@ -59,11 +66,22 @@ public class WalletController {
      */
     @GetMapping("/{address}/activities")
     public ApiResponse<WalletActivityCursorResponse> getActivities(
+        Authentication authentication,
         @PathVariable String address,
+        @RequestParam(required = false) Long lastActivityId,
         @RequestParam(required = false) Long cursor,
         @RequestParam(defaultValue = "20") int size,
         @RequestParam(required = false) String type
     ) {
-        return ApiResponse.success(walletService.getActivities(address, cursor, size, type));
+        Long resolvedCursor = lastActivityId != null ? lastActivityId : cursor;
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_ACTIVITIES_SUCCESS_MESSAGE,
+            walletService.getActivities(resolveWalletSubject(authentication), address, resolvedCursor, size, type)
+        );
+    }
+
+    private String resolveWalletSubject(Authentication authentication) {
+        return authentication.getName();
     }
 }

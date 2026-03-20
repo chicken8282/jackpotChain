@@ -48,7 +48,7 @@ class GlobalExceptionHandlerTest {
     void businessExceptionUsesConfiguredErrorCodeAndStatus() throws Exception {
         mockMvc.perform(get("/test-exception/business"))
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("AUTH_EMAIL_DUPLICATE"))
+            .andExpect(jsonPath("$.code").value(409))
             .andExpect(jsonPath("$.message").value("이미 사용 중인 이메일입니다."))
             .andExpect(jsonPath("$.data").value(nullValue()));
     }
@@ -62,7 +62,7 @@ class GlobalExceptionHandlerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"value\":\"\"}"))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.code").value("COMMON_INVALID_REQUEST"))
+            .andExpect(jsonPath("$.code").value(400))
             .andExpect(jsonPath("$.message").value("값은 비어 있을 수 없습니다."))
             .andExpect(jsonPath("$.data").value(nullValue()));
     }
@@ -74,7 +74,7 @@ class GlobalExceptionHandlerTest {
     void unhandledExceptionReturnsInternalServerErrorWrapper() throws Exception {
         mockMvc.perform(get("/test-exception/unhandled"))
             .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_SERVER_ERROR"))
+            .andExpect(jsonPath("$.code").value(500))
             .andExpect(jsonPath("$.message").value("서버 내부 오류가 발생했습니다."))
             .andExpect(jsonPath("$.data").value(nullValue()));
     }

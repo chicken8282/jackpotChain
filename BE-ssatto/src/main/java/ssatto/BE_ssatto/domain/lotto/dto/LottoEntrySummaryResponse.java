@@ -12,7 +12,7 @@ import java.util.List;
  * @param status 상태
  * @param matchCount 일치 개수
  * @param rewardJack JACK 보상
- * @param isClaimed 보상 수령 여부
+ * @param claimed 보상 수령 여부
  * @param isClaimable 보상 수령 가능 여부
  * @param enteredAt 참여 시각
  */
@@ -23,7 +23,7 @@ public record LottoEntrySummaryResponse(
     String status,
     Integer matchCount,
     Long rewardJack,
-    boolean isClaimed,
+    boolean claimed,
     boolean isClaimable,
     LocalDateTime enteredAt
 ) {

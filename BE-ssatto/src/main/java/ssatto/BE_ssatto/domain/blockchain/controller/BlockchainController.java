@@ -3,6 +3,7 @@ package ssatto.BE_ssatto.domain.blockchain.controller;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +26,10 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 @RequestMapping("/api/v1/blockchain")
 public class BlockchainController {
 
+    private static final int SUCCESS_CODE = HttpStatus.OK.value();
+    private static final String DASHBOARD_SUCCESS_MESSAGE = "대시보드 조회가 완료되었습니다.";
+    private static final String BLOCK_DETAIL_SUCCESS_MESSAGE = "블록 상세 조회가 완료되었습니다.";
+
     private final BlockchainQueryService blockchainQueryService;
 
     /**
@@ -44,7 +49,7 @@ public class BlockchainController {
             throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
         }
 
-        return ApiResponse.success(blockchainQueryService.getDashboard(limit));
+        return ApiResponse.success(SUCCESS_CODE, DASHBOARD_SUCCESS_MESSAGE, blockchainQueryService.getDashboard(limit));
     }
 
     /**
@@ -55,6 +60,10 @@ public class BlockchainController {
      */
     @GetMapping("/blocks/{height}")
     public ApiResponse<BlockchainBlockDetailResponse> getBlockDetail(@PathVariable long height) {
-        return ApiResponse.success(blockchainQueryService.getBlockDetail(height));
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            BLOCK_DETAIL_SUCCESS_MESSAGE,
+            blockchainQueryService.getBlockDetail(height)
+        );
     }
 }

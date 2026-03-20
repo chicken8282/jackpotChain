@@ -2,6 +2,8 @@ package ssatto.BE_ssatto.domain.lotto.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimRequest;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoCommitRequest;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoEntriesResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoOverviewResponse;
@@ -24,6 +28,13 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 @RequestMapping("/api/v1/lotto")
 public class LottoController {
 
+    private static final int SUCCESS_CODE = HttpStatus.OK.value();
+    private static final String GET_OVERVIEW_SUCCESS_MESSAGE = "로또 정보 조회가 완료되었습니다.";
+    private static final String COMMIT_SUCCESS_MESSAGE = "로또 참여가 완료되었습니다.";
+    private static final String CLAIM_SUCCESS_MESSAGE = "보상 수령이 완료되었습니다.";
+    private static final String GET_ENTRIES_SUCCESS_MESSAGE = "로또 참여 내역 조회가 완료되었습니다.";
+    private static final String GET_RESULT_SUCCESS_MESSAGE = "로또 결과 조회가 완료되었습니다.";
+
     private final LottoService lottoService;
 
     /**
@@ -33,8 +44,12 @@ public class LottoController {
      * @return 로또 개요 응답
      */
     @GetMapping
-    public ApiResponse<LottoOverviewResponse> getOverview(@RequestParam String address) {
-        return ApiResponse.success(lottoService.getOverview(address));
+    public ApiResponse<LottoOverviewResponse> getOverview(Authentication authentication, @RequestParam String address) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_OVERVIEW_SUCCESS_MESSAGE,
+            lottoService.getOverview(resolveWalletSubject(authentication), address)
+        );
     }
 
     /**
@@ -44,9 +59,24 @@ public class LottoController {
      * @return 성공 응답
      */
     @PostMapping("/commit")
-    public ApiResponse<Void> commit(@Valid @RequestBody LottoCommitRequest request) {
-        lottoService.commit(request);
-        return ApiResponse.success();
+    public ApiResponse<Void> commit(Authentication authentication, @Valid @RequestBody LottoCommitRequest request) {
+        lottoService.commit(resolveWalletSubject(authentication), request);
+        return ApiResponse.success(SUCCESS_CODE, COMMIT_SUCCESS_MESSAGE);
+    }
+
+    /**
+     * 서명된 로또 보상 수령 트랜잭션을 제출한다.
+     *
+     * @param request 클레임 요청
+     * @return 클레임 응답
+     */
+    @PostMapping("/claim")
+    public ApiResponse<LottoClaimResponse> claim(Authentication authentication, @Valid @RequestBody LottoClaimRequest request) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            CLAIM_SUCCESS_MESSAGE,
+            lottoService.claim(resolveWalletSubject(authentication), request)
+        );
     }
 
     /**
@@ -58,10 +88,15 @@ public class LottoController {
      */
     @GetMapping("/entries")
     public ApiResponse<LottoEntriesResponse> getEntries(
+        Authentication authentication,
         @RequestParam String address,
         @RequestParam(required = false) String status
     ) {
-        return ApiResponse.success(lottoService.getEntries(address, status));
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_ENTRIES_SUCCESS_MESSAGE,
+            lottoService.getEntries(resolveWalletSubject(authentication), address, status)
+        );
     }
 
     /**
@@ -71,7 +106,15 @@ public class LottoController {
      * @return 로또 결과 응답
      */
     @GetMapping("/entries/{commitHash}/result")
-    public ApiResponse<LottoResultResponse> getResult(@PathVariable String commitHash) {
-        return ApiResponse.success(lottoService.getResult(commitHash));
+    public ApiResponse<LottoResultResponse> getResult(Authentication authentication, @PathVariable String commitHash) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_RESULT_SUCCESS_MESSAGE,
+            lottoService.getResult(resolveWalletSubject(authentication), commitHash)
+        );
+    }
+
+    private String resolveWalletSubject(Authentication authentication) {
+        return authentication.getName();
     }
 }

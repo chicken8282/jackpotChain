@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
         log.warn("BUSINESS_EXCEPTION errorCode={} message={}", errorCode.name(), exception.getMessage());
         return ResponseEntity
             .status(errorCode.getHttpStatus())
-            .body(ApiResponse.error(errorCode.name(), exception.getMessage()));
+            .body(ApiResponse.error(errorCode.getHttpStatus().value(), exception.getMessage()));
     }
 
     /**
@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
             .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
-            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.name(), message));
+            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(), message));
     }
 
     /**
@@ -76,7 +76,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
             .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
-            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.name(), message));
+            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(), message));
     }
 
     /**
@@ -96,7 +96,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus())
             .body(ApiResponse.error(
-                ErrorCode.COMMON_INTERNAL_SERVER_ERROR.name(),
+                ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus().value(),
                 ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getMessage()
             ));
     }

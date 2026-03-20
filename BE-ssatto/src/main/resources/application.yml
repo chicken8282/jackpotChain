@@ -25,7 +25,22 @@ springdoc:
   default-produces-media-type: application/json
 
 jwt:
-  expiration: 86400000
+  access-expiration: 900000
+  refresh-expiration: 1209600000
+  expiration: 900000
+
+auth:
+  challenge-ttl-seconds: 300
+  cors:
+    allowed-origins:
+    allowed-methods: GET,POST,OPTIONS
+    allowed-headers: Authorization,Content-Type,Accept
+    max-age-seconds: 3600
+  refresh-cookie:
+    path: /api/v1/auth
+    max-age-seconds: 1209600
+    secure: false
+    same-site: Lax
 
 jackpotchain:
   rpc:

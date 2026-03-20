@@ -38,6 +38,7 @@ export async function getJson<T>(path: string, signal?: AbortSignal, token?: str
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "GET",
     headers: buildHeaders(token),
+    credentials: "include",
     signal,
   });
 
@@ -72,6 +73,7 @@ export async function postJson<T, B>(
       ...buildHeaders(token),
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(body),
     signal,
   });

@@ -14,10 +14,10 @@ class ApiResponseTest {
      */
     @Test
     void successResponseContainsSuccessCodeMessageAndData() {
-        ApiResponse<String> response = ApiResponse.success("payload");
+        ApiResponse<String> response = ApiResponse.success(200, "대시보드 조회가 완료되었습니다.", "payload");
 
-        assertThat(response.getCode()).isEqualTo("SUCCESS");
-        assertThat(response.getMessage()).isEqualTo("Request completed successfully.");
+        assertThat(response.getCode()).isEqualTo(200);
+        assertThat(response.getMessage()).isEqualTo("대시보드 조회가 완료되었습니다.");
         assertThat(response.getData()).isEqualTo("payload");
     }
 
@@ -26,10 +26,10 @@ class ApiResponseTest {
      */
     @Test
     void successResponseWithoutDataKeepsNullData() {
-        ApiResponse<Void> response = ApiResponse.success();
+        ApiResponse<Void> response = ApiResponse.success(200, "로또 참여가 완료되었습니다.");
 
-        assertThat(response.getCode()).isEqualTo("SUCCESS");
-        assertThat(response.getMessage()).isEqualTo("Request completed successfully.");
+        assertThat(response.getCode()).isEqualTo(200);
+        assertThat(response.getMessage()).isEqualTo("로또 참여가 완료되었습니다.");
         assertThat(response.getData()).isNull();
     }
 
@@ -38,10 +38,10 @@ class ApiResponseTest {
      */
     @Test
     void errorResponseContainsErrorCodeAndMessage() {
-        ApiResponse<Void> response = ApiResponse.error("COMMON_INVALID_REQUEST", "Invalid request.");
+        ApiResponse<Void> response = ApiResponse.error(400, "잘못된 요청입니다.");
 
-        assertThat(response.getCode()).isEqualTo("COMMON_INVALID_REQUEST");
-        assertThat(response.getMessage()).isEqualTo("Invalid request.");
+        assertThat(response.getCode()).isEqualTo(400);
+        assertThat(response.getMessage()).isEqualTo("잘못된 요청입니다.");
         assertThat(response.getData()).isNull();
     }
 }

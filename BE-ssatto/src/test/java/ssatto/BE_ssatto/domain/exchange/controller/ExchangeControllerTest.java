@@ -6,14 +6,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationEntryPoint;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationFilter;
 import ssatto.BE_ssatto.domain.exchange.dto.ExchangeInfoResponse;
 import ssatto.BE_ssatto.domain.exchange.dto.ExchangeResponse;
 import ssatto.BE_ssatto.domain.exchange.service.ExchangeService;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,24 +37,37 @@ class ExchangeControllerTest {
     @MockitoBean
     private ExchangeService exchangeService;
 
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockitoBean
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
     @Test
-    @DisplayName("교환 정보 조회 API가 성공 응답을 반환한다")
+    @DisplayName("교환 정보 조회 API는 인증 지갑 주소를 서비스에 전달한다")
     void getExchangeInfoReturnsSuccess() throws Exception {
-        given(exchangeService.getExchangeInfo("JackpotAddress01"))
+        given(exchangeService.getExchangeInfo("JackpotAddress01", "JackpotAddress01"))
             .willReturn(new ExchangeInfoResponse(12_500_000_000L, 300_000_000L));
 
-        mockMvc.perform(get("/api/v1/exchange/info").param("address", "JackpotAddress01"))
+        mockMvc.perform(get("/api/v1/exchange/info")
+                .param("address", "JackpotAddress01")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("교환 정보 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.potBalance").value(300_000_000L));
+
+        verify(exchangeService).getExchangeInfo("JackpotAddress01", "JackpotAddress01");
     }
 
     @Test
-    @DisplayName("교환 제출 API가 성공 응답을 반환한다")
+    @DisplayName("교환 제출 API는 인증 지갑 주소를 서비스에 전달한다")
     void exchangeReturnsSuccess() throws Exception {
-        given(exchangeService.exchangeJackToPot(any()))
+        given(exchangeService.exchangeJackToPot(eq("JackpotAddress01"), any()))
             .willReturn(new ExchangeResponse("tx-001", 10_000_000_000L, 100_000_000L, 100));
 
         mockMvc.perform(post("/api/v1/exchange/jack-to-pot")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -59,6 +77,10 @@ class ExchangeControllerTest {
                     }
                     """))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("교환이 완료되었습니다."))
             .andExpect(jsonPath("$.data.exchangeRate").value(100));
+
+        verify(exchangeService).exchangeJackToPot(eq("JackpotAddress01"), any());
     }
 }

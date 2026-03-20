@@ -2,78 +2,66 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { WalletThemeId } from "../components/wallet/walletThemes";
 
-export interface LocalWallet {
+export const WALLET_STORE_KEY = "ssatto-wallet-session-v2";
+export const WALLET_STORE_SCHEMA_VERSION = 2;
+
+export interface WalletMetadata {
+  walletId: string;
+  keystoreId: string;
   nickname: string;
   address: string;
-  privateKey: string;
   walletColor: WalletThemeId;
+  refreshSessionHandle: string | null;
 }
 
 interface WalletStoreState {
-  wallets: LocalWallet[];
+  schemaVersion: number;
+  wallets: WalletMetadata[];
   activeAddress: string | null;
-  token: string | null;
-  createWallet: (
-    nickname?: string,
-    color?: WalletThemeId,
-    credentials?: { address?: string; privateKey?: string },
-  ) => void;
-  restoreWallet: (
-    privateKey: string,
-    address: string,
-    nickname?: string,
-    color?: WalletThemeId,
-  ) => void;
-  setActiveAddress: (address: string) => void;
-  setToken: (token: string | null) => void;
+  upsertWallet: (wallet: WalletMetadata) => void;
+  replaceWallets: (wallets: WalletMetadata[]) => void;
+  setActiveAddress: (address: string | null) => void;
 }
-
-const makeId = (length: number, fallback: string) =>
-  `${Math.random().toString(16).slice(2).toUpperCase().padEnd(length, fallback).slice(0, length)}`;
 
 export const useWalletStore = create<WalletStoreState>()(
   persist(
     (set) => ({
+      schemaVersion: WALLET_STORE_SCHEMA_VERSION,
       wallets: [],
       activeAddress: null,
-      token: null,
-      createWallet: (nickname = "내 지갑", color = "gray", credentials) =>
+      upsertWallet: (wallet) =>
         set((state) => {
-          const address = credentials?.address ?? `0x${makeId(40, "0")}`;
-          const privateKey = credentials?.privateKey ?? `0x${makeId(64, "A")}`;
+          const existingWallet = state.wallets.find((item) => item.address === wallet.address);
           const nextWallets = [
-            ...state.wallets.filter((wallet) => wallet.address !== address),
-            { nickname, address, privateKey, walletColor: color },
+            ...state.wallets.filter((item) => item.address !== wallet.address),
+            {
+              ...existingWallet,
+              ...wallet,
+              refreshSessionHandle: wallet.refreshSessionHandle ?? existingWallet?.refreshSessionHandle ?? null,
+            },
           ];
 
           return {
             wallets: nextWallets,
-            activeAddress: address,
+            activeAddress: wallet.address,
           };
         }),
-      restoreWallet: (privateKey, address, nickname = "기존 지갑", color = "gray") =>
-        set((state) => {
-          const nextWallets = [
-            ...state.wallets.filter((wallet) => wallet.address !== address),
-            { nickname, address, privateKey, walletColor: color },
-          ];
-
-          return {
-            wallets: nextWallets,
-            activeAddress: address,
-          };
-        }),
+      replaceWallets: (wallets) =>
+        set((state) => ({
+          wallets,
+          activeAddress:
+            state.activeAddress && wallets.some((wallet) => wallet.address === state.activeAddress)
+              ? state.activeAddress
+              : wallets[0]?.address ?? null,
+        })),
       setActiveAddress: (address) =>
         set(() => ({
           activeAddress: address,
         })),
-      setToken: (token) =>
-        set(() => ({
-          token,
-        })),
     }),
     {
-      name: "ssatto-wallet-session",
+      name: WALLET_STORE_KEY,
+      version: WALLET_STORE_SCHEMA_VERSION,
     },
   ),
 );

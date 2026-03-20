@@ -6,8 +6,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationEntryPoint;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationFilter;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletListResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletSummaryResponse;
@@ -18,6 +21,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,6 +40,12 @@ class WalletControllerTest {
     @MockitoBean
     private WalletService walletService;
 
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockitoBean
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
     @Test
     @DisplayName("지갑 등록 API가 성공 응답을 반환한다")
     void createWalletReturnsSuccess() throws Exception {
@@ -52,6 +62,8 @@ class WalletControllerTest {
                     }
                     """))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("지갑이 등록되었습니다."))
             .andExpect(jsonPath("$.data.address").value("JackpotAddress01"));
     }
 
@@ -65,13 +77,15 @@ class WalletControllerTest {
 
         mockMvc.perform(get("/api/v1/wallet").param("addresses", "JackpotAddress01"))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("지갑 목록 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.wallets[0].jackBalance").value(12_500_000_000L));
     }
 
     @Test
-    @DisplayName("활동 내역 조회 API가 성공 응답을 반환한다")
+    @DisplayName("활동 내역 조회 API는 인증 지갑 주소를 서비스에 전달한다")
     void getActivitiesReturnsSuccess() throws Exception {
-        given(walletService.getActivities("JackpotAddress01", null, 20, null))
+        given(walletService.getActivities("JackpotAddress01", "JackpotAddress01", 15L, 20, null))
             .willReturn(new ssatto.BE_ssatto.domain.wallet.dto.WalletActivityCursorResponse(
                 false,
                 null,
@@ -80,12 +94,22 @@ class WalletControllerTest {
                     "LOTTO_COMMIT",
                     "로또 참여 (1 POT)",
                     "tx-001",
+                    null,
+                    -100_000_000L,
                     LocalDateTime.of(2026, 3, 20, 9, 30)
                 ))
             ));
 
-        mockMvc.perform(get("/api/v1/wallet/JackpotAddress01/activities"))
+        mockMvc.perform(get("/api/v1/wallet/JackpotAddress01/activities")
+                .param("lastActivityId", "15")
+                .param("size", "20")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.activities[0].type").value("LOTTO_COMMIT"));
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("활동 내역 조회가 완료되었습니다."))
+            .andExpect(jsonPath("$.data.activities[0].type").value("LOTTO_COMMIT"))
+            .andExpect(jsonPath("$.data.activities[0].potAmount").value(-100_000_000L));
+
+        verify(walletService).getActivities("JackpotAddress01", "JackpotAddress01", 15L, 20, null);
     }
 }

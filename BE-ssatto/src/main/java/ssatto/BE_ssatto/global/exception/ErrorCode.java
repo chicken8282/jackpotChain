@@ -17,6 +17,9 @@ public enum ErrorCode {
     AUTH_TOKEN_MISSING(HttpStatus.UNAUTHORIZED, "인증 토큰이 없습니다."),
     AUTH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "인증 토큰이 만료되었습니다."),
     AUTH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "유효하지 않은 인증 토큰입니다."),
+    AUTH_CHALLENGE_NOT_FOUND(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 인증 챌린지입니다."),
+    AUTH_REFRESH_SESSION_NOT_FOUND(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 세션입니다."),
+    AUTH_SIGNATURE_INVALID(HttpStatus.UNAUTHORIZED, "서명 검증에 실패했습니다."),
     AUTH_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 작업을 수행할 권한이 없습니다."),
     AUTH_EMAIL_DUPLICATE(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
 

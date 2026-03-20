@@ -13,8 +13,13 @@ import ssatto.BE_ssatto.global.exception.BusinessException;
 import ssatto.BE_ssatto.global.exception.ErrorCode;
 
 import javax.crypto.SecretKey;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Date;
+import java.util.HexFormat;
+import java.security.SecureRandom;
 
 /**
  * JWT 생성과 파싱을 담당하는 유틸리티 컴포넌트이다.
@@ -24,20 +29,21 @@ import java.util.Date;
 public class JwtUtil {
 
     private final SecretKey secretKey;
-    private final long expirationMs;
+    private final long accessExpirationMs;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     /**
      * 설정된 시크릿과 만료 시간으로 JWT 유틸리티를 생성한다.
      *
      * @param secret JWT 서명 시크릿
-     * @param expirationMs 토큰 만료 시간(밀리초)
+     * @param accessExpirationMs access token 만료 시간(밀리초)
      */
     public JwtUtil(
         @Value("${jwt.secret}") String secret,
-        @Value("${jwt.expiration}") long expirationMs
+        @Value("${jwt.access-expiration:${jwt.expiration}}") long accessExpirationMs
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+        this.accessExpirationMs = accessExpirationMs;
     }
 
     /**
@@ -46,9 +52,9 @@ public class JwtUtil {
      * @param walletAddress 지갑 주소
      * @return 서명된 JWT
      */
-    public String generateToken(String walletAddress) {
+    public String generateAccessToken(String walletAddress) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + expirationMs);
+        Date expiry = new Date(now.getTime() + accessExpirationMs);
 
         return Jwts.builder()
             .subject(walletAddress)
@@ -66,6 +72,33 @@ public class JwtUtil {
      */
     public String extractWalletAddress(String token) {
         return parseClaims(token).getSubject();
+    }
+
+    /**
+     * refresh token 원문을 생성한다.
+     *
+     * @return 난수 기반 refresh token
+     */
+    public String generateRefreshToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * refresh token 원문을 SHA-256 hex로 해시한다.
+     *
+     * @param refreshToken refresh token 원문
+     * @return SHA-256 hex 해시
+     */
+    public String hashRefreshToken(String refreshToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(refreshToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 해시 계산에 실패했습니다.", exception);
+        }
     }
 
     /**

@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
  * @param type 활동 유형
  * @param description 활동 설명
  * @param txId 연관 트랜잭션 해시
+ * @param jackAmount JACK 증감
+ * @param potAmount POT 증감
  * @param createdAt 생성 시각
  */
 public record WalletActivityItemResponse(
@@ -16,6 +18,8 @@ public record WalletActivityItemResponse(
     String type,
     String description,
     String txId,
+    Long jackAmount,
+    Long potAmount,
     LocalDateTime createdAt
 ) {
 }

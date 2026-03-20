@@ -2,6 +2,8 @@ package ssatto.BE_ssatto.domain.exchange.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,6 +24,10 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 @RequestMapping("/api/v1/exchange")
 public class ExchangeController {
 
+    private static final int SUCCESS_CODE = HttpStatus.OK.value();
+    private static final String GET_EXCHANGE_INFO_SUCCESS_MESSAGE = "교환 정보 조회가 완료되었습니다.";
+    private static final String EXCHANGE_SUCCESS_MESSAGE = "교환이 완료되었습니다.";
+
     private final ExchangeService exchangeService;
 
     /**
@@ -31,8 +37,12 @@ public class ExchangeController {
      * @return 교환 정보 응답
      */
     @GetMapping("/info")
-    public ApiResponse<ExchangeInfoResponse> getExchangeInfo(@RequestParam String address) {
-        return ApiResponse.success(exchangeService.getExchangeInfo(address));
+    public ApiResponse<ExchangeInfoResponse> getExchangeInfo(Authentication authentication, @RequestParam String address) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_EXCHANGE_INFO_SUCCESS_MESSAGE,
+            exchangeService.getExchangeInfo(resolveWalletSubject(authentication), address)
+        );
     }
 
     /**
@@ -42,7 +52,18 @@ public class ExchangeController {
      * @return 교환 완료 응답
      */
     @PostMapping("/jack-to-pot")
-    public ApiResponse<ExchangeResponse> exchangeJackToPot(@Valid @RequestBody ExchangeRequest request) {
-        return ApiResponse.success(exchangeService.exchangeJackToPot(request));
+    public ApiResponse<ExchangeResponse> exchangeJackToPot(
+        Authentication authentication,
+        @Valid @RequestBody ExchangeRequest request
+    ) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            EXCHANGE_SUCCESS_MESSAGE,
+            exchangeService.exchangeJackToPot(resolveWalletSubject(authentication), request)
+        );
+    }
+
+    private String resolveWalletSubject(Authentication authentication) {
+        return authentication.getName();
     }
 }

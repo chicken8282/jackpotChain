@@ -6,8 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationEntryPoint;
+import ssatto.BE_ssatto.global.config.JwtAuthenticationFilter;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoOverviewResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoPrizeTierResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoResultResponse;
@@ -16,7 +20,9 @@ import ssatto.BE_ssatto.domain.lotto.service.LottoService;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,10 +41,16 @@ class LottoControllerTest {
     @MockitoBean
     private LottoService lottoService;
 
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @MockitoBean
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
     @Test
-    @DisplayName("로또 개요 조회 API가 성공 응답을 반환한다")
+    @DisplayName("로또 개요 조회 API는 인증 지갑 주소를 서비스에 전달한다")
     void getOverviewReturnsSuccess() throws Exception {
-        given(lottoService.getOverview("JackpotAddress01"))
+        given(lottoService.getOverview("JackpotAddress01", "JackpotAddress01"))
             .willReturn(new LottoOverviewResponse(
                 12_500_000_000L,
                 300_000_000L,
@@ -48,15 +60,22 @@ class LottoControllerTest {
                 List.of(new LottoPrizeTierResponse(1, 6, 10_000_000_000_000L))
             ));
 
-        mockMvc.perform(get("/api/v1/lotto").param("address", "JackpotAddress01"))
+        mockMvc.perform(get("/api/v1/lotto")
+                .param("address", "JackpotAddress01")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("로또 정보 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.poolBalanceJack").value(450_000_000_000L));
+
+        verify(lottoService).getOverview("JackpotAddress01", "JackpotAddress01");
     }
 
     @Test
-    @DisplayName("로또 참여 API가 성공 응답을 반환한다")
+    @DisplayName("로또 참여 API는 인증 지갑 주소를 서비스에 전달한다")
     void commitReturnsSuccess() throws Exception {
         mockMvc.perform(post("/api/v1/lotto/commit")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -66,13 +85,17 @@ class LottoControllerTest {
                     }
                     """))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("로또 참여가 완료되었습니다."))
             .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(lottoService).commit(eq("JackpotAddress01"), any());
     }
 
     @Test
     @DisplayName("로또 결과 조회 API가 성공 응답을 반환한다")
     void getResultReturnsSuccess() throws Exception {
-        given(lottoService.getResult("commit-001"))
+        given(lottoService.getResult("JackpotAddress01", "commit-001"))
             .willReturn(new LottoResultResponse(
                 "commit-001",
                 List.of(10, 1, 15, 3, 4, 14),
@@ -83,15 +106,20 @@ class LottoControllerTest {
                 2_000_000_000_000L
             ));
 
-        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/result"))
+        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/result")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("로또 결과 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.status").value("WINNING"));
+
+        verify(lottoService).getResult("JackpotAddress01", "commit-001");
     }
 
     @Test
-    @DisplayName("로또 참여 내역 조회 API가 성공 응답을 반환한다")
+    @DisplayName("로또 참여 내역 조회 API는 인증 지갑 주소를 서비스에 전달한다")
     void getEntriesReturnsSuccess() throws Exception {
-        given(lottoService.getEntries("JackpotAddress01", "WINNING"))
+        given(lottoService.getEntries("JackpotAddress01", "JackpotAddress01", "WINNING"))
             .willReturn(new ssatto.BE_ssatto.domain.lotto.dto.LottoEntriesResponse(
                 List.of(new ssatto.BE_ssatto.domain.lotto.dto.LottoEntrySummaryResponse(
                     42L,
@@ -108,8 +136,42 @@ class LottoControllerTest {
 
         mockMvc.perform(get("/api/v1/lotto/entries")
                 .param("address", "JackpotAddress01")
-                .param("status", "WINNING"))
+                .param("status", "WINNING")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("로또 참여 내역 조회가 완료되었습니다."))
             .andExpect(jsonPath("$.data.entries[0].commitHash").value("commit-001"));
+
+        verify(lottoService).getEntries("JackpotAddress01", "JackpotAddress01", "WINNING");
+    }
+
+    @Test
+    @DisplayName("로또 클레임 API는 인증 지갑 주소를 서비스에 전달한다")
+    void claimReturnsSuccess() throws Exception {
+        given(lottoService.claim(eq("JackpotAddress01"), any()))
+            .willReturn(new LottoClaimResponse(
+                "claim-tx-001",
+                4,
+                2_000_000_000_000L,
+                java.time.LocalDateTime.of(2026, 3, 21, 1, 0)
+            ));
+
+        mockMvc.perform(post("/api/v1/lotto/claim")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "fromAddress": "JackpotAddress01",
+                      "commitHash": "commit-001",
+                      "signedTxHex": "0500000001abcd"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("보상 수령이 완료되었습니다."))
+            .andExpect(jsonPath("$.data.claimTxId").value("claim-tx-001"));
+
+        verify(lottoService).claim(eq("JackpotAddress01"), any());
     }
 }

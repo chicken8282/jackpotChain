@@ -1,38 +1,36 @@
-import { useEffect, useState } from "react";
 import PageLayout from "../components/layout/PageLayout";
 import JackpotPool from "../components/dashboard/JackpotPool";
 import HexPicker from "../components/lotto/HexPicker";
 import LottoTierRanking from "../components/lotto/LottoTierRanking";
-import { getLottoOverview, type LottoOverview } from "../services/lottoService";
+import { useLottoEntries } from "../hooks/useLottoEntries";
+import { useLottoOverview } from "../hooks/useLottoOverview";
+import { getLottoEntryResult } from "../services/lottoService";
+import { mapLottoResult, type LottoHistoryDetail } from "../services/readModelAdapters";
+import { useWalletSessionStore } from "../stores/useWalletSessionStore";
 import { useWalletStore } from "../stores/useWalletStore";
 
 export default function LottoPage() {
+  const wallets = useWalletStore((state) => state.wallets);
   const activeAddress = useWalletStore((state) => state.activeAddress);
-  const [overview, setOverview] = useState<LottoOverview | null>(null);
+  const accessSessions = useWalletSessionStore((state) => state.accessSessions);
+  const activeWallet = wallets.find((wallet) => wallet.address === activeAddress);
+  const activeAccessToken = activeWallet ? accessSessions[activeWallet.walletId]?.accessToken : undefined;
+  const { overview } = useLottoOverview(activeAddress, activeAccessToken);
+  const { entries } = useLottoEntries(activeAddress, activeAccessToken);
 
-  useEffect(() => {
-    if (!activeAddress) {
-      setOverview(null);
-      return;
+  const handleLoadResult = async (commitHash: string): Promise<LottoHistoryDetail> => {
+    if (!activeAccessToken) {
+      throw new Error("지갑 인증이 필요합니다.");
     }
 
-    let cancelled = false;
-    void getLottoOverview(activeAddress)
-      .then((response) => {
-        if (!cancelled) {
-          setOverview(response);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setOverview(null);
-        }
-      });
+    const entry = entries.find((item) => item.commitHash === commitHash);
+    if (!entry) {
+      throw new Error("참여 내역을 찾을 수 없습니다.");
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [activeAddress]);
+    const result = await getLottoEntryResult(commitHash, activeAccessToken);
+    return mapLottoResult(entry, result);
+  };
 
   return (
     <PageLayout>
@@ -53,7 +51,8 @@ export default function LottoPage() {
         onCommit={() => {
           window.alert("서명 기반 로또 참여 기능은 아직 준비 중입니다.");
         }}
-        entries={[]}
+        entries={entries}
+        onLoadResult={handleLoadResult}
       />
     </PageLayout>
   );

@@ -260,7 +260,7 @@ class RPCServer:
 
     def _getblock(self, blockhash: str, verbosity: int = 1) -> Any:
         """블록 조회"""
-        block_hash = bytes.fromhex(blockhash)
+        block_hash = bytes.fromhex(blockhash)[::-1]
         block = self.blockchain.get_block(block_hash)
 
         if block is None:
@@ -270,17 +270,25 @@ class RPCServer:
             return block.serialize().hex()
 
         index = self.blockchain.get_block_index(block_hash)
+        coinbase = block.get_coinbase()
+        reward_jack = coinbase.outputs[0].jack_value if coinbase and coinbase.outputs else 0
+
         return {
             'hash': block.get_hash_hex(),
             'confirmations': self.blockchain.get_confirmations(block_hash),
             'height': index.height if index else 0,
             'version': block.header.version,
+            'versionHex': f"0x{block.header.version:08x}",
             'merkleroot': block.header.merkle_root.hex(),
             'time': block.header.timestamp,
             'nonce': block.header.nonce,
             'difficulty': block.header.difficulty_target,
+            'difficultyDisplay': hex(block.header.difficulty_target),
             'nTx': len(block.transactions),
-            'previousblockhash': block.header.prev_block_hash.hex(),
+            'previousblockhash': block.header.prev_block_hash[::-1].hex(),
+            'rewardJack': reward_jack,
+            'feeRewardJack': 0,
+            'isMainChain': self.blockchain.is_in_main_chain(block_hash),
             'tx': [tx.get_txid().hex() for tx in block.transactions] if verbosity > 1 else [],
         }
 
