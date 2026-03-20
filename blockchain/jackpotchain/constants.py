@@ -2,12 +2,23 @@
 JackpotChain 전역 상수
 """
 
+import os
+
+
+def get_default_data_dir() -> str:
+    """기본 데이터 디렉토리 (%APPDATA%/JackpotChain/data 또는 ~/.jackpotchain/data)"""
+    if os.name == 'nt':  # Windows
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        return os.path.join(appdata, 'JackpotChain', 'data')
+    else:  # Linux/Mac
+        return os.path.expanduser('~/.jackpotchain/data')
+
 # =============================================================================
 # 네트워크 파라미터
 # =============================================================================
 NETWORK_MAGIC = b'\xf9\xbe\xb4\xd9'  # 메시지 헤더 매직 바이트
-DEFAULT_PORT = 8333
-DEFAULT_RPC_PORT = 8332
+DEFAULT_PORT = 9777
+DEFAULT_RPC_PORT = 9776
 
 # =============================================================================
 # 블록 파라미터
@@ -74,24 +85,33 @@ LOTTO_DIGIT_BASE = 16            # hex 0x0 ~ 0xf
 LOTTO_BLOCK_INTERVAL = 3         # 비교 블록 간격
 LOTTO_COMPARISON_OFFSETS = [3, 6, 9, 12, 15, 18]  # N+3, N+6, ..., N+18
 
-# Claim 윈도우
-LOTTO_MIN_CLAIM_GAP = 18         # N+18 이후 Claim 가능
-LOTTO_MAX_CLAIM_GAP = 68         # N+68까지 Claim 가능 (50블록 여유)
+# 자동 지급 타이밍
+LOTTO_MIN_CLAIM_GAP = 18         # N+18: 마지막 비교 블록
+LOTTO_PAYOUT_MATURITY = 10       # 비교 블록 확정 대기 (포크 대비)
+LOTTO_PAYOUT_GAP = LOTTO_MIN_CLAIM_GAP + LOTTO_PAYOUT_MATURITY  # N+28: 실제 지급 블록
+LOTTO_MAX_CLAIM_GAP = 68         # 레거시 호환
 GACHA_MIN_REVEAL_GAP = LOTTO_MIN_CLAIM_GAP  # 하위 호환
 GACHA_MAX_REVEAL_GAP = LOTTO_MAX_CLAIM_GAP  # 하위 호환
 
-# 참가비 분배 (100 JACK 기준)
-LOTTO_POOL_RATIO = 0.80          # 80% → 잭팟 풀
-LOTTO_BURN_RATIO = 0.19          # 19% → 소각
-LOTTO_MINER_RATIO = 0.01         # 1% → 채굴자 보상
+# 참가비 분배 (100 JACK 기준) - 백분율
+LOTTO_POOL_PERCENT = 80          # 80% → 잭팟 풀
+LOTTO_BURN_PERCENT = 19          # 19% → 소각
+LOTTO_MINER_PERCENT = 1          # 1% → 채굴자 보상
+
+# 참가비 분배 (소수) - DEPRECATED, 호환용
+LOTTO_POOL_RATIO = 0.80
+LOTTO_BURN_RATIO = 0.19
+LOTTO_MINER_RATIO = 0.01
 
 # 등급별 보상
-LOTTO_PRIZE_1ST_RATIO = 0.50     # 1등: 잭팟 풀의 50%
+LOTTO_PRIZE_1ST_PERCENT = 50     # 1등: 잭팟 풀의 50%
+LOTTO_PRIZE_1ST_RATIO = 0.50     # DEPRECATED, 호환용
 LOTTO_PRIZE_2ND = 100_000 * COIN # 2등: 100,000 JACK
 LOTTO_PRIZE_3RD = 20_000 * COIN  # 3등: 20,000 JACK
 LOTTO_PRIZE_4TH = 2_000 * COIN   # 4등: 2,000 JACK
 LOTTO_PRIZE_5TH = 300 * COIN     # 5등: 300 JACK
-LOTTO_PRIZE_6TH_POT = 1 * COIN   # 6등: 1 POT 재지급
+LOTTO_PRIZE_6TH_POT = 1 * COIN   # 6등: 1 POT (mint - 참가비 환불)
+LOTTO_PRIZE_6TH_JACK = 100 * COIN # 6등 대안: 100 JACK (deprecated)
 
 # 하위 호환 (deprecated)
 GACHA_WIN_PROBABILITY = 1 / (16 ** 6)  # 1등 확률 참고용
@@ -135,8 +155,8 @@ COINBASE_MATURITY = 100          # Coinbase 사용 가능까지 필요한 확인
 # =============================================================================
 # 네트워크 제한
 # =============================================================================
-MAX_OUTBOUND_CONNECTIONS = 6
-MAX_INBOUND_CONNECTIONS = 2
+MAX_OUTBOUND_CONNECTIONS = 8
+MAX_INBOUND_CONNECTIONS = 32  # 시드노드는 많은 연결 수용
 MAX_INV_SIZE = 50000             # INV 메시지 최대 항목
 MAX_HEADERS_SIZE = 2000          # HEADERS 응답 최대 개수
 
@@ -162,3 +182,8 @@ MAX_TX_SIZE = 100_000            # 단일 TX 최대 크기 (100 KB)
 GENESIS_TIMESTAMP = 1735689600   # 2025-01-01 00:00:00 UTC
 GENESIS_MESSAGE = b"JackpotChain Genesis - 2025"
 GENESIS_JACKPOT_POOL_FUNDING = 1_000_000 * COIN  # 100만 JACK 잭팟풀 초기 자금
+
+# 하드코딩된 제네시스 블록 값 (AWS 시드 노드에서 생성)
+GENESIS_NONCE = 0
+GENESIS_MERKLE_ROOT = bytes.fromhex("802a573854dabc3c2b7afd5bf3e80a2c0c3549125769550c260ca2509d485d74")
+GENESIS_HASH = bytes.fromhex("c41d65b3c0b76dea7142202a37f5b10f8275aba8370387636e35640e30c7a0d9")
