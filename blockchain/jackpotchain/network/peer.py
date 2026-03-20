@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ...blockchain.jackpotchain.constants import MAX_OUTBOUND_CONNECTIONS, MAX_INBOUND_CONNECTIONS
+from ..constants import MAX_OUTBOUND_CONNECTIONS, MAX_INBOUND_CONNECTIONS
 
 
 class PeerState(Enum):

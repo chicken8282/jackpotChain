@@ -11,8 +11,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.block import Block, create_genesis_block
-from ..core.utxo import UTXOSet
+from ..core.utxo import UTXO, UTXOSet
 from .difficulty import compact_to_target
+from ..script.standard import get_address_from_script_pubkey, is_commit_script, extract_commit_numbers, is_payout_script, extract_payout_data
+from ..crypto.address import JACKPOT_POOL_ADDRESS
+from ..constants import TX_VERSION_COMMIT
 
 
 class ChainState(Enum):
@@ -43,6 +46,17 @@ class BlockIndex:
     is_in_main_chain: bool = True
 
 
+@dataclass
+class CommitInfo:
+    """Commit TX 인덱스 정보 (자동 지급용)"""
+    tx_id: bytes
+    block_height: int
+    block_hash: bytes
+    chosen_numbers: list = None  # 선택한 숫자 (평문)
+    player_address: str = ""     # 플레이어 주소
+    payout_height: int = 0       # 지급 블록 높이 (0이면 미지급)
+
+
 class Blockchain:
     """
     블록체인 관리 클래스
@@ -70,6 +84,16 @@ class Blockchain:
 
         # UTXO Set
         self.utxo_set = UTXOSet()
+
+        # Undo 데이터 (Reorg용): block_hash -> List[List[UTXO]]
+        # 각 블록의 각 TX가 소비한 UTXO들 저장
+        self._undo_data: Dict[bytes, List[List[UTXO]]] = {}
+
+        # Commit TX 인덱스 (Claim 검증용): commit_hash -> CommitInfo
+        self._commit_index: Dict[bytes, CommitInfo] = {}
+
+        # Reorg 시 mempool 복원 대상 TX (add_block 호출자가 가져감)
+        self._disconnected_txs: list = []
 
         # 상태
         self.state = ChainState.SYNCING
@@ -108,9 +132,8 @@ class Blockchain:
                     else:
                         self._add_block_internal(block, height)
 
-                    # UTXO 업데이트
-                    for tx in block.transactions:
-                        self.utxo_set.apply_transaction(tx, height)
+                    # _connect_block으로 UTXO + undo 데이터 + 인덱싱 일괄 처리
+                    self._connect_block(block, height)
 
             print(f"[Chain] Loaded {tip_height + 1} blocks. Height: {self.get_height()}")
 
@@ -175,6 +198,9 @@ class Blockchain:
         self._tips[block_hash] = tip
         self._main_tip = tip
 
+        # Genesis 블록 UTXO 적용
+        self._connect_block(block, 0)
+
     def _calculate_work(self, difficulty_target: int) -> int:
         """난이도에서 작업량 계산"""
         target = compact_to_target(difficulty_target)
@@ -194,11 +220,13 @@ class Blockchain:
 
         # 이미 존재하면 무시
         if block_hash in self._blocks:
+            print(f"[CHAIN] 블록 추가 실패: 이미 존재 (hash={block_hash.hex()[:16]}...)")
             return False, "Block already exists"
 
         # 이전 블록 확인
         prev_hash = block.header.prev_block_hash
         if prev_hash not in self._block_index:
+            print(f"[CHAIN] 블록 추가 실패: 이전 블록 없음 (prev={prev_hash.hex()[:16]}...)")
             return False, "Previous block not found"
 
         prev_index = self._block_index[prev_hash]
@@ -246,13 +274,17 @@ class Blockchain:
             else:
                 # 단순 확장
                 self._height_to_hash[new_height] = block_hash
+                # UTXO 적용 및 undo 데이터 저장
+                self._connect_block(block, new_height)
 
             # 영구 저장
             if self._store:
                 self._store.save_block(block, new_height)
 
+            print(f"[CHAIN] 블록 추가 성공: height={new_height}, hash={block_hash.hex()[:16]}...")
             return True, "Block added to main chain"
         else:
+            print(f"[CHAIN] 사이드 체인에 추가: hash={block_hash.hex()[:16]}...")
             return True, "Block added to side chain"
 
     def _reorganize(self, old_tip_hash: bytes, new_tip_hash: bytes):
@@ -262,6 +294,9 @@ class Blockchain:
         Args:
             old_tip_hash: 이전 메인 체인 팁
             new_tip_hash: 새 메인 체인 팁
+
+        Returns:
+            disconnected_txs: disconnect된 블록의 TX 목록 (mempool 복원용, coinbase 제외)
         """
         self.state = ChainState.REORGING
 
@@ -306,9 +341,99 @@ class Blockchain:
             height = self._block_index[block_hash].height
             self._height_to_hash[height] = block_hash
 
-        # TODO: UTXO Set 업데이트 (disconnect/connect)
+        # UTXO Set 업데이트 (disconnect/connect)
+        # 1. 기존 블록들 되돌리기 (역순으로) — TX 수집
+        disconnected_txs = []
+        for block_hash in blocks_to_disconnect:
+            block = self._blocks.get(block_hash)
+            if block:
+                # coinbase(인덱스 0) 제외한 TX를 mempool 복원 후보로 수집
+                disconnected_txs.extend(block.transactions[1:])
+            self._disconnect_block(block_hash)
+
+        # 2. 새 블록들 연결하기
+        # 새 체인에 이미 포함된 TX는 mempool 복원 대상에서 제거
+        new_chain_txids = set()
+        for block_hash in blocks_to_connect:
+            block = self._blocks[block_hash]
+            height = self._block_index[block_hash].height
+            self._connect_block(block, height)
+            for tx in block.transactions[1:]:
+                new_chain_txids.add(tx.get_txid())
+
+        # 새 체인에 포함되지 않은 TX만 반환 (mempool 복원 대상)
+        self._disconnected_txs = [
+            tx for tx in disconnected_txs
+            if tx.get_txid() not in new_chain_txids
+        ]
 
         self.state = ChainState.SYNCED
+
+    def _connect_block(self, block: Block, height: int):
+        """
+        블록 연결 (UTXO 적용 + undo 데이터 저장 + commit 인덱싱)
+
+        Args:
+            block: 연결할 블록
+            height: 블록 높이
+        """
+        block_hash = block.get_hash()
+        undo_data: List[List[UTXO]] = []
+
+        for tx in block.transactions:
+            # UTXO 적용 및 소비된 UTXO 저장
+            spent_utxos = self.utxo_set.apply_transaction(tx, height, get_address_from_script_pubkey)
+            undo_data.append(spent_utxos)
+
+            # Commit TX 인덱싱
+            self._index_commit_tx(tx, height, block_hash)
+
+            # Payout TX 감지 → commit_index 갱신
+            self._index_payout_tx(tx, height)
+
+        # Undo 데이터 저장 (나중에 disconnect용)
+        self._undo_data[block_hash] = undo_data
+
+    def _disconnect_block(self, block_hash: bytes):
+        """
+        블록 연결 해제 (UTXO 되돌리기 + commit/claim 인덱스 제거)
+
+        Args:
+            block_hash: 연결 해제할 블록 해시
+        """
+        block = self._blocks.get(block_hash)
+        if not block:
+            return
+
+        undo_data = self._undo_data.get(block_hash, [])
+
+        # 트랜잭션을 역순으로 되돌리기
+        for i in range(len(block.transactions) - 1, -1, -1):
+            tx = block.transactions[i]
+            spent_utxos = undo_data[i] if i < len(undo_data) else []
+            self.utxo_set.revert_transaction(tx, spent_utxos, get_address_from_script_pubkey)
+
+            # Commit TX 인덱스 제거
+            self._unindex_commit_tx(tx)
+
+            # Payout TX 인덱스 되돌리기
+            self._unindex_payout_tx(tx)
+
+        # Undo 데이터 제거
+        self._undo_data.pop(block_hash, None)
+
+    def get_commits_at_height(self, height: int) -> list:
+        """특정 높이의 Commit TX 목록 반환 (자동 지급용)"""
+        result = []
+        for tx_id, info in self._commit_index.items():
+            if info.block_height == height and info.payout_height == 0:
+                result.append((
+                    info.tx_id,
+                    info.player_address,
+                    info.chosen_numbers or [],
+                    0  # pool_snapshot (동적 조회)
+                ))
+        return result
 
     def _get_ancestors(self, block_hash: bytes, limit: int = 1000) -> List[bytes]:
         """블록의 조상들 반환"""
@@ -321,6 +446,84 @@ class Blockchain:
                 break
             current = index.prev_hash
         return ancestors
+
+    def _index_commit_tx(self, tx, height: int, block_hash: bytes):
+        """
+        Commit TX 인덱싱 (자동 지급용)
+
+        TX ID를 키로 사용하여 chosen_numbers와 player_address 저장
+        """
+        if tx.version != TX_VERSION_COMMIT:
+            return
+
+        for output in tx.outputs:
+            if is_commit_script(output.script_pubkey):
+                chosen_numbers = extract_commit_numbers(output.script_pubkey)
+                if chosen_numbers:
+                    # 플레이어 주소 추출 (P2PKH 출력에서)
+                    player_address = ""
+                    for out in tx.outputs:
+                        addr = get_address_from_script_pubkey(out.script_pubkey)
+                        if addr and addr != JACKPOT_POOL_ADDRESS:
+                            player_address = addr
+                            break
+
+                    tx_id = tx.get_txid()
+                    self._commit_index[tx_id] = CommitInfo(
+                        tx_id=tx_id,
+                        block_height=height,
+                        block_hash=block_hash,
+                        chosen_numbers=chosen_numbers,
+                        player_address=player_address,
+                    )
+                    return
+
+    def _unindex_commit_tx(self, tx):
+        """Commit TX 인덱스 제거 (reorg 시)"""
+        if tx.version != TX_VERSION_COMMIT:
+            return
+
+        tx_id = tx.get_txid()
+        if tx_id in self._commit_index:
+            del self._commit_index[tx_id]
+
+    def _index_payout_tx(self, tx, height: int):
+        """Payout TX 감지 → 원본 Commit의 payout_height 갱신"""
+        for output in tx.outputs:
+            payout_data = extract_payout_data(output.script_pubkey)
+            if payout_data:
+                commit_tx_id = payout_data[0]  # (commit_tx_id, chosen, result, matches)
+                if commit_tx_id in self._commit_index:
+                    self._commit_index[commit_tx_id].payout_height = height
+                return
+
+    def _unindex_payout_tx(self, tx):
+        """Payout TX 인덱스 되돌리기 (reorg 시 payout_height 초기화)"""
+        for output in tx.outputs:
+            payout_data = extract_payout_data(output.script_pubkey)
+            if payout_data:
+                commit_tx_id = payout_data[0]
+                if commit_tx_id in self._commit_index:
+                    self._commit_index[commit_tx_id].payout_height = 0
+                return
+
+    def pop_disconnected_txs(self) -> list:
+        """Reorg 시 disconnect된 TX 목록 반환 및 초기화 (mempool 복원용)"""
+        txs = self._disconnected_txs
+        self._disconnected_txs = []
+        return txs
+
+    def get_commit_info(self, commit_hash: bytes) -> Optional[CommitInfo]:
+        """
+        Commit 정보 조회 (claim 검증용)
+
+        Args:
+            commit_hash: Commit TX의 commit_hash
+
+        Returns:
+            CommitInfo or None
+        """
+        return self._commit_index.get(commit_hash)
 
     def get_block(self, block_hash: bytes) -> Optional[Block]:
         """블록 조회"""

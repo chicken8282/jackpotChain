@@ -35,8 +35,8 @@ def main():
 
     # node 명령
     node_parser = subparsers.add_parser('node', help='Run a node')
-    node_parser.add_argument('--port', type=int, default=8333, help='P2P port')
-    node_parser.add_argument('--rpc-port', type=int, default=8332, help='RPC port')
+    node_parser.add_argument('--port', type=int, default=9777, help='P2P port')
+    node_parser.add_argument('--rpc-port', type=int, default=9776, help='RPC port')
     node_parser.add_argument('--data-dir', default=None, help='Data directory (default: %%APPDATA%%/JackpotChain/data)')
     node_parser.add_argument('--wallet-file', default=None, help='Wallet file path (default: %%APPDATA%%/JackpotChain/wallets/default.json)')
     node_parser.add_argument('--seed', action='append', help='Seed node (ip:port)')
@@ -179,7 +179,8 @@ def run_node(args):
                     miner_address=args.address,
                     transactions=txs,
                     difficulty_target=difficulty,
-                    height=height
+                    height=height,
+                    blockchain=blockchain
                 )
                 print(f"\n[Miner] Mining block {height}...")
 
@@ -210,12 +211,28 @@ def run_node(args):
                     # 체인에 추가 (UTXO 자동 적용됨)
                     success, msg = blockchain.add_block(result.block)
                     if success:
+                        new_height = blockchain.get_height()
+
                         # Mempool에서 포함된 TX 제거
                         for tx in result.block.transactions[1:]:  # coinbase 제외
                             mempool.remove_tx(tx.get_txid())
+
+                        # pending commit block_height 업데이트
+                        rpc._update_pending_commits_for_block(result.block, new_height)
+
+                        # Reorg 발생 시 disconnect된 TX를 mempool에 복원
+                        disconnected_txs = blockchain.pop_disconnected_txs()
+                        if disconnected_txs:
+                            restored = 0
+                            for tx in disconnected_txs:
+                                added, _ = mempool.add_tx(tx)
+                                if added:
+                                    restored += 1
+                            print(f"[REORG] {len(disconnected_txs)}개 TX 중 {restored}개 mempool 복원")
+
                         # 네트워크에 브로드캐스트
                         await node.broadcast_block(result.block)
-                        print(f"[Miner] Block added and broadcasted. New height: {blockchain.get_height()}")
+                        print(f"[Miner] Block added and broadcasted. New height: {new_height}")
                     else:
                         print(f"[Miner] Failed to add block: {msg}")
 
@@ -246,10 +263,24 @@ def run_node(args):
         """피어로부터 블록 수신시 처리"""
         success, msg = blockchain.add_block(block)
         if success:
-            print(f"[CHAIN] 피어 블록 추가 성공: height={blockchain.get_height()}")
+            new_height = blockchain.get_height()
+            print(f"[CHAIN] 피어 블록 추가 성공: height={new_height}")
             # Mempool에서 포함된 TX 제거
             for tx in block.transactions[1:]:  # coinbase 제외
                 mempool.remove_tx(tx.get_txid())
+
+            # pending commit block_height 업데이트
+            rpc._update_pending_commits_for_block(block, new_height)
+
+            # Reorg 발생 시 disconnect된 TX를 mempool에 복원
+            disconnected_txs = blockchain.pop_disconnected_txs()
+            if disconnected_txs:
+                restored = 0
+                for tx in disconnected_txs:
+                    added, _ = mempool.add_tx(tx)
+                    if added:
+                        restored += 1
+                print(f"[REORG] {len(disconnected_txs)}개 TX 중 {restored}개 mempool 복원")
         else:
             # 이미 있는 블록이면 무시 (중복 수신)
             if "already exists" not in msg.lower():
@@ -373,7 +404,8 @@ def run_miner(args):
                 miner_address=args.address,
                 transactions=txs,
                 difficulty_target=difficulty,
-                height=height
+                height=height,
+                blockchain=blockchain
             )
 
             print(f"\nMining block {height}...")

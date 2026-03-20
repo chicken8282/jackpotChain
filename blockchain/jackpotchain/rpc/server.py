@@ -6,17 +6,22 @@ Step 14: RPC 서버
 
 import json
 import asyncio
+import os
+from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 from dataclasses import dataclass
 from aiohttp import web
 
 from ..consensus.chain import Blockchain
+from ..consensus.difficulty import difficulty_to_hashrate, get_next_difficulty
+from ..consensus.miner import create_block_template, mine_block
 from ..mempool.pool import Mempool
 from ..wallet.wallet import Wallet
 from ..network.node import Node
-from ..constants import DEFAULT_RPC_PORT
+from ..constants import DEFAULT_RPC_PORT, LOTTO_MIN_CLAIM_GAP, TX_VERSION_GACHA_COMMIT
 from ..gacha.game import GachaGame
 from ..gacha.service import GachaService, create_gacha_service
+from ..script.standard import is_commit_script
 
 
 @dataclass
@@ -58,6 +63,7 @@ class RPCServer:
         gacha: GachaGame = None,
         gacha_service: GachaService = None,
         data_dir: str = None,
+        wallet_dir: str = None,
         host: str = "127.0.0.1",
         port: int = DEFAULT_RPC_PORT
     ):
@@ -68,11 +74,36 @@ class RPCServer:
         self.gacha = gacha or GachaGame()
         self.gacha_service = gacha_service or create_gacha_service(data_dir=data_dir)
 
+        # 다중 지갑 지원
+        self.wallet_dir = wallet_dir
+        self.wallets: Dict[str, Wallet] = {}  # name -> Wallet
+        self._load_all_wallets()
+
+        # 블록 해시 조회 콜백 설정
+        def get_block_hash(height: int) -> bytes:
+            block = blockchain.get_block_by_height(height)
+            return block.get_hash() if block else None
+
+        self.gacha.set_block_hash_getter(get_block_hash)
+        # gacha_service.game에도 설정 (create_claim에서 사용)
+        if self.gacha_service and hasattr(self.gacha_service, 'game'):
+            self.gacha_service.game.set_block_hash_getter(get_block_hash)
+
         self.host = host
         self.port = port
 
         self._app = web.Application()
         self._app.router.add_post('/', self._handle_request)
+
+        # 채굴 상태
+        self._mining = False
+        self._mining_address: Optional[str] = None
+        self._mining_task: Optional[asyncio.Task] = None
+        self._mining_stats = {
+            'blocks_mined': 0,
+            'total_hashes': 0,
+            'hashrate': 0.0,
+        }
 
         # 메서드 등록
         self._methods: Dict[str, Callable] = {}
@@ -86,6 +117,7 @@ class RPCServer:
         self._methods['getblockhash'] = self._getblockhash
         self._methods['getblockcount'] = self._getblockcount
         self._methods['getbestblockhash'] = self._getbestblockhash
+        self._methods['getrecentblocks'] = self._getrecentblocks
 
         # Mempool
         self._methods['getmempoolinfo'] = self._getmempoolinfo
@@ -94,6 +126,7 @@ class RPCServer:
 
         # Wallet
         self._methods['getbalance'] = self._getbalance
+        self._methods['getbalances'] = self._getbalances  # JACK + POT
         self._methods['getnewaddress'] = self._getnewaddress
         self._methods['listunspent'] = self._listunspent
         self._methods['sendtoaddress'] = self._sendtoaddress
@@ -104,20 +137,29 @@ class RPCServer:
 
         # Mining
         self._methods['getmininginfo'] = self._getmininginfo
+        self._methods['startmining'] = self._startmining
+        self._methods['stopmining'] = self._stopmining
 
-        # Lotto (16-2 Final)
+        # Lotto (자동 지급 방식)
         self._methods['getlottoinfo'] = self._getlottoinfo
         self._methods['getjackpotpool'] = self._getjackpotpool
         self._methods['lottocommit'] = self._lottocommit
-        self._methods['lottoclaim'] = self._lottoclaim
         self._methods['lottocheckresult'] = self._lottocheckresult
         self._methods['listlottocommits'] = self._listlottocommits
 
-        # Legacy aliases (deprecated)
+        # Legacy aliases
         self._methods['getgachainfo'] = self._getlottoinfo
         self._methods['gachacommit'] = self._lottocommit
-        self._methods['gachareveal'] = self._lottoclaim
         self._methods['listgachacommits'] = self._listlottocommits
+
+        # Exchange (JACK -> POT)
+        self._methods['exchangetopot'] = self._exchangetopot
+        self._methods['getexchangeinfo'] = self._getexchangeinfo
+
+        # Wallet Management
+        self._methods['listwallets'] = self._listwallets
+        self._methods['setwallet'] = self._setwallet
+        self._methods['getactivewallet'] = self._getactivewallet
 
         # Utility
         self._methods['help'] = self._help
@@ -257,6 +299,25 @@ class RPCServer:
         """최신 블록 해시"""
         return self.blockchain.get_tip_hash().hex()
 
+    def _getrecentblocks(self, count: int = 10) -> list:
+        """최근 N개 블록 요약"""
+        height = self.blockchain.get_height()
+        count = min(count, 20)  # 최대 20개
+        blocks = []
+        for h in range(max(0, height - count + 1), height + 1):
+            block = self.blockchain.get_block_by_height(h)
+            if block is None:
+                continue
+            block_hash = block.get_hash()
+            last_hex = f"{block_hash[-1]:X}"  # 해시 마지막 1바이트의 하위 니블
+            blocks.append({
+                'height': h,
+                'difficulty': hex(block.header.difficulty_target),
+                'nTx': len(block.transactions),
+                'lotto_digit': last_hex[-1],  # 마지막 hex 1자리
+            })
+        return blocks
+
     # =========================================================================
     # Mempool Methods
     # =========================================================================
@@ -315,16 +376,56 @@ class RPCServer:
     # Wallet Methods
     # =========================================================================
 
-    def _getbalance(self) -> float:
-        """잔액 조회"""
+    def _getbalance(self, address: str = None) -> float:
+        """잔액 조회 (주소 지정 가능)"""
+        current_height = self.blockchain.get_height()
+
+        if address:
+            # 특정 주소의 잔액 조회
+            balance = self.blockchain.utxo_set.get_balance(address, current_height)
+            return balance / 100_000_000  # satoshi → JACK
+
         if not self.wallet:
             raise Exception("Wallet not available")
 
         balance = self.wallet.get_balance(
             self.blockchain.utxo_set,
-            self.blockchain.get_height()
+            current_height
         )
         return balance / 100_000_000  # satoshi → JACK
+
+    def _getbalances(self, address: str = None) -> dict:
+        """JACK + POT 잔액 조회"""
+        from ..constants import ASSET_ID_POT, COIN
+
+        current_height = self.blockchain.get_height()
+
+        if address:
+            # 특정 주소의 UTXO
+            utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
+        elif self.wallet:
+            # 지갑의 모든 주소 UTXO
+            utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
+        else:
+            raise Exception("Wallet not available")
+
+        # mature UTXO만 필터
+        mature_utxos = [u for u in utxos if u.is_mature(current_height)]
+
+        jack_balance = 0
+        pot_balance = 0
+
+        for utxo in mature_utxos:
+            jack_balance += utxo.output.jack_value
+            if utxo.output.assets and ASSET_ID_POT in utxo.output.assets:
+                pot_balance += utxo.output.assets[ASSET_ID_POT]
+
+        return {
+            'jack': jack_balance / COIN,
+            'pot': pot_balance / COIN,
+            'jack_satoshi': jack_balance,
+            'pot_satoshi': pot_balance,
+        }
 
     def _getnewaddress(self, label: str = "") -> str:
         """새 주소 생성"""
@@ -333,18 +434,38 @@ class RPCServer:
 
         return self.wallet.generate_address(label)
 
-    def _listunspent(self) -> list:
-        """UTXO 목록"""
+    def _listunspent(self, address: str = None) -> list:
+        """UTXO 목록 (주소 지정 가능)"""
+        if address:
+            # 특정 주소의 UTXO
+            utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
+            return [
+                {
+                    'txid': utxo.outpoint.txid.hex(),
+                    'vout': utxo.outpoint.index,
+                    'address': address,
+                    'amount': utxo.output.jack_value / 100_000_000,
+                    'assets': utxo.output.assets,
+                    'confirmations': self.blockchain.get_height() - utxo.block_height + 1
+                }
+                for utxo in utxos
+            ]
+
         if not self.wallet:
             raise Exception("Wallet not available")
 
+        from ..script.standard import get_address_from_script_pubkey
+
         utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
+        current_height = self.blockchain.get_height()
         return [
             {
                 'txid': utxo.tx_id.hex(),
                 'vout': utxo.output_index,
+                'address': get_address_from_script_pubkey(utxo.output.script_pubkey),
                 'amount': utxo.output.jack_value / 100_000_000,
-                'confirmations': 0,  # TODO
+                'assets': utxo.output.assets,
+                'confirmations': max(0, current_height - utxo.block_height + 1),
             }
             for utxo in utxos
         ]
@@ -356,10 +477,14 @@ class RPCServer:
 
         amount_satoshi = int(amount * 100_000_000)
 
+        # mempool 체크 함수
+        is_spent = self.mempool.is_utxo_spent if self.mempool else None
+
         tx, error = self.wallet.create_transaction(
             self.blockchain.utxo_set,
             [(address, amount_satoshi)],
-            current_height=self.blockchain.get_height()
+            current_height=self.blockchain.get_height(),
+            is_spent_in_mempool=is_spent
         )
 
         if tx is None:
@@ -423,12 +548,147 @@ class RPCServer:
 
     def _getmininginfo(self) -> dict:
         """채굴 정보"""
+        difficulty = self.blockchain.get_difficulty()
         return {
             'blocks': self.blockchain.get_height(),
-            'difficulty': self.blockchain.get_difficulty(),
-            'networkhashps': 0,  # TODO
+            'difficulty': difficulty,
+            'networkhashps': difficulty_to_hashrate(difficulty),
             'pooledtx': self.mempool.get_stats()['count'],
+            'mining': self._mining,
+            'mining_address': self._mining_address,
+            'blocks_mined': self._mining_stats['blocks_mined'],
+            'hashrate': self._mining_stats['hashrate'],
         }
+
+    def _startmining(self, address: str = None) -> dict:
+        """채굴 시작"""
+        if self._mining:
+            return {'success': False, 'error': 'Already mining'}
+
+        # 주소 결정
+        if address:
+            self._mining_address = address
+        elif self.wallet:
+            addresses = self.wallet.get_addresses()
+            if addresses:
+                self._mining_address = addresses[0]
+            else:
+                self._mining_address = self.wallet.generate_address()
+        else:
+            return {'success': False, 'error': 'No mining address provided'}
+
+        self._mining = True
+        self._mining_task = asyncio.create_task(self._mining_loop())
+
+        return {
+            'success': True,
+            'message': f'Mining started',
+            'address': self._mining_address
+        }
+
+    def _stopmining(self) -> dict:
+        """채굴 중지"""
+        if not self._mining:
+            return {'success': False, 'error': 'Not mining'}
+
+        self._mining = False
+        if self._mining_task:
+            self._mining_task.cancel()
+            self._mining_task = None
+
+        return {
+            'success': True,
+            'message': 'Mining stopped',
+            'blocks_mined': self._mining_stats['blocks_mined']
+        }
+
+    async def _mining_loop(self):
+        """채굴 루프"""
+        print(f"[Miner] Started mining to {self._mining_address}")
+
+        while self._mining:
+            try:
+                # IBD 중이면 대기
+                if self.node and self.node.is_syncing:
+                    await asyncio.sleep(1)
+                    continue
+
+                # 블록 템플릿 생성
+                txs = self.mempool.get_txs_for_block()
+                if txs:
+                    print(f"[Miner] Including {len(txs)} TXs from mempool")
+                tip = self.blockchain.get_tip()
+                difficulty = get_next_difficulty(
+                    self.blockchain.get_height(),
+                    self.blockchain.get_block_by_height
+                )
+
+                template = create_block_template(
+                    prev_block=tip,
+                    miner_address=self._mining_address,
+                    transactions=txs,
+                    difficulty_target=difficulty,
+                    height=self.blockchain.get_height() + 1,
+                    blockchain=self.blockchain
+                )
+
+                # 비동기 채굴 (블로킹 방지)
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: mine_block(template, max_nonce=500_000)
+                )
+
+                self._mining_stats['total_hashes'] += result.hash_count
+                if result.elapsed_time > 0:
+                    self._mining_stats['hashrate'] = result.hash_count / result.elapsed_time
+
+                if result.success:
+                    self._mining_stats['blocks_mined'] += 1
+
+                    # 블록 추가
+                    success, msg = self.blockchain.add_block(result.block)
+                    if success:
+                        new_height = self.blockchain.get_height()
+                        print(f"[Miner] Block {new_height} mined!")
+
+                        # mempool에서 TX 제거
+                        for tx in result.block.transactions[1:]:
+                            self.mempool.remove_tx(tx.get_txid())
+
+                        # pending commit block_height 업데이트
+                        self._update_pending_commits_for_block(result.block, new_height)
+
+                        # 네트워크 전파
+                        if self.node:
+                            asyncio.create_task(
+                                self.node.broadcast_block(result.block)
+                            )
+                    else:
+                        print(f"[Miner] Block rejected: {msg}")
+
+                await asyncio.sleep(0.1)  # CPU 과부하 방지
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[Miner] Error: {e}")
+                await asyncio.sleep(1)
+
+        print("[Miner] Mining stopped")
+
+    def _update_pending_commits_for_block(self, block, height: int):
+        """블록 내 commit TX의 pending commit block_height 업데이트"""
+        for tx in block.transactions:
+            if tx.version == TX_VERSION_GACHA_COMMIT:
+                for output in tx.outputs:
+                    if is_commit_script(output.script_pubkey):
+                        tx_id = tx.get_txid()
+                        self.gacha_service.update_commit_status(
+                            commit_hash=b'\x00' * 32,
+                            tx_id=tx_id,
+                            block_height=height
+                        )
+                        break
 
     # =========================================================================
     # Lotto Methods (16-2 Final)
@@ -448,8 +708,8 @@ class RPCServer:
             'pending_commits': stats['pending_commits'],
             'digit_count': 6,
             'digit_base': 16,
-            'comparison_blocks': 'N+5, N+10, N+15, N+20, N+25, N+30',
-            'claim_window': 'N+30 ~ N+80',
+            'comparison_blocks': 'N+3, N+6, N+9, N+12, N+15, N+18',
+            'auto_payout': 'N+18 블록에서 자동 판정 및 지급',
             'prize_table': {
                 '1st (6 matches)': 'Jackpot Pool 50%',
                 '2nd (5 matches)': '100,000 JACK',
@@ -461,13 +721,19 @@ class RPCServer:
         }
 
     def _getjackpotpool(self) -> dict:
-        """잭팟 풀 상태"""
+        """잭팟 풀 상태 (UTXO 기반)"""
+        # UTXO 기반 잔액 계산 (Exchange TX의 JACKPOT_POOL 출력 포함)
+        pool_utxos = self.blockchain.utxo_set.get_pool_utxos()
+        utxo_balance = sum(utxo.output.jack_value for utxo in pool_utxos)
+
+        # 인메모리 pool 통계 (엔트리, 수집 등)
         pool_stats = self.gacha.pool.get_stats()
+
         return {
-            'balance': pool_stats['balance'] / 100_000_000,
-            'balance_satoshi': pool_stats['balance'],
-            'next_jackpot': pool_stats['balance'] * 0.5 / 100_000_000,
-            'next_jackpot_satoshi': int(pool_stats['balance'] * 0.5),
+            'balance': utxo_balance / 100_000_000,
+            'balance_satoshi': utxo_balance,
+            'next_jackpot': utxo_balance * 50 // 100 / 100_000_000,
+            'next_jackpot_satoshi': utxo_balance * 50 // 100,
             'total_entries': pool_stats.get('total_entries', 0) / 100_000_000,
             'total_collected': pool_stats.get('total_fees_collected', 0) / 100_000_000,
             'snapshot_count': pool_stats.get('snapshot_count', 0),
@@ -494,12 +760,14 @@ class RPCServer:
                 if not (0 <= d <= 15):
                     raise Exception("Each number must be 0-15 (hex 0x0-0xf)")
 
-        # Commit TX 생성
+        # Commit TX 생성 (mempool에서 사용 중인 UTXO 제외, 미확인 잔돈 포함)
         tx, pending, error = self.gacha_service.create_commit(
             wallet=self.wallet,
             utxo_set=self.blockchain.utxo_set,
             current_height=self.blockchain.get_height(),
-            chosen_numbers=chosen_numbers
+            chosen_numbers=chosen_numbers,
+            is_spent_in_mempool=self.mempool.is_utxo_spent if self.mempool else None,
+            mempool=self.mempool,
         )
 
         if error:
@@ -513,6 +781,8 @@ class RPCServer:
         )
 
         if not success:
+            # 실패 시 pending commit 취소 (UTXO 예약 해제)
+            self.gacha_service.cancel_pending_commit(pending.commit_hash)
             raise Exception(f"Failed to add to mempool: {msg}")
 
         # 네트워크 전파
@@ -521,46 +791,208 @@ class RPCServer:
 
         return {
             'success': True,
-            'commit_hash': pending.commit_hash.hex(),
             'chosen_numbers': pending.chosen_numbers,
             'chosen_hex': [hex(n) for n in pending.chosen_numbers],
             'tx_id': tx.get_txid().hex(),
-            'comparison_blocks': f"N+5, N+10, N+15, N+20, N+25, N+30 (where N = commit block)",
-            'claim_window': "N+30 ~ N+80",
-            'message': "Commit created. Wait for N+30 blocks to claim result."
+            'comparison_blocks': "N+3, N+6, N+9, N+12, N+15, N+18 (N = commit block)",
+            'message': "Commit 완료. N+18 블록에서 자동으로 당첨 판정 및 지급됩니다."
         }
 
-    async def _lottoclaim(self, commit_hash: str) -> dict:
+    def _lottocheckresult(self, tx_id_hex: str) -> dict:
         """
-        로또 결과 확정 및 보상 수령 (Claim TX 생성 및 전파)
+        로또 결과 확인 (자동 지급이므로 조회만 가능)
 
         Args:
-            commit_hash: Commit 해시 (hex)
+            tx_id_hex: Commit TX ID (hex)
+        """
+        tx_id = bytes.fromhex(tx_id_hex)
+        commit_info = self.blockchain.get_commit_info(tx_id)
+
+        if commit_info is None:
+            raise Exception("Commit TX not found in blockchain")
+
+        current_height = self.blockchain.get_height()
+        from ..constants import LOTTO_MIN_CLAIM_GAP
+        from ..gacha.commit_reveal import get_comparison_heights, calculate_result_digits, count_matches, determine_prize, calculate_payout
+
+        comparison_heights = get_comparison_heights(commit_info.block_height)
+        from ..constants import LOTTO_PAYOUT_GAP
+        payout_block = commit_info.block_height + LOTTO_PAYOUT_GAP
+
+        if current_height <= comparison_heights[-1]:
+            return {
+                'success': False,
+                'status': 'pending',
+                'commit_height': commit_info.block_height,
+                'payout_block': payout_block,
+                'blocks_remaining': payout_block - current_height,
+                'message': f"대기 중. 블록 {payout_block}에서 자동 판정됩니다."
+            }
+
+        # 결과 계산
+        block_hashes = []
+        for h in comparison_heights:
+            block = self.blockchain.get_block_by_height(h)
+            if block:
+                block_hashes.append(block.get_hash())
+            else:
+                return {'success': False, 'error': f"Block {h} not found"}
+
+        result_digits = calculate_result_digits(block_hashes)
+        chosen = commit_info.chosen_numbers or []
+        matches = count_matches(chosen, result_digits)
+        prize = determine_prize(matches)
+        payout_jack, payout_pot = calculate_payout(prize, 0)
+
+        paid = commit_info.payout_height > 0
+
+        return {
+            'success': True,
+            'chosen_numbers': chosen,
+            'chosen_hex': [hex(n) for n in chosen],
+            'result_digits': result_digits,
+            'result_hex': [hex(n) for n in result_digits],
+            'matches': matches,
+            'prize': prize.name,
+            'prize_rank': prize.value,
+            'payout_jack': payout_jack / 100_000_000,
+            'payout_pot': payout_pot / 100_000_000,
+            'paid': paid,
+            'payout_block': payout_block,
+            'status': 'paid' if paid else ('resolved' if current_height >= payout_block else 'pending'),
+        }
+
+    def _listlottocommits(self, address: str = None) -> list:
+        """대기 중인 Commit 목록"""
+        pending_commits = self.gacha_service.get_pending_commits(address)
+        current_height = self.blockchain.get_height()
+        from ..gacha.commit_reveal import get_comparison_heights
+        from ..constants import LOTTO_PAYOUT_GAP
+
+        result = []
+        for c in pending_commits:
+            commit_height = c.block_height if c.block_height > 0 else current_height
+            comparison_heights = get_comparison_heights(commit_height)
+            payout_block = commit_height + LOTTO_PAYOUT_GAP
+
+            if c.block_height == 0:
+                status = "pending_mine"
+            elif current_height <= comparison_heights[-1]:
+                status = "pending"
+            else:
+                status = "ready"
+
+            result.append({
+                'tx_id': c.tx_id.hex() if c.tx_id else '',
+                'chosen_numbers': c.chosen_numbers,
+                'chosen_hex': [hex(n) for n in c.chosen_numbers] if c.chosen_numbers else [],
+                'player_address': c.address,
+                'commit_height': c.block_height,
+                'status': status,
+                'payout_block': payout_block,
+                'blocks_until_payout': max(0, payout_block - current_height),
+                'comparison_blocks': comparison_heights,
+            })
+
+        return result
+
+    # =========================================================================
+    # Exchange Methods (JACK -> POT)
+    # =========================================================================
+
+    def _getexchangeinfo(self) -> dict:
+        """교환 정보 조회"""
+        from ..constants import EXCHANGE_RATE, COIN
+        return {
+            'rate': f'{EXCHANGE_RATE} JACK = 1 POT',
+            'jack_per_pot': EXCHANGE_RATE,
+            'direction': 'JACK -> POT only (one-way)',
+            'min_jack': EXCHANGE_RATE,
+        }
+
+    async def _exchangetopot(self, jack_amount: float) -> dict:
+        """
+        JACK -> POT 교환
+
+        Args:
+            jack_amount: 교환할 JACK 수량
 
         Returns:
-            {matches, prize, payout, tx_id, ...}
+            {pot_received, jack_burned, tx_id, ...}
         """
         if not self.wallet:
             raise Exception("Wallet not available")
 
-        commit_hash_bytes = bytes.fromhex(commit_hash)
+        from ..asset.exchange import calculate_exchange, create_exchange_tx
+        from ..constants import COIN
+
+        jack_satoshi = round(jack_amount * COIN)
+
+        # 교환 계산
+        result = calculate_exchange(jack_satoshi)
+        if not result.success:
+            raise Exception(result.error)
+
+        # UTXO 선택
+        utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
         current_height = self.blockchain.get_height()
 
-        # 결과 미리 확인
-        preview = self.gacha.check_result(commit_hash_bytes, current_height)
-        if preview and not preview.success:
-            raise Exception(preview.error)
+        # Mature UTXO만 선택 + mempool에서 사용 중이 아닌 것
+        mature_utxos = [
+            u for u in utxos
+            if u.is_mature(current_height)
+            and not (self.mempool and self.mempool.is_utxo_spent(u.tx_id, u.output_index))
+        ]
 
-        # Claim TX 생성
-        tx, error = self.gacha_service.create_claim(
-            wallet=self.wallet,
-            utxo_set=self.blockchain.utxo_set,
-            commit_hash=commit_hash_bytes,
-            current_height=current_height
+        # 충분한 JACK 수집
+        selected = []
+        total = 0
+        for utxo in mature_utxos:
+            if utxo.output.jack_value > 0:
+                from ..core.transaction import TxInput
+                inp = TxInput(
+                    prev_tx_id=utxo.tx_id,
+                    output_index=utxo.output_index,
+                    script_sig=b'',
+                    sequence=0xFFFFFFFF
+                )
+                selected.append((inp, utxo))
+                total += utxo.output.jack_value
+                if total >= jack_satoshi:
+                    break
+
+        if total < jack_satoshi:
+            raise Exception(f"Insufficient JACK balance: {total / COIN} < {jack_amount}")
+
+        # 주소
+        addresses = self.wallet.get_addresses()
+        recipient = addresses[0] if addresses else ""
+        change_addr = self.wallet.get_change_address()
+
+        # 교환 TX 생성
+        tx, error = create_exchange_tx(
+            inputs=selected,
+            exchange_jack=jack_satoshi,
+            recipient_address=recipient,
+            change_address=change_addr
         )
 
         if error:
             raise Exception(error)
+
+        # 서명
+        from ..crypto.signature import sign
+        from ..script.standard import create_p2pkh_script_sig
+
+        for i, (inp, utxo) in enumerate(selected):
+            # 주소에서 개인키 찾기
+            from ..script.standard import get_address_from_script_pubkey
+            addr = get_address_from_script_pubkey(utxo.output.script_pubkey)
+            if addr and addr in self.wallet._addresses:
+                info = self.wallet._addresses[addr]
+                sig_hash = tx.get_signature_hash(i, utxo.output.script_pubkey)
+                signature = sign(sig_hash, info.private_key)
+                tx.inputs[i].script_sig = create_p2pkh_script_sig(signature, info.public_key)
 
         # Mempool에 추가
         success, msg = self.mempool.add_tx(
@@ -576,98 +1008,97 @@ class RPCServer:
         if self.node:
             await self.node.broadcast_tx(tx)
 
-        # 결과 반환
-        result = {
-            'success': True,
-            'tx_id': tx.get_txid().hex(),
-            'commit_hash': commit_hash,
-            'chosen_numbers': preview.chosen_numbers if preview else [],
-            'result_digits': preview.result_digits if preview else [],
-            'matches': preview.matches if preview else 0,
-            'prize': preview.prize.name if preview else 'NONE',
-            'payout_jack': preview.payout_jack / 100_000_000 if preview else 0,
-            'payout_pot': preview.payout_pot / 100_000_000 if preview else 0,
-            'message': "Claim TX broadcast. Reward will be credited when included in a block."
-        }
-
-        return result
-
-    def _lottocheckresult(self, commit_hash: str) -> dict:
-        """
-        로또 결과 미리보기 (Claim 전)
-
-        Args:
-            commit_hash: Commit 해시 (hex)
-
-        Returns:
-            {matches, prize, expected_payout, ...}
-        """
-        commit_hash_bytes = bytes.fromhex(commit_hash)
-        current_height = self.blockchain.get_height()
-
-        result = self.gacha.check_result(commit_hash_bytes, current_height)
-
-        if result is None:
-            raise Exception("Commit not found")
-
-        if not result.success:
-            return {
-                'success': False,
-                'error': result.error,
-                'message': result.error
-            }
-
         return {
             'success': True,
-            'chosen_numbers': result.chosen_numbers,
-            'chosen_hex': [hex(n) for n in result.chosen_numbers] if result.chosen_numbers else [],
-            'result_digits': result.result_digits,
-            'result_hex': [hex(n) for n in result.result_digits] if result.result_digits else [],
-            'matches': result.matches,
-            'prize': result.prize.name,
-            'prize_rank': result.prize.value,
-            'expected_payout_jack': result.payout_jack / 100_000_000,
-            'expected_payout_pot': result.payout_pot / 100_000_000,
-            'can_claim': True,
+            'tx_id': tx.get_txid().hex(),
+            'jack_exchanged': jack_amount,
+            'jack_burned': result.jack_burned / COIN,
+            'pot_received': result.pot_amount / COIN,
+            'jack_change': result.jack_change / COIN,
         }
 
-    def _listlottocommits(self, address: str = None) -> list:
-        """
-        대기 중인 Commit 목록
+    # =========================================================================
+    # Wallet Management
+    # =========================================================================
 
-        Args:
-            address: 특정 주소 (None이면 전체)
+    def _load_all_wallets(self) -> None:
+        """wallet_dir의 모든 지갑 로드"""
+        if not self.wallet_dir:
+            # wallet_dir 없으면 기존 wallet만 사용
+            if self.wallet:
+                # 기존 wallet의 파일명 추출
+                wallet_path = Path(self.wallet.wallet_file) if hasattr(self.wallet, 'wallet_file') and self.wallet.wallet_file else None
+                if wallet_path:
+                    name = wallet_path.stem
+                    self.wallets[name] = self.wallet
+            return
 
-        Returns:
-            [{commit_hash, chosen_numbers, status, ...}, ...]
-        """
-        commits = self.gacha.get_pending_commits(address, self.blockchain.get_height())
-        current_height = self.blockchain.get_height()
+        wallet_path = Path(self.wallet_dir)
+        if not wallet_path.exists():
+            return
 
-        from ..gacha.commit_reveal import get_commit_status, get_comparison_heights
+        for wf in wallet_path.glob("*.json"):
+            try:
+                w = Wallet(str(wf))
+                name = wf.stem
+                self.wallets[name] = w
+                # 첫 번째 지갑을 기본 활성 지갑으로
+                if self.wallet is None:
+                    self.wallet = w
+            except Exception:
+                pass  # 로드 실패 무시
+
+    def _listwallets(self) -> dict:
+        """로드된 지갑 목록"""
+        active_name = None
+        if self.wallet:
+            for name, w in self.wallets.items():
+                if w is self.wallet:
+                    active_name = name
+                    break
 
         result = []
-        for c in commits:
-            comparison_heights = get_comparison_heights(c.commit_height)
-            status = get_commit_status(c, current_height)
-
+        for name, w in self.wallets.items():
+            addrs = w.get_addresses()
             result.append({
-                'commit_hash': c.commit_hash.hex(),
-                'chosen_numbers': c.chosen_numbers,
-                'chosen_hex': [hex(n) for n in c.chosen_numbers] if c.chosen_numbers else [],
-                'player_address': c.player_address,
-                'commit_height': c.commit_height,
-                'tx_id': c.commit_tx_id.hex() if c.commit_tx_id else '',
-                'pool_snapshot': c.pool_snapshot / 100_000_000,
-                'status': status.value,
-                'can_claim': status.value == 'claimable',
-                'comparison_blocks': comparison_heights,
-                'claim_deadline': c.commit_height + 80,
-                'blocks_until_claimable': max(0, (c.commit_height + 30) - current_height),
-                'blocks_until_expire': max(0, (c.commit_height + 80) - current_height),
+                'name': name,
+                'addresses': len(addrs),
+                'active': name == active_name,
             })
+        return {
+            'wallets': result,
+            'count': len(result),
+            'active': active_name,
+        }
 
-        return result
+    def _setwallet(self, name: str) -> dict:
+        """활성 지갑 변경"""
+        if name not in self.wallets:
+            raise Exception(f"Wallet not found: {name}")
+
+        self.wallet = self.wallets[name]
+        return {
+            'success': True,
+            'active': name,
+            'addresses': len(self.wallet.get_addresses()),
+        }
+
+    def _getactivewallet(self) -> dict:
+        """현재 활성 지갑 정보"""
+        if not self.wallet:
+            return {'active': None}
+
+        active_name = None
+        for name, w in self.wallets.items():
+            if w is self.wallet:
+                active_name = name
+                break
+
+        return {
+            'active': active_name,
+            'addresses': self.wallet.get_addresses(),
+            'watch_only': list(self.wallet._watch_only) if hasattr(self.wallet, '_watch_only') else [],
+        }
 
     # =========================================================================
     # Utility Methods
