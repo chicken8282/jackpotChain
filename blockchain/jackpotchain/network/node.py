@@ -24,7 +24,11 @@ from ..consensus.chain import Blockchain
 from ..core.block import Block
 from ..core.transaction import Transaction
 from ..mempool.pool import Mempool
-from ..constants import DEFAULT_PORT, DEFAULT_RENDEZVOUS_PORT
+from ..constants import DEFAULT_PORT, DEFAULT_RENDEZVOUS_PORT, MAX_INV_SIZE
+
+# 블록 버퍼/대기열 최대 크기 (메모리 누수 방지)
+MAX_BLOCK_BUFFER_SIZE = 1000
+MAX_PENDING_BLOCKS = 5000
 
 
 @dataclass
@@ -33,8 +37,8 @@ class NodeConfig:
     host: str = "0.0.0.0"
     port: int = DEFAULT_PORT
     user_agent: str = "/JackpotChain:0.1.0/"
-    max_outbound: int = 6
-    max_inbound: int = 2
+    max_outbound: int = 8
+    max_inbound: int = 32
     relay: bool = True
     data_dir: str = None  # 피어 캐시 저장 경로
     discovery_interval: int = 1800  # 피어 발견 주기 (30분)
@@ -46,6 +50,7 @@ class NodeConfig:
     rendezvous_port: int = DEFAULT_RENDEZVOUS_PORT  # 8334
     rendezvous_seeds: list = None  # 랑데부 시드 노드 (ip:port)
     is_seed_node: bool = False  # True면 랑데부 서버도 실행
+    allow_private_ip: bool = False  # True면 사설 IP 피어도 캐시 허용 (로컬 테스트용)
 
 
 class Node:
@@ -73,7 +78,7 @@ class Node:
         )
 
         # 피어 발견
-        self.discovery = PeerDiscovery(self.config.data_dir)
+        self.discovery = PeerDiscovery(self.config.data_dir, allow_private_ip=self.config.allow_private_ip)
 
         # NAT 자동 포트 매핑
         self.nat_manager: Optional[NATManager] = None
@@ -101,9 +106,16 @@ class Node:
         # GETADDR 요청 시간 추적 (스팸 방지)
         self._last_getaddr: Dict[PeerAddress, float] = {}
 
-        # 순차 블록 동기화용
+        # 순차 블록 동기화용 (high/low watermark 방식)
         self._pending_blocks: List[bytes] = []  # 대기 중인 블록 해시 목록
         self._sync_peer: Optional[PeerAddress] = None  # 동기화 중인 피어
+        self._requesting: set = set()  # 현재 요청 중인 블록 해시
+        self._block_buffer: Dict[bytes, Block] = {}  # 순서 대기 중인 블록
+        self._batch_size: int = 16  # high watermark: 최대 in-flight 수
+        self._low_watermark: int = 4  # low watermark: 이 이하로 떨어지면 추가 요청
+        self._sync_start_time: float = 0  # 마지막 블록 수신 시각 (watchdog용)
+        self._sync_timeout: int = 120  # 동기화 세션 타임아웃 (초)
+        self._last_inv_count: int = 0  # 마지막 INV에서 받은 블록 수 (연속 동기화 판단용)
 
     @property
     def height(self) -> int:
@@ -119,7 +131,17 @@ class Node:
     @property
     def is_syncing(self) -> bool:
         """IBD(Initial Block Download) 중인지 확인"""
-        return self._sync_peer is not None or len(self._pending_blocks) > 0
+        if self._sync_peer is not None:
+            # 타임아웃 경과 시 좀비 동기화 상태 자동 해제
+            if self._sync_start_time > 0 and time.time() - self._sync_start_time > self._sync_timeout:
+                print(f"[SYNC] 동기화 타임아웃 감지, 상태 초기화 (높이: {self.height})")
+                self._sync_peer = None
+                self._pending_blocks.clear()
+                self._requesting.clear()
+                self._block_buffer.clear()
+                return False
+            return True
+        return len(self._pending_blocks) > 0
 
     def set_block_callback(self, callback: Callable):
         """블록 수신 콜백 설정"""
@@ -170,11 +192,30 @@ class Node:
         for addr in initial_peers:
             self.peer_manager.add_peer_address(addr)
 
+        # 시드 노드에 즉시 연결
+        for addr in initial_peers[:5]:
+            asyncio.create_task(self.connect_to_peer(addr))
+
         # 연결 유지 태스크
         asyncio.create_task(self._maintain_connections())
 
         # 피어 발견 태스크
         asyncio.create_task(self._discovery_loop())
+
+        # 동기화 워치독
+        asyncio.create_task(self._sync_watchdog())
+
+    async def _sync_watchdog(self):
+        """동기화 stall 감지 — 5초 무응답 시 stale 요청 정리 후 재요청"""
+        while self._running:
+            await asyncio.sleep(5)
+            if self._sync_peer and self._pending_blocks and self._requesting:
+                if self._sync_start_time > 0 and time.time() - self._sync_start_time > 5:
+                    stale = len(self._requesting)
+                    self._requesting.clear()
+                    self._sync_start_time = time.time()
+                    print(f"[SYNC] watchdog: stale {stale}개 정리, 재요청 (대기: {len(self._pending_blocks)}개)")
+                    await self._request_next_block()
 
     async def stop(self):
         """노드 정지"""
@@ -240,6 +281,7 @@ class Node:
                         print(f"[HolePunch] 피어 연결 성공: {address.ip}:{address.port}")
                         return True
 
+            print(f"[PEER] 연결 실패: {address.ip}:{address.port} - {e}")
             self.peer_manager.update_peer_state(address, PeerState.DISCONNECTED)
             return False
 
@@ -367,8 +409,20 @@ class Node:
         # VERACK 전송
         await self._send_message(address, MessageType.VERACK, b'')
 
-        # 인바운드면 VERSION도 전송
+        # 인바운드 피어의 리스닝 주소를 discovery에 등록
+        # (TCP 연결의 임시 포트가 아닌, VERSION에 광고된 리스닝 포트 사용)
         peer = self.peer_manager.get_peer(address)
+        if peer and peer.is_inbound and version_msg.addr_trans_port > 0:
+            listen_addr = PeerAddress(
+                ip=address.ip,
+                port=version_msg.addr_trans_port,
+                services=version_msg.services,
+                timestamp=int(time.time())
+            )
+            self.discovery.add_addresses([listen_addr])
+            self.discovery.mark_good(listen_addr)
+
+        # 인바운드면 VERSION도 전송
         if peer and peer.is_inbound:
             await self._send_version(address)
 
@@ -414,12 +468,14 @@ class Node:
         tx_count = sum(1 for i in inv_msg.items if i.inv_type == InvType.TX)
         print(f"[SYNC] INV 수신: 블록 {block_count}개, TX {tx_count}개 from {address.ip}:{address.port}")
 
-        # TX는 바로 요청
+        # TX는 바로 요청 (MAX_INV_SIZE 제한, 5.7)
         tx_to_fetch = []
         for item in inv_msg.items:
             if item.inv_type == InvType.TX:
                 if self.mempool and not self.mempool.has_tx(item.hash):
                     tx_to_fetch.append(item)
+                    if len(tx_to_fetch) >= MAX_INV_SIZE:
+                        break
 
         if tx_to_fetch:
             getdata = GetDataMessage(items=tx_to_fetch)
@@ -433,21 +489,58 @@ class Node:
                     block_hashes.append(item.hash)
 
         if block_hashes:
+            # 대기열 크기 제한
+            if len(block_hashes) > MAX_PENDING_BLOCKS:
+                print(f"[SYNC] 대기열 크기 제한: {len(block_hashes)} -> {MAX_PENDING_BLOCKS}")
+                block_hashes = block_hashes[:MAX_PENDING_BLOCKS]
+
+            # 이전 피어 요청 잔여물 초기화 (5.4)
+            self._requesting.clear()
             self._pending_blocks = block_hashes
             self._sync_peer = address
+            self._sync_start_time = time.time()  # 세션 타임아웃 추적 (5.6)
+            self._last_inv_count = block_count
             print(f"[SYNC] 블록 {len(block_hashes)}개 대기열에 추가, 순차 다운로드 시작")
             await self._request_next_block()
 
     async def _request_next_block(self):
-        """대기 중인 다음 블록 요청"""
+        """대기 중인 다음 블록들 요청 (배치)"""
         if not self._pending_blocks or not self._sync_peer:
             return
 
-        # 첫 번째 블록 요청
-        block_hash = self._pending_blocks[0]
-        item = InvItem(InvType.BLOCK, block_hash)
-        getdata = GetDataMessage(items=[item])
-        print(f"[SYNC] GETDATA 요청: 1개 블록 (대기: {len(self._pending_blocks)}개)")
+        # 세션 타임아웃 체크 (5.6)
+        if time.time() - self._sync_start_time > self._sync_timeout:
+            print(f"[SYNC] 세션 타임아웃 ({self._sync_timeout}s). 동기화 중단.")
+            self._sync_peer = None
+            self._pending_blocks.clear()
+            self._requesting.clear()
+            self._block_buffer.clear()
+            return
+
+        # High/Low Watermark: in-flight가 low 이하일 때만 high까지 채움
+        in_flight = len(self._requesting)
+        if in_flight > self._low_watermark:
+            return  # 아직 충분히 요청 중 — 추가 요청 안 함
+
+        slots = self._batch_size - in_flight  # high watermark까지 채울 수량
+        to_request = []
+        for block_hash in self._pending_blocks:
+            if block_hash not in self._requesting and block_hash not in self._block_buffer:
+                to_request.append(block_hash)
+                if len(to_request) >= slots:
+                    break
+
+        if not to_request:
+            return
+
+        # 요청 중 표시
+        for h in to_request:
+            self._requesting.add(h)
+
+        # 여러 블록 한번에 요청
+        items = [InvItem(InvType.BLOCK, h) for h in to_request]
+        getdata = GetDataMessage(items=items)
+        print(f"[SYNC] GETDATA 요청: {len(items)}개 블록 (대기: {len(self._pending_blocks)}개)")
         await self._send_message(self._sync_peer, MessageType.GETDATA, getdata.serialize())
 
     async def _handle_getdata(self, address: PeerAddress, payload: bytes):
@@ -472,37 +565,129 @@ class Node:
         peer = self.peer_manager.get_peer(address)
         block_hash = block.get_hash()
 
-        # [SYNC-LOG] BLOCK 수신
-        print(f"[SYNC] BLOCK 수신: hash={block_hash.hex()[:16]}... from {address.ip}:{address.port}")
+        # 마지막 블록 수신 시각 갱신 (watchdog용)
+        self._sync_start_time = time.time()
 
-        # 이전 블록이 없으면 동기화 요청
+        # 요청 목록에서 제거
+        self._requesting.discard(block_hash)
+
+        # 이전 블록이 없으면 버퍼에 저장
         prev_hash = block.header.prev_block_hash
         if prev_hash != bytes(32) and not self.blockchain.has_block(prev_hash):
-            # 이전 블록들이 필요함 - GETBLOCKS 요청
-            print(f"[SYNC] 이전 블록 없음, GETBLOCKS 요청 (prev={prev_hash.hex()[:16]}...)")
-            await self._request_blocks(address)
+            # 버퍼에 저장 (나중에 처리)
+            if block_hash in self._pending_blocks:
+                # 버퍼 크기 제한 체크
+                if len(self._block_buffer) >= MAX_BLOCK_BUFFER_SIZE:
+                    # 가장 오래된 항목 제거
+                    oldest_key = next(iter(self._block_buffer))
+                    del self._block_buffer[oldest_key]
+                    print(f"[BUFFER] 크기 제한 초과, 오래된 블록 제거: {oldest_key.hex()[:16]}...")
+
+                self._block_buffer[block_hash] = block
+            else:
+                # 동기화 목록에 없는 블록 - GETBLOCKS 요청
+                print(f"[SYNC] 이전 블록 없음, GETBLOCKS 요청 (prev={prev_hash.hex()[:16]}...)")
+                await self._request_blocks(address)
             return
 
-        # 콜백 호출 (블록 체인에 추가)
+        # 블록 처리
         if self._on_block:
             self._on_block(block, peer)
 
-        # 순차 동기화: 처리된 블록 제거 후 다음 블록 요청
+        # 피어 높이 갱신 (체인 현재 높이로)
+        chain_height = self.blockchain.get_height() if self.blockchain else 0
+        if chain_height > 0:
+            self.peer_manager.update_peer_height(address, chain_height)
+
+        # 다른 피어들에게 재전파 (보낸 피어 제외)
+        await self._relay_block(block, exclude=address)
+
+        # 처리된 블록 제거
         if block_hash in self._pending_blocks:
             self._pending_blocks.remove(block_hash)
-            if self._pending_blocks:
-                await self._request_next_block()
-            else:
-                print(f"[SYNC] 동기화 완료! 현재 높이: {self.height}")
-                self._sync_peer = None
+
+        # 버퍼에서 연결 가능한 블록들 처리
+        processed = True
+        while processed:
+            processed = False
+            for buf_hash, buf_block in list(self._block_buffer.items()):
+                if self.blockchain.has_block(buf_block.header.prev_block_hash):
+                    if self._on_block:
+                        self._on_block(buf_block, peer)
+                    # 재전파
+                    await self._relay_block(buf_block, exclude=address)
+                    del self._block_buffer[buf_hash]
+                    if buf_hash in self._pending_blocks:
+                        self._pending_blocks.remove(buf_hash)
+                    processed = True
+                    break
+
+        # 다음 배치 요청
+        if self._pending_blocks:
+            await self._request_next_block()
+        elif self._last_inv_count >= 500 and self._sync_peer:
+            # 이전 INV가 최대치(500)였으면 피어에 더 많은 블록이 있을 수 있음
+            print(f"[SYNC] 배치 완료 (높이: {self.height}), 추가 블록 요청...")
+            await self._request_blocks(self._sync_peer)
+        else:
+            print(f"[SYNC] 동기화 완료! 현재 높이: {self.height}")
+            self._sync_peer = None
+            self._block_buffer.clear()
+            self._requesting.clear()  # 요청 잔여물 초기화 (5.5)
 
     async def _handle_tx(self, address: PeerAddress, payload: bytes):
-        """TX 수신"""
+        """TX 수신 (orphan TX 대기열 포함)"""
         tx, _ = Transaction.deserialize(payload)
         peer = self.peer_manager.get_peer(address)
 
+        # mempool에 추가
+        if self.mempool and not self.mempool.has_tx(tx.get_txid()):
+            success, msg = self.mempool.add_tx(
+                tx,
+                self.blockchain.utxo_set,
+                self.blockchain.get_height()
+            )
+            if success:
+                # 다른 피어에게 재전파
+                await self._relay_tx(tx, exclude=address)
+                # orphan TX 재시도 (이 TX의 출력을 기다리던 TX)
+                await self._retry_orphan_txs(tx.get_txid(), address)
+            elif "UTXO not found" in msg:
+                # 부모 TX가 아직 없음 → orphan 대기열에 추가
+                if not hasattr(self, '_orphan_txs'):
+                    self._orphan_txs = {}
+                txid = tx.get_txid()
+                if len(self._orphan_txs) < 100:  # 최대 100개 제한
+                    self._orphan_txs[txid] = (tx, address)
+
         if self._on_tx:
             self._on_tx(tx, peer)
+
+    async def _retry_orphan_txs(self, parent_txid: bytes, address: PeerAddress):
+        """부모 TX가 들어오면 orphan TX 재시도"""
+        if not hasattr(self, '_orphan_txs') or not self._orphan_txs:
+            return
+
+        resolved = []
+        for txid, (tx, orig_addr) in list(self._orphan_txs.items()):
+            # 이 TX가 parent_txid를 참조하는지 확인
+            refs_parent = any(inp.prev_tx_id == parent_txid for inp in tx.inputs)
+            if not refs_parent:
+                continue
+
+            success, msg = self.mempool.add_tx(
+                tx,
+                self.blockchain.utxo_set,
+                self.blockchain.get_height()
+            )
+            if success:
+                resolved.append(txid)
+                await self._relay_tx(tx, exclude=orig_addr)
+            elif "UTXO not found" not in msg:
+                resolved.append(txid)  # 다른 이유로 실패 → 제거
+
+        for txid in resolved:
+            self._orphan_txs.pop(txid, None)
 
     async def _handle_getblocks(self, address: PeerAddress, payload: bytes):
         """GETBLOCKS 처리"""
@@ -692,6 +877,22 @@ class Node:
         self.peer_manager.update_peer_state(address, PeerState.DISCONNECTED)
         self.peer_manager.remove_peer(address)
 
+        # 연결이 끊기면 즉시 재연결 시도
+        if self._running and self.peer_manager.can_connect_outbound():
+            asyncio.create_task(self._reconnect_soon())
+
+    async def _reconnect_soon(self):
+        """끊김 후 3초 대기 → 재연결"""
+        await asyncio.sleep(3)
+        if not self._running:
+            return
+        to_connect = self.peer_manager.get_peers_to_connect(1)
+        if not to_connect:
+            connected = set(str(a) for a in self._connections.keys())
+            to_connect = self.discovery.get_peers_to_connect(count=1, exclude=connected)
+        for addr in to_connect:
+            await self.connect_to_peer(addr)
+
     async def _maintain_connections(self):
         """연결 유지"""
         while self._running:
@@ -753,3 +954,28 @@ class Node:
 
         for addr in list(self._connections.keys()):
             await self._send_message(addr, MessageType.INV, payload)
+
+    async def _relay_block(self, block: Block, exclude: PeerAddress = None):
+        """블록 재전파 (수신한 피어 제외)"""
+        item = InvItem(InvType.BLOCK, block.get_hash())
+        inv = InvMessage([item])
+        payload = inv.serialize()
+
+        relayed = 0
+        for addr in list(self._connections.keys()):
+            if addr != exclude:
+                await self._send_message(addr, MessageType.INV, payload)
+                relayed += 1
+
+        if relayed > 0:
+            print(f"[RELAY] 블록 {block.get_hash().hex()[:16]}... → {relayed}개 피어")
+
+    async def _relay_tx(self, tx: Transaction, exclude: PeerAddress = None):
+        """TX 재전파 (수신한 피어 제외)"""
+        item = InvItem(InvType.TX, tx.get_txid())
+        inv = InvMessage([item])
+        payload = inv.serialize()
+
+        for addr in list(self._connections.keys()):
+            if addr != exclude:
+                await self._send_message(addr, MessageType.INV, payload)
