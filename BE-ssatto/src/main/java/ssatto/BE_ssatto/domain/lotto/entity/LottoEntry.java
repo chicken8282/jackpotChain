@@ -172,4 +172,30 @@ public class LottoEntry {
     public String getCommitHash() {
         return commitTransaction.getTxId();
     }
+
+    /**
+     * 체인 결과를 기준으로 엔트리 결과를 갱신한다.
+     *
+     * @param resultNumbers 결과 번호 문자열
+     * @param matchCount 일치 개수
+     * @param status 결과 상태
+     * @param rewardJack JACK 보상
+     */
+    public void updateResult(String resultNumbers, Integer matchCount, LottoEntryStatus status, Long rewardJack) {
+        this.resultNumbers = resultNumbers;
+        this.matchCount = matchCount;
+        this.status = status;
+        this.rewardJack = rewardJack;
+    }
+
+    /**
+     * 클레임 완료 상태를 반영한다.
+     *
+     * @param claimTransaction claim 트랜잭션
+     * @param claimedAt claim 시각
+     */
+    public void markClaimed(Transaction claimTransaction, LocalDateTime claimedAt) {
+        this.claimTransaction = claimTransaction;
+        this.claimedAt = claimedAt == null ? LocalDateTime.now() : claimedAt;
+    }
 }

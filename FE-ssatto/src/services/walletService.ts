@@ -4,6 +4,17 @@ export interface RegisterWalletRequest {
   address: string;
   nickname?: string;
   walletColor?: string;
+  grantOnboardingReward?: boolean;
+}
+
+export interface RegisterWalletResponse {
+  address: string;
+  nickname: string | null;
+  walletColor: string;
+  createdAt: string;
+  onboardingRewardGranted: boolean;
+  onboardingRewardTxId: string | null;
+  onboardingRewardPotAmount: number;
 }
 
 export interface WalletSummary {
@@ -35,8 +46,22 @@ export interface WalletActivityPage {
   activities: WalletActivityItem[];
 }
 
+export interface WalletUtxo {
+  txId: string;
+  vout: number;
+  address: string;
+  jackAmount: number;
+  assets: Record<string, number>;
+  confirmations: number;
+  coinbase: boolean;
+}
+
+interface WalletUtxoListResponse {
+  utxos: WalletUtxo[];
+}
+
 export function registerWallet(request: RegisterWalletRequest) {
-  return postJson<WalletSummary, RegisterWalletRequest>("/v1/wallet", request);
+  return postJson<RegisterWalletResponse, RegisterWalletRequest>("/v1/wallet", request);
 }
 
 export function getWallets(addresses: string[]) {
@@ -63,4 +88,8 @@ export function getWalletActivities(
   }
 
   return getJson<WalletActivityPage>(`/v1/wallet/${encodeURIComponent(address)}/activities?${params.toString()}`, undefined, token);
+}
+
+export function getWalletUtxos(address: string, token: string) {
+  return getJson<WalletUtxoListResponse>(`/v1/wallet/${encodeURIComponent(address)}/utxos`, undefined, token);
 }

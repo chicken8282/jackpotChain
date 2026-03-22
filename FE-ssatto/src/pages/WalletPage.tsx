@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import PageLayout from "../components/layout/PageLayout";
 import type { WalletThemeId } from "../components/wallet/walletThemes";
-import { ApiError } from "../lib/api";
 import {
   backupLegacyWalletPayload,
   clearLegacyWalletPayloads,
@@ -11,7 +10,9 @@ import {
 } from "../services/legacyWalletMigrationService";
 import { migrateLegacyWallets, secureWallet, unlockWalletPrivateKey } from "../services/walletSecurityService";
 import { restoreWalletSession } from "../services/walletSessionService";
-import { registerWallet } from "../services/walletService";
+import { toWalletAuthErrorMessage, toWalletWriteErrorMessage } from "../services/walletErrorMapper";
+import { registerWalletWithRollback } from "../services/walletRegistrationFlowService";
+import { submitExchangeWrite } from "../services/writeFlowService";
 import { useWalletActivities } from "../hooks/useWalletActivities";
 import { useWalletSummaries } from "../hooks/useWalletSummaries";
 import { useWalletSessionStore, WALLET_IDLE_LOCK_MS } from "../stores/useWalletSessionStore";
@@ -68,6 +69,8 @@ export default function WalletPage() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [legacyWallets, setLegacyWallets] = useState<LegacyWalletRecord[]>([]);
+  const [writeStatus, setWriteStatus] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -78,7 +81,7 @@ export default function WalletPage() {
     setLegacyWallets(extractLegacyWallets(window.localStorage));
   }, []);
 
-  const { walletSummaries } = useWalletSummaries(wallets);
+  const { walletSummaries, refetch: refetchWalletSummaries } = useWalletSummaries(wallets);
 
   useEffect(() => {
     if (!activeAddress) {
@@ -139,14 +142,17 @@ export default function WalletPage() {
         }
 
         setAccessSession(activeWallet.walletId, response.accessToken, response.accessTokenExpiresAt);
-        upsertWallet({
-          ...activeWallet,
-          refreshSessionHandle: response.refreshSessionHandle || activeWallet.refreshSessionHandle,
-        });
+        const nextRefreshSessionHandle = response.refreshSessionHandle || activeWallet.refreshSessionHandle;
+        if (nextRefreshSessionHandle !== activeWallet.refreshSessionHandle) {
+          upsertWallet({
+            ...activeWallet,
+            refreshSessionHandle: nextRefreshSessionHandle,
+          });
+        }
       })
       .catch((error) => {
         clearAccessSession(activeWallet.walletId);
-        setAuthError(error instanceof Error ? error.message : "지갑 인증에 실패했습니다.");
+        setAuthError(toWalletAuthErrorMessage(error));
       })
       .finally(() => setIsAuthenticating(false));
   }, [
@@ -192,33 +198,48 @@ export default function WalletPage() {
       return;
     }
 
-    const existingWallet = wallets.find((wallet) => wallet.address === address);
-    const securedWallet = await secureWallet({
-      walletId: existingWallet?.walletId,
-      keystoreId: existingWallet?.keystoreId,
-      nickname: walletNickname,
-      walletColor: color,
-      privateKey,
-      address,
-      password,
-    });
-
-    upsertWallet({
-      ...securedWallet.metadata,
-      refreshSessionHandle: existingWallet?.refreshSessionHandle ?? null,
-    });
-    unlockWallet(securedWallet.metadata.walletId, securedWallet.privateKey);
+    setWriteError(null);
+    setWriteStatus(null);
 
     try {
-      await registerWallet({
-        address,
-        nickname: walletNickname,
-        walletColor: color.toUpperCase(),
+      const existingWallet = wallets.find((wallet) => wallet.address === address);
+      const result = await registerWalletWithRollback({
+        walletNickname,
+        type,
+        color,
+        payload: {
+          address,
+          privateKey,
+          password,
+        },
+        existingWallet,
       });
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 409) {
-        throw error;
+
+      upsertWallet({
+        ...result.securedWallet.metadata,
+        refreshSessionHandle: existingWallet?.refreshSessionHandle ?? null,
+      });
+      unlockWallet(result.securedWallet.metadata.walletId, result.securedWallet.privateKey);
+
+      if (result.status === "duplicate_restore") {
+        setWriteStatus("이미 등록된 지갑입니다. 기존 지갑 정보를 그대로 사용합니다.");
+        setAuthError(null);
+        return;
       }
+
+      await refetchWalletSummaries();
+      if (type === "create") {
+        setWriteStatus(
+          result.response?.onboardingRewardGranted
+            ? "지갑이 등록되었고 1 POT이 지급되었습니다. 바로 로또에 참여할 수 있습니다."
+            : "지갑이 등록되었습니다. 잔액 반영 상태를 확인해주세요.",
+        );
+      } else {
+        setWriteStatus("기존 지갑이 등록되었습니다.");
+      }
+    } catch (error) {
+      setWriteError(toWalletWriteErrorMessage(error));
+      return;
     }
 
     if (type === "restore") {
@@ -289,6 +310,27 @@ export default function WalletPage() {
     setAuthError(null);
   };
 
+  const handleExchangeJackToPot = async () => {
+    if (!activeWallet) {
+      throw new Error("활성 지갑을 찾을 수 없습니다.");
+    }
+    if (!activeAccessSession?.accessToken) {
+      throw new Error("지갑 인증이 필요합니다.");
+    }
+    if (!activeUnlockedPrivateKey) {
+      throw new Error("서명하려면 먼저 지갑 잠금을 해제해야 합니다.");
+    }
+
+    const response = await submitExchangeWrite({
+      address: activeWallet.address,
+      privateKey: activeUnlockedPrivateKey,
+      accessToken: activeAccessSession.accessToken,
+    });
+    setWriteStatus(
+      `${(response.burnedJack / 100_000_000).toLocaleString("ko-KR")} JACK 교환 트랜잭션을 제출했습니다.`,
+    );
+  };
+
   return (
     <PageLayout>
       {legacyWallets.length > 0 ? (
@@ -329,7 +371,7 @@ export default function WalletPage() {
             <div className="mb-4 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-text-secondary">
               {isCurrentWalletLocked ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>현재 지갑은 잠금 상태입니다. 서명 전 비밀번호로 잠금 해제가 필요합니다.</span>
+                  <span>현재 지갑은 잠금 상태입니다. 로또 참여나 교환 서명 전에는 비밀번호로 잠금 해제가 필요합니다.</span>
                   <button
                     type="button"
                     onClick={() => setShowUnlockModal(true)}
@@ -340,7 +382,7 @@ export default function WalletPage() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>현재 지갑은 메모리에서 잠금 해제된 상태입니다. 5분 동안 활동이 없으면 자동으로 잠깁니다.</span>
+                  <span>현재 지갑은 메모리에서 잠금 해제된 상태입니다. 서명 가능한 상태이며 5분 동안 활동이 없으면 자동으로 잠깁니다.</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -367,6 +409,16 @@ export default function WalletPage() {
               {authError}
             </div>
           ) : null}
+          {writeError ? (
+            <div className="mb-4 rounded-[18px] border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {writeError}
+            </div>
+          ) : null}
+          {writeStatus ? (
+            <div className="mb-4 rounded-[18px] border border-info/20 bg-info/10 px-4 py-3 text-sm text-info">
+              {writeStatus}
+            </div>
+          ) : null}
           {activeAccessSession?.accessToken ? (
             <div className="mb-4 rounded-[18px] border border-accent-gold/20 bg-accent-gold/10 px-4 py-3 text-sm text-accent-gold">
               현재 활성 지갑이 인증된 상태입니다.
@@ -378,9 +430,7 @@ export default function WalletPage() {
               activeIndex={activeWalletIndex}
               onChangeIndex={setActiveWalletIndex}
               onAddWallet={handleAddWallet}
-              onExchangeJackToPot={() => {
-                window.alert("서명 기반 교환 기능은 아직 준비 중입니다.");
-              }}
+              onExchangeJackToPot={handleExchangeJackToPot}
             />
           </Suspense>
           <div className="mt-6">

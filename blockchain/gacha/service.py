@@ -25,20 +25,32 @@ from ..script.standard import (
     create_p2pkh_script_pubkey,
     create_p2pkh_script_sig,
     create_commit_script,
+    create_claim_script,
+    get_address_from_script_pubkey,
 )
 from ..constants import (
     TX_VERSION_GACHA_COMMIT,
+    TX_VERSION_CLAIM,
     LOTTO_COST_POT,
     LOTTO_DIGIT_COUNT,
     LOTTO_DIGIT_BASE,
     ASSET_ID_POT,
     ASSET_ID_JACK,
     MIN_TX_FEE,
+    LOTTO_MIN_CLAIM_GAP,
+    LOTTO_MAX_CLAIM_GAP,
 )
 from .commit_reveal import generate_commit
 from .pool import JackpotPool
 from .game import GachaGame, GachaPlayResult, LottoPlayResult, LottoGame
-from .commit_reveal import LottoPrize
+from .commit_reveal import (
+    LottoPrize,
+    get_comparison_heights,
+    calculate_result_digits,
+    count_matches,
+    determine_prize,
+    calculate_payout,
+)
 
 
 # =============================================================================
@@ -368,6 +380,137 @@ class GachaService:
 
         return tx, pending, ""
 
+    def create_claim(
+        self,
+        wallet,
+        utxo_set: UTXOSet,
+        commit_hash,
+        current_height: int,
+        blockchain=None,
+        is_spent_in_mempool: Callable[[bytes, int], bool] = None,
+        mempool=None,
+    ) -> Tuple[Optional[Transaction], str]:
+        """LOTTO_CLAIM TX 생성"""
+        if blockchain is None:
+            return None, "Blockchain reference is required"
+
+        commit_tx_id = bytes.fromhex(commit_hash) if isinstance(commit_hash, str) else commit_hash
+        commit_info = blockchain.get_commit_info(commit_tx_id)
+        if commit_info is None:
+            return None, "Commit transaction not found"
+        if commit_info.payout_height > 0:
+            return None, "Commit already claimed"
+
+        gap = current_height - commit_info.block_height
+        if gap < LOTTO_MIN_CLAIM_GAP:
+            return None, f"Claim is too early. Wait {LOTTO_MIN_CLAIM_GAP - gap} more blocks"
+        if gap > LOTTO_MAX_CLAIM_GAP:
+            return None, "Claim window expired"
+
+        comparison_heights = get_comparison_heights(commit_info.block_height)
+        comparison_hashes = []
+        for height in comparison_heights:
+            block = blockchain.get_block_by_height(height)
+            if block is None:
+                return None, f"Comparison block {height} not found"
+            comparison_hashes.append(block.get_hash())
+
+        result_digits = calculate_result_digits(comparison_hashes)
+        chosen_numbers = commit_info.chosen_numbers or []
+        matches = count_matches(chosen_numbers, result_digits)
+        prize = determine_prize(matches)
+        pool_snapshot = commit_info.pool_snapshot
+        if pool_snapshot <= 0:
+            pool_snapshot = sum(utxo.output.jack_value for utxo in blockchain.utxo_set.get_pool_utxos())
+        payout_jack, payout_pot = calculate_payout(prize, pool_snapshot)
+
+        if payout_jack == 0 and payout_pot == 0:
+            return None, "No reward available for this commit"
+
+        fee_utxos = self._select_claim_fee_utxos(
+            wallet,
+            utxo_set,
+            MIN_TX_FEE,
+            current_height,
+            is_spent_in_mempool,
+            mempool,
+        )
+        if not fee_utxos:
+            return None, "Insufficient JACK balance for claim fee"
+
+        fee_inputs = []
+        player_input_total = 0
+        for utxo in fee_utxos:
+            fee_inputs.append((
+                TxInput(
+                    prev_tx_id=utxo.tx_id,
+                    output_index=utxo.output_index,
+                    script_sig=b'',
+                    sequence=0xFFFFFFFF,
+                ),
+                utxo,
+            ))
+            player_input_total += utxo.output.jack_value
+
+        pool_inputs = []
+        pool_input_total = 0
+        if payout_jack > 0:
+            for utxo in blockchain.utxo_set.get_pool_utxos():
+                if is_spent_in_mempool and is_spent_in_mempool(utxo.tx_id, utxo.output_index):
+                    continue
+                pool_inputs.append((
+                    TxInput(
+                        prev_tx_id=utxo.tx_id,
+                        output_index=utxo.output_index,
+                        script_sig=b'',
+                        sequence=0xFFFFFFFF,
+                    ),
+                    utxo,
+                ))
+                pool_input_total += utxo.output.jack_value
+                if pool_input_total >= payout_jack:
+                    break
+
+            if pool_input_total < payout_jack:
+                return None, "Insufficient jackpot pool balance"
+
+        recipient_script = create_p2pkh_script_pubkey(address_to_pubkey_hash(commit_info.player_address))
+        recipient_jack = payout_jack + max(0, player_input_total - MIN_TX_FEE)
+        recipient_assets = {ASSET_ID_POT: payout_pot} if payout_pot > 0 else {}
+
+        outputs = [
+            TxOutput(
+                jack_value=recipient_jack,
+                script_pubkey=recipient_script,
+                assets=recipient_assets,
+            )
+        ]
+
+        pool_change = pool_input_total - payout_jack
+        if pool_change > 0:
+            outputs.append(TxOutput(jack_value=pool_change, script_pubkey=b'JACKPOT_POOL'))
+
+        outputs.append(TxOutput(jack_value=0, script_pubkey=create_claim_script(commit_tx_id)))
+
+        all_inputs = fee_inputs + pool_inputs
+        tx = Transaction(
+            version=TX_VERSION_CLAIM,
+            inputs=[inp for inp, _ in all_inputs],
+            outputs=outputs,
+            locktime=0,
+        )
+
+        for index, (_, utxo) in enumerate(fee_inputs):
+            source_address = self._get_utxo_address(utxo)
+            if not source_address or source_address not in wallet._addresses:
+                return None, "Cannot locate signing key for claim fee input"
+            info = wallet._addresses[source_address]
+            sig_hash = tx.get_signature_hash(index, utxo.output.script_pubkey)
+            signature = sign(sig_hash, info.private_key)
+            tx.inputs[index].script_sig = create_p2pkh_script_sig(signature, info.public_key)
+
+        return tx, ""
+
     # =========================================================================
     # 상태 관리
     # =========================================================================
@@ -489,6 +632,15 @@ class GachaService:
                 if total >= amount:
                     break
         return jack_utxos if total >= amount else []
+
+    def _select_claim_fee_utxos(self, wallet, utxo_set, amount, current_height,
+                                is_spent_in_mempool: Callable[[bytes, int], bool] = None,
+                                mempool=None) -> List[UTXO]:
+        """Claim 수수료용 순수 JACK UTXO만 선택한다."""
+        utxos = self._select_jack_utxos(wallet, utxo_set, amount, current_height, is_spent_in_mempool, mempool)
+        pure_jack = [utxo for utxo in utxos if not utxo.output.assets]
+        total = sum(utxo.output.jack_value for utxo in pure_jack)
+        return pure_jack if total >= amount else []
 
     def _get_utxo_address(self, utxo: UTXO) -> Optional[str]:
         from ..script.standard import get_address_from_script_pubkey

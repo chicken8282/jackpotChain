@@ -12,12 +12,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import ssatto.BE_ssatto.global.config.JwtAuthenticationEntryPoint;
 import ssatto.BE_ssatto.global.config.JwtAuthenticationFilter;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletResponse;
+import ssatto.BE_ssatto.domain.wallet.dto.WalletUtxoItemResponse;
+import ssatto.BE_ssatto.domain.wallet.dto.WalletUtxoListResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletListResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletSummaryResponse;
 import ssatto.BE_ssatto.domain.wallet.service.WalletService;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -50,7 +53,15 @@ class WalletControllerTest {
     @DisplayName("지갑 등록 API가 성공 응답을 반환한다")
     void createWalletReturnsSuccess() throws Exception {
         given(walletService.createWallet(any()))
-            .willReturn(new CreateWalletResponse("JackpotAddress01", "내 지갑", "BLUE", LocalDateTime.of(2026, 3, 20, 9, 0)));
+            .willReturn(new CreateWalletResponse(
+                "JackpotAddress01",
+                "내 지갑",
+                "BLUE",
+                LocalDateTime.of(2026, 3, 20, 9, 0),
+                true,
+                "reward-tx-001",
+                100_000_000L
+            ));
 
         mockMvc.perform(post("/api/v1/wallet")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -64,7 +75,10 @@ class WalletControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))
             .andExpect(jsonPath("$.message").value("지갑이 등록되었습니다."))
-            .andExpect(jsonPath("$.data.address").value("JackpotAddress01"));
+            .andExpect(jsonPath("$.data.address").value("JackpotAddress01"))
+            .andExpect(jsonPath("$.data.onboardingRewardGranted").value(true))
+            .andExpect(jsonPath("$.data.onboardingRewardTxId").value("reward-tx-001"))
+            .andExpect(jsonPath("$.data.onboardingRewardPotAmount").value(100_000_000L));
     }
 
     @Test
@@ -111,5 +125,32 @@ class WalletControllerTest {
             .andExpect(jsonPath("$.data.activities[0].potAmount").value(-100_000_000L));
 
         verify(walletService).getActivities("JackpotAddress01", "JackpotAddress01", 15L, 20, null);
+    }
+
+    @Test
+    @DisplayName("UTXO 조회 API는 인증 지갑 주소를 서비스에 전달한다")
+    void getUtxosReturnsSuccess() throws Exception {
+        given(walletService.getUtxos("JackpotAddress01", "JackpotAddress01"))
+            .willReturn(new WalletUtxoListResponse(List.of(
+                new WalletUtxoItemResponse(
+                    "tx-001",
+                    0,
+                    "JackpotAddress01",
+                    100_000_000L,
+                    Map.of("POT", 200_000_000L),
+                    12,
+                    false
+                )
+            )));
+
+        mockMvc.perform(get("/api/v1/wallet/JackpotAddress01/utxos")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("UTXO 조회가 완료되었습니다."))
+            .andExpect(jsonPath("$.data.utxos[0].txId").value("tx-001"))
+            .andExpect(jsonPath("$.data.utxos[0].assets.POT").value(200_000_000L));
+
+        verify(walletService).getUtxos("JackpotAddress01", "JackpotAddress01");
     }
 }

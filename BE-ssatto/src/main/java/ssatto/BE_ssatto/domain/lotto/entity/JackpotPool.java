@@ -74,4 +74,27 @@ public class JackpotPool {
     ) {
         return new JackpotPool(id, balanceJack, totalEntries, totalWinners, lastSyncedHeight, updatedAt);
     }
+
+    /**
+     * 잭팟 풀 캐시를 최신 체인 상태로 갱신한다.
+     *
+     * @param balanceJack 잭팟 잔액
+     * @param totalEntries 누적 참여 수
+     * @param totalWinners 누적 당첨 수
+     * @param lastSyncedHeight 마지막 동기화 높이
+     * @param updatedAt 갱신 시각
+     */
+    public void updateSnapshot(
+        Long balanceJack,
+        Long totalEntries,
+        Long totalWinners,
+        Long lastSyncedHeight,
+        LocalDateTime updatedAt
+    ) {
+        this.balanceJack = balanceJack;
+        this.totalEntries = totalEntries;
+        this.totalWinners = totalWinners;
+        this.lastSyncedHeight = lastSyncedHeight;
+        this.updatedAt = updatedAt == null ? LocalDateTime.now() : updatedAt;
+    }
 }

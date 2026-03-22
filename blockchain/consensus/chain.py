@@ -13,7 +13,15 @@ from enum import Enum
 from ..core.block import Block, create_genesis_block
 from ..core.utxo import UTXO, UTXOSet
 from .difficulty import compact_to_target
-from ..script.standard import get_address_from_script_pubkey, is_commit_script, extract_commit_numbers, is_payout_script, extract_payout_data
+from ..script.standard import (
+    get_address_from_script_pubkey,
+    is_commit_script,
+    extract_commit_numbers,
+    is_payout_script,
+    extract_payout_data,
+    is_claim_script,
+    extract_claim_commit_tx_id,
+)
 from ..crypto.address import JACKPOT_POOL_ADDRESS
 from ..constants import TX_VERSION_COMMIT
 
@@ -55,6 +63,8 @@ class CommitInfo:
     chosen_numbers: list = None  # 선택한 숫자 (평문)
     player_address: str = ""     # 플레이어 주소
     payout_height: int = 0       # 지급 블록 높이 (0이면 미지급)
+    claim_tx_id: bytes = b''     # 지급 완료 claim tx id
+    pool_snapshot: int = 0       # commit 시점 jackpot pool snapshot
 
 
 class Blockchain:
@@ -475,6 +485,7 @@ class Blockchain:
                         block_hash=block_hash,
                         chosen_numbers=chosen_numbers,
                         player_address=player_address,
+                        pool_snapshot=sum(utxo.output.jack_value for utxo in self.utxo_set.get_pool_utxos()),
                     )
                     return
 
@@ -490,21 +501,37 @@ class Blockchain:
     def _index_payout_tx(self, tx, height: int):
         """Payout TX 감지 → 원본 Commit의 payout_height 갱신"""
         for output in tx.outputs:
+            commit_tx_id = extract_claim_commit_tx_id(output.script_pubkey)
+            if commit_tx_id:
+                if commit_tx_id in self._commit_index:
+                    self._commit_index[commit_tx_id].payout_height = height
+                    self._commit_index[commit_tx_id].claim_tx_id = tx.get_txid()
+                return
+        for output in tx.outputs:
             payout_data = extract_payout_data(output.script_pubkey)
             if payout_data:
                 commit_tx_id = payout_data[0]  # (commit_tx_id, chosen, result, matches)
                 if commit_tx_id in self._commit_index:
                     self._commit_index[commit_tx_id].payout_height = height
+                    self._commit_index[commit_tx_id].claim_tx_id = tx.get_txid()
                 return
 
     def _unindex_payout_tx(self, tx):
         """Payout TX 인덱스 되돌리기 (reorg 시 payout_height 초기화)"""
+        for output in tx.outputs:
+            commit_tx_id = extract_claim_commit_tx_id(output.script_pubkey)
+            if commit_tx_id:
+                if commit_tx_id in self._commit_index:
+                    self._commit_index[commit_tx_id].payout_height = 0
+                    self._commit_index[commit_tx_id].claim_tx_id = b''
+                return
         for output in tx.outputs:
             payout_data = extract_payout_data(output.script_pubkey)
             if payout_data:
                 commit_tx_id = payout_data[0]
                 if commit_tx_id in self._commit_index:
                     self._commit_index[commit_tx_id].payout_height = 0
+                    self._commit_index[commit_tx_id].claim_tx_id = b''
                 return
 
     def pop_disconnected_txs(self) -> list:

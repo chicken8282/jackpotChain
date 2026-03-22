@@ -15,6 +15,10 @@ import ssatto.BE_ssatto.domain.exchange.dto.ExchangeRequest;
 import ssatto.BE_ssatto.domain.exchange.dto.ExchangeResponse;
 import ssatto.BE_ssatto.domain.exchange.exception.ExchangeBelowMinimumException;
 import ssatto.BE_ssatto.domain.exchange.exception.InvalidExchangeRequestException;
+import ssatto.BE_ssatto.global.logging.BusinessEventLogger;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
 /**
  * 교환 direct-pull 조회와 제출을 담당하는 서비스다.
@@ -87,7 +91,14 @@ public class ExchangeService {
         String txId = jackpotChainRpcClient.sendRawTransaction(request.signedTxHex());
         long receivedPot = request.jackAmount() / exchangeInfo.jackPerPot();
 
-        log.info("EXCHANGE_TRANSACTION_SUBMITTED txId={} address={}", txId, request.fromAddress());
+        BusinessEventLogger.info(
+            LoggingEventType.EXCHANGE_TRANSACTION_SUBMITTED,
+            "exchange transaction submitted",
+            LoggingUtils.fields(
+                LoggingFields.TX_ID, txId,
+                LoggingFields.WALLET_ADDRESS, request.fromAddress()
+            )
+        );
 
         return new ExchangeResponse(
             txId,

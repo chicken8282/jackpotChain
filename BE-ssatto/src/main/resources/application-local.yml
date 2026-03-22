@@ -52,3 +52,5 @@ logging:
     ssatto.BE_ssatto: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
+  pattern:
+    console: ""

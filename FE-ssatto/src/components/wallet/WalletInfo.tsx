@@ -1,10 +1,11 @@
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { createWalletCredentials, deriveWalletCredentials } from "../../lib/crypto/wallet";
+import { createWalletCredentials } from "../../lib/crypto/wallet";
 import AnimatedNumber from "../common/AnimatedNumber";
 import GoldButton from "../common/GoldButton";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
+import { prepareWalletAddSubmission } from "../../services/walletAddFormService";
 
 interface WalletEntry {
   nickname: string;
@@ -24,7 +25,7 @@ interface WalletInfoProps {
     payload?: { address?: string; privateKey?: string; password?: string },
     color?: WalletThemeId,
   ) => void;
-  onExchangeJackToPot?: (walletAddress: string) => void;
+  onExchangeJackToPot?: (walletAddress: string) => Promise<void> | void;
 }
 
 export default function WalletInfo({
@@ -39,18 +40,33 @@ export default function WalletInfo({
   const [newNickname, setNewNickname] = useState("");
   const [newColor, setNewColor] = useState<WalletThemeId>("gray");
   const [restorePrivateKey, setRestorePrivateKey] = useState("");
+  const [generatedAddress, setGeneratedAddress] = useState("");
+  const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showTooltip, setShowTooltip] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [isExchanging, setIsExchanging] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
   const lastNavTime = useRef(0);
   const navCooldown = 350;
 
   const total = wallets.length;
-  const activeWallet = wallets[activeIndex];
-  const activeTheme = getWalletTheme(activeWallet.color);
+  const resolvedActiveIndex = activeIndex >= 0 && activeIndex < total ? activeIndex : 0;
+  const activeWallet = wallets[resolvedActiveIndex];
+  const activeTheme = getWalletTheme(activeWallet?.color ?? "gray");
+
+  useEffect(() => {
+    if (!showAddModal || addMode !== "create") {
+      return;
+    }
+
+    const credentials = createWalletCredentials();
+    setGeneratedAddress(credentials.address);
+    setGeneratedPrivateKey(credentials.privateKey);
+    setModalError(null);
+  }, [addMode, showAddModal]);
 
   const navigate = useCallback(
     (dir: 1 | -1) => {
@@ -60,9 +76,9 @@ export default function WalletInfo({
       }
 
       lastNavTime.current = now;
-      onChangeIndex((activeIndex + dir + total) % total);
+      onChangeIndex((resolvedActiveIndex + dir + total) % total);
     },
-    [activeIndex, total, onChangeIndex],
+    [resolvedActiveIndex, total, onChangeIndex],
   );
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -73,59 +89,61 @@ export default function WalletInfo({
     }
   };
 
-  const handleExchangeJackToPot = () => {
+  const handleExchangeJackToPot = async () => {
     if (activeWallet.jackBalance < 100) {
       setExchangeError("JACK 잔액이 부족합니다. 최소 100 JACK이 필요합니다.");
       setTimeout(() => setExchangeError(null), 2500);
       return;
     }
 
-    onExchangeJackToPot?.(activeWallet.address);
+    if (!onExchangeJackToPot) {
+      return;
+    }
+
+    setExchangeError(null);
+    setIsExchanging(true);
+    try {
+      await onExchangeJackToPot(activeWallet.address);
+    } catch (error) {
+      setExchangeError(error instanceof Error ? error.message : "교환 처리에 실패했습니다.");
+    } finally {
+      setIsExchanging(false);
+    }
   };
 
   const handleAdd = () => {
-    if (!newNickname.trim()) {
-      return;
-    }
-
-    if (password.trim().length < 8) {
-      setModalError("지갑 비밀번호는 8자 이상이어야 합니다.");
-      return;
-    }
-
-    if (password !== passwordConfirm) {
-      setModalError("비밀번호 확인이 일치하지 않습니다.");
-      return;
-    }
-
     try {
-      const credentials =
-        addMode === "restore"
-          ? deriveWalletCredentials(restorePrivateKey.trim())
-          : createWalletCredentials();
+      const submission = prepareWalletAddSubmission({
+        mode: addMode === "restore" ? "restore" : "create",
+        nickname: newNickname,
+        color: newColor,
+        password,
+        passwordConfirm,
+        restorePrivateKey,
+        generatedCredentials: {
+          address: generatedAddress,
+          privateKey: generatedPrivateKey,
+        },
+      });
 
-      onAddWallet?.(
-        newNickname.trim(),
-        addMode === "restore" ? "restore" : "create",
-        { address: credentials.address, privateKey: credentials.privateKey, password: password.trim() },
-        newColor,
-      );
+      onAddWallet?.(submission.nickname, submission.type, submission.payload, submission.color);
       setShowAddModal(false);
       setAddMode("choose");
       setNewNickname("");
       setNewColor("gray");
       setRestorePrivateKey("");
+      setGeneratedAddress("");
+      setGeneratedPrivateKey("");
       setPassword("");
       setPasswordConfirm("");
       setModalError(null);
-      onChangeIndex(wallets.length);
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "지갑 처리에 실패했습니다.");
     }
   };
 
   const getCardStyle = (index: number) => {
-    let diff = index - activeIndex;
+    let diff = index - resolvedActiveIndex;
     if (diff > total / 2) diff -= total;
     if (diff < -total / 2) diff += total;
 
@@ -137,7 +155,7 @@ export default function WalletInfo({
   };
 
   const isVisible = (index: number) => {
-    let diff = index - activeIndex;
+    let diff = index - resolvedActiveIndex;
     if (diff > total / 2) diff -= total;
     if (diff < -total / 2) diff += total;
     return Math.abs(diff) <= 2;
@@ -155,6 +173,8 @@ export default function WalletInfo({
               setShowAddModal(true);
               setAddMode("choose");
               setModalError(null);
+              setGeneratedAddress("");
+              setGeneratedPrivateKey("");
               setPassword("");
               setPasswordConfirm("");
             }}
@@ -204,7 +224,7 @@ export default function WalletInfo({
           }
 
           const style = getCardStyle(index);
-          const isCurrent = index === activeIndex;
+          const isCurrent = index === resolvedActiveIndex;
           const theme = getWalletTheme(wallet.color);
 
           return (
@@ -256,7 +276,7 @@ export default function WalletInfo({
                   >
                     <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>JACK 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
-                      <AnimatedNumber key={`jack-${activeIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
+                      <AnimatedNumber key={`jack-${resolvedActiveIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
                       <span className={`text-base font-bold ${theme.accentClassName}`}>JACK</span>
                     </div>
                   </div>
@@ -267,8 +287,10 @@ export default function WalletInfo({
                     </p>
                     <div className="flex items-center rounded-full border border-white/10 bg-white/5 p-1.5 shadow-inner">
                       <button
+                        type="button"
                         onClick={handleExchangeJackToPot}
                         title="JACK to POT"
+                        disabled={isExchanging}
                         className="rounded-full p-2 text-white/40 transition-colors hover:bg-white/15 hover:text-info"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -283,7 +305,7 @@ export default function WalletInfo({
                   >
                     <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>POT 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
-                      <AnimatedNumber key={`pot-${activeIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
+                      <AnimatedNumber key={`pot-${resolvedActiveIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
                       <span className={`text-base font-bold ${theme.accentClassName}`}>POT</span>
                     </div>
                   </div>
@@ -301,6 +323,9 @@ export default function WalletInfo({
                     </motion.p>
                   )}
                 </AnimatePresence>
+                {isExchanging ? (
+                  <p className="mt-2 text-center text-xs font-bold text-info">교환 트랜잭션을 전송하는 중입니다.</p>
+                ) : null}
               </div>
             </motion.div>
           );
@@ -314,7 +339,7 @@ export default function WalletInfo({
             type="button"
             onClick={() => onChangeIndex(index)}
             className={`h-2 rounded-full transition-all duration-300 ${
-              index === activeIndex ? "w-6 bg-white" : "w-2 bg-white/20 hover:bg-white/40"
+              index === resolvedActiveIndex ? "w-6 bg-white" : "w-2 bg-white/20 hover:bg-white/40"
             }`}
             aria-label={`지갑 ${index + 1}`}
           />
@@ -332,6 +357,8 @@ export default function WalletInfo({
               onClick={() => {
                 setShowAddModal(false);
                 setModalError(null);
+                setGeneratedAddress("");
+                setGeneratedPrivateKey("");
                 setPassword("");
                 setPasswordConfirm("");
               }}
@@ -349,6 +376,8 @@ export default function WalletInfo({
                   onClick={() => {
                     setShowAddModal(false);
                     setModalError(null);
+                    setGeneratedAddress("");
+                    setGeneratedPrivateKey("");
                     setPassword("");
                     setPasswordConfirm("");
                   }}
@@ -371,6 +400,7 @@ export default function WalletInfo({
                         type="button"
                         onClick={() => {
                           setAddMode("create");
+                          setNewNickname("내 지갑");
                           setModalError(null);
                           setPassword("");
                           setPasswordConfirm("");
@@ -384,6 +414,7 @@ export default function WalletInfo({
                         type="button"
                         onClick={() => {
                           setAddMode("restore");
+                          setNewNickname("기존 지갑");
                           setModalError(null);
                           setPassword("");
                           setPasswordConfirm("");
@@ -424,6 +455,28 @@ export default function WalletInfo({
                           />
                         ))}
                       </div>
+
+                      {addMode === "create" ? (
+                        <>
+                          <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                              지갑 주소
+                            </label>
+                            <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                              {generatedAddress}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                              개인 키
+                            </label>
+                            <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                              {generatedPrivateKey}
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
 
                       {addMode === "restore" && (
                         <div>
@@ -478,6 +531,8 @@ export default function WalletInfo({
                           onClick={() => {
                             setAddMode("choose");
                             setModalError(null);
+                            setGeneratedAddress("");
+                            setGeneratedPrivateKey("");
                             setPassword("");
                             setPasswordConfirm("");
                           }}

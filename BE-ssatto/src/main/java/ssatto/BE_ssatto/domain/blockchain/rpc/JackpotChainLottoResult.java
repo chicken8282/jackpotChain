@@ -12,7 +12,8 @@ import java.util.List;
  * @param payoutJack JACK 보상 satoshi
  * @param payoutPot POT 보상 satoshi
  * @param paid 지급 여부
- * @param payoutBlock 결과 확정 블록 높이
+ * @param claimableHeight claim 가능 시작 블록 높이
+ * @param claimable 현재 claim 가능 여부
  * @param status 체인 상태 문자열
  */
 public record JackpotChainLottoResult(
@@ -23,7 +24,8 @@ public record JackpotChainLottoResult(
     Long payoutJack,
     Long payoutPot,
     boolean paid,
-    Long payoutBlock,
+    Long claimableHeight,
+    boolean claimable,
     String status
 ) {
 }

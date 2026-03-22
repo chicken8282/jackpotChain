@@ -13,7 +13,10 @@ import ssatto.BE_ssatto.domain.blockchain.entity.Transaction;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBalances;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainJackpotPool;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainLottoInfo;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainLottoResult;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainPoolUnspentOutput;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimRequest;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoCommitRequest;
 import ssatto.BE_ssatto.domain.lotto.exception.InvalidLottoNumbersException;
@@ -44,6 +47,9 @@ class LottoServiceTest {
 
     @Mock
     private WalletAuthCrypto walletAuthCrypto;
+
+    @Mock
+    private BlockchainReadModelSyncService blockchainReadModelSyncService;
 
     @InjectMocks
     private LottoService lottoService;
@@ -130,6 +136,7 @@ class LottoServiceTest {
         assertThat(response.status()).isEqualTo("WINNING");
         assertThat(response.isClaimable()).isTrue();
         assertThat(response.rewardJack()).isEqualTo(2_000_000_000_000L);
+        verify(blockchainReadModelSyncService).syncToTip();
     }
 
     @Test
@@ -162,6 +169,7 @@ class LottoServiceTest {
 
         assertThat(response.status()).isEqualTo("EXPIRED");
         assertThat(response.isClaimable()).isFalse();
+        verify(blockchainReadModelSyncService).syncToTip();
     }
 
     @Test
@@ -198,6 +206,7 @@ class LottoServiceTest {
         assertThat(response.entries()).hasSize(1);
         assertThat(response.entries().getFirst().isClaimable()).isTrue();
         assertThat(response.entries().getFirst().entryId()).isEqualTo(42L);
+        verify(blockchainReadModelSyncService).syncToTip();
     }
 
     @Test
@@ -239,6 +248,7 @@ class LottoServiceTest {
         assertThat(response.claimTxId()).isEqualTo("claim-tx-001");
         assertThat(response.matchCount()).isEqualTo(4);
         assertThat(response.rewardJack()).isEqualTo(2_000_000_000_000L);
+        verify(blockchainReadModelSyncService).syncToTip();
         verify(jackpotChainRpcClient).sendRawTransaction("0500000001abcd");
     }
 
@@ -256,5 +266,63 @@ class LottoServiceTest {
 
         assertThatThrownBy(() -> lottoService.claim("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", request))
             .isInstanceOf(LottoEntryNotFoundException.class);
+        verify(blockchainReadModelSyncService).syncToTip();
+    }
+
+    @Test
+    @DisplayName("클레임 컨텍스트는 체인 기준 payout과 풀 UTXO를 반환한다")
+    void getClaimContextReturnsChainDerivedContext() {
+        Wallet wallet = Wallet.create("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", LocalDateTime.now());
+        Block block = Block.create(10L, "block-001", "prev-001", "0x1", LocalDateTime.now(), 12, "7.4T", 1L, "miner", 1L, 0L, 1, true);
+        Transaction commitTransaction = Transaction.create("commit-claim-ctx-001", block, 3, "from", "to", 0L, 100_000_000L, LocalDateTime.now());
+        LottoEntry entry = LottoEntry.create(
+            commitTransaction,
+            wallet,
+            "10,1,15,3,4,14",
+            1L,
+            100L,
+            "10,5,15,3,9,14",
+            1,
+            LottoEntryStatus.WINNING,
+            null,
+            null,
+            110L,
+            150L,
+            LocalDateTime.of(2026, 3, 20, 10, 0),
+            null
+        );
+
+        given(lottoEntryRepository.findByCommitTransactionTxId("commit-claim-ctx-001")).willReturn(java.util.Optional.of(entry));
+        given(jackpotChainRpcClient.getBlockCount()).willReturn(120L);
+        given(jackpotChainRpcClient.checkLottoResult("commit-claim-ctx-001"))
+            .willReturn(new JackpotChainLottoResult(
+                true,
+                List.of(10, 1, 15, 3, 4, 14),
+                List.of(10, 5, 15, 3, 9, 14),
+                1,
+                null,
+                100_000_000L,
+                false,
+                110L,
+                true,
+                "claimable"
+            ));
+        given(jackpotChainRpcClient.listPoolUnspent())
+            .willReturn(List.of(new JackpotChainPoolUnspentOutput("pool-utxo-001", 0, 200_000_000_000L, 22)));
+
+        var response = lottoService.getClaimContext("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "commit-claim-ctx-001");
+
+        assertThat(response.commitHash()).isEqualTo("commit-claim-ctx-001");
+        assertThat(response.matchCount()).isEqualTo(1);
+        assertThat(response.rewardJack()).isNull();
+        assertThat(response.rewardPot()).isEqualTo(100_000_000L);
+        assertThat(response.claimable()).isTrue();
+        assertThat(response.poolUtxos()).singleElement().satisfies(utxo -> {
+            assertThat(utxo.txId()).isEqualTo("pool-utxo-001");
+            assertThat(utxo.jackAmount()).isEqualTo(200_000_000_000L);
+        });
+        verify(blockchainReadModelSyncService).syncToTip();
+        verify(jackpotChainRpcClient).checkLottoResult("commit-claim-ctx-001");
+        verify(jackpotChainRpcClient).listPoolUnspent();
     }
 }

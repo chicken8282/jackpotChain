@@ -63,4 +63,13 @@ public interface WalletActivityRepository extends JpaRepository<WalletActivity, 
         Long id,
         Pageable pageable
     );
+
+    /**
+     * 지갑 주소와 연관 트랜잭션 조합의 중복 여부를 조회한다.
+     *
+     * @param walletAddress 지갑 주소
+     * @param txId 연관 트랜잭션 해시
+     * @return 이미 저장된 경우 true
+     */
+    boolean existsByWalletAddressAndTransactionTxId(String walletAddress, String txId);
 }

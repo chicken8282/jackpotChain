@@ -751,10 +751,67 @@ GET /lotto/entries/{commitHash}/result
 
 ---
 
+### 4-4A. 로또 클레임 컨텍스트 조회
+
+> 클라이언트가 `version=5` claim TX를 직접 서명할 수 있도록
+> 체인 기준 payout 정보와 잭팟 풀 UTXO 목록을 조회한다.
+> `isClaimable=true`인 항목에 대해서만 성공한다.
+
+```
+GET /lotto/entries/{commitHash}/claim-context
+```
+
+**Request**
+- PathVariable: `commitHash`
+- BearerToken: 필수
+
+**Response** 응답 코드: 200 / 400 / 401 / 404 / 500 / 503
+
+| 파라미터 | 의미 | 타입 | 필수 여부 |
+|----------|------|------|:--------:|
+| commitHash | 커밋 TX 해시 | String | 필수 |
+| matchCount | 일치 개수 | Integer | 필수 |
+| rewardJack | JACK 보상 (satoshi) | Long | 선택 |
+| rewardPot | POT 보상 (satoshi) | Long | 선택 |
+| claimable | 현재 클레임 가능 여부 | Boolean | 필수 |
+| poolUtxos[].txId | 잭팟 풀 UTXO 트랜잭션 해시 | String | 필수 |
+| poolUtxos[].vout | 잭팟 풀 UTXO 출력 인덱스 | Integer | 필수 |
+| poolUtxos[].jackAmount | 잭팟 풀 UTXO JACK 금액 (satoshi) | Long | 필수 |
+| poolUtxos[].confirmations | 잭팟 풀 UTXO 확인 수 | Integer | 필수 |
+
+> **1매치 환불**: `matchCount == 1`일 경우 `rewardJack`은 null, `rewardPot`은 `100000000`이다.
+> 클라이언트는 `rewardJack`/`rewardPot`와 `poolUtxos`를 사용해 signed claim TX를 구성한다.
+
+```json
+{
+  "code": 200,
+  "message": "로또 클레임 컨텍스트 조회가 완료되었습니다.",
+  "data": {
+    "commitHash": "a1b2c3d4e5f6...",
+    "matchCount": 4,
+    "rewardJack": 2000000000000,
+    "rewardPot": null,
+    "claimable": true,
+    "poolUtxos": [
+      {
+        "txId": "pooltx001...",
+        "vout": 0,
+        "jackAmount": 2500000000000,
+        "confirmations": 18
+      }
+    ]
+  }
+}
+```
+
+---
+
 ### 4-4. 로또 보상 수령 (클레임)
 
 > 당첨된 로또의 보상을 수령한다.
 > TX는 클라이언트에서 version=5로 서명하여 전달한다.
+> 일반적으로 `GET /lotto/entries/{commitHash}/claim-context`를 먼저 호출해
+> payout 정보와 풀 입력을 조회한 뒤 signed TX를 생성한다.
 > `isClaimable=true`인 항목에 대해서만 호출 가능하다.
 
 ```

@@ -9,11 +9,17 @@ import java.time.LocalDateTime;
  * @param nickname 지갑 닉네임
  * @param walletColor 지갑 색상 식별자
  * @param createdAt 생성 시각
+ * @param onboardingRewardGranted onboarding POT 지급 완료 여부
+ * @param onboardingRewardTxId onboarding POT 지급 트랜잭션 ID
+ * @param onboardingRewardPotAmount onboarding POT 지급량
  */
 public record CreateWalletResponse(
     String address,
     String nickname,
     String walletColor,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    boolean onboardingRewardGranted,
+    String onboardingRewardTxId,
+    long onboardingRewardPotAmount
 ) {
 }

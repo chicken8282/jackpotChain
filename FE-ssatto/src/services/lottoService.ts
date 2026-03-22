@@ -53,6 +53,22 @@ export interface LottoClaimRequest {
   signedTxHex: string;
 }
 
+export interface LottoClaimPoolUtxo {
+  txId: string;
+  vout: number;
+  jackAmount: number;
+  confirmations: number;
+}
+
+export interface LottoClaimContext {
+  commitHash: string;
+  matchCount: number | null;
+  rewardJack: number | null;
+  rewardPot: number | null;
+  claimable: boolean;
+  poolUtxos: LottoClaimPoolUtxo[];
+}
+
 export interface LottoClaimResponse {
   claimTxId: string;
   matchCount: number;
@@ -76,6 +92,10 @@ export function getLottoEntries(address: string, token?: string, status: LottoEn
 
 export function getLottoEntryResult(commitHash: string, token?: string) {
   return getJson<LottoEntryResult>(`/v1/lotto/entries/${encodeURIComponent(commitHash)}/result`, undefined, token);
+}
+
+export function getLottoClaimContext(commitHash: string, token: string) {
+  return getJson<LottoClaimContext>(`/v1/lotto/entries/${encodeURIComponent(commitHash)}/claim-context`, undefined, token);
 }
 
 export function commitLotto(request: LottoCommitRequest, token: string) {

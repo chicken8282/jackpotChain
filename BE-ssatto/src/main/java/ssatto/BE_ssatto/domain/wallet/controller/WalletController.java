@@ -15,6 +15,7 @@ import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletRequest;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletActivityCursorResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletListResponse;
+import ssatto.BE_ssatto.domain.wallet.dto.WalletUtxoListResponse;
 import ssatto.BE_ssatto.domain.wallet.service.WalletService;
 import ssatto.BE_ssatto.global.response.ApiResponse;
 
@@ -30,6 +31,7 @@ public class WalletController {
     private static final String CREATE_WALLET_SUCCESS_MESSAGE = "지갑이 등록되었습니다.";
     private static final String GET_WALLETS_SUCCESS_MESSAGE = "지갑 목록 조회가 완료되었습니다.";
     private static final String GET_ACTIVITIES_SUCCESS_MESSAGE = "활동 내역 조회가 완료되었습니다.";
+    private static final String GET_UTXOS_SUCCESS_MESSAGE = "UTXO 조회가 완료되었습니다.";
 
     private final WalletService walletService;
 
@@ -78,6 +80,22 @@ public class WalletController {
             SUCCESS_CODE,
             GET_ACTIVITIES_SUCCESS_MESSAGE,
             walletService.getActivities(resolveWalletSubject(authentication), address, resolvedCursor, size, type)
+        );
+    }
+
+    /**
+     * 특정 지갑의 UTXO 목록을 조회한다.
+     *
+     * @param authentication 인증 주체
+     * @param address 지갑 주소
+     * @return UTXO 목록 응답
+     */
+    @GetMapping("/{address}/utxos")
+    public ApiResponse<WalletUtxoListResponse> getUtxos(Authentication authentication, @PathVariable String address) {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            GET_UTXOS_SUCCESS_MESSAGE,
+            walletService.getUtxos(resolveWalletSubject(authentication), address)
         );
     }
 

@@ -8,7 +8,7 @@ import json
 import asyncio
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Dict, Optional, Callable, List
 from dataclasses import dataclass
 from aiohttp import web
 
@@ -21,6 +21,7 @@ from ..network.node import Node
 from ..constants import DEFAULT_RPC_PORT, LOTTO_MIN_CLAIM_GAP, TX_VERSION_GACHA_COMMIT
 from ..gacha.game import GachaGame
 from ..gacha.service import GachaService, create_gacha_service
+from ..gacha.commit_reveal import get_comparison_heights, calculate_result_digits, count_matches, determine_prize, calculate_payout
 from ..script.standard import is_commit_script
 
 
@@ -129,7 +130,10 @@ class RPCServer:
         self._methods['getbalances'] = self._getbalances  # JACK + POT
         self._methods['getnewaddress'] = self._getnewaddress
         self._methods['listunspent'] = self._listunspent
+        self._methods['listpoolunspent'] = self._listpoolunspent
         self._methods['sendtoaddress'] = self._sendtoaddress
+        self._methods['grantonboardingreward'] = self._grantonboardingreward
+        self._methods['grantlocaljack'] = self._grantlocaljack
 
         # Network
         self._methods['getnetworkinfo'] = self._getnetworkinfo
@@ -139,6 +143,7 @@ class RPCServer:
         self._methods['getmininginfo'] = self._getmininginfo
         self._methods['startmining'] = self._startmining
         self._methods['stopmining'] = self._stopmining
+        self._methods['mineqablocks'] = self._mineqablocks
 
         # Lotto (자동 지급 방식)
         self._methods['getlottoinfo'] = self._getlottoinfo
@@ -260,6 +265,8 @@ class RPCServer:
 
     def _getblock(self, blockhash: str, verbosity: int = 1) -> Any:
         """블록 조회"""
+        from ..script.standard import get_address_from_script_pubkey
+
         block_hash = bytes.fromhex(blockhash)[::-1]
         block = self.blockchain.get_block(block_hash)
 
@@ -272,6 +279,9 @@ class RPCServer:
         index = self.blockchain.get_block_index(block_hash)
         coinbase = block.get_coinbase()
         reward_jack = coinbase.outputs[0].jack_value if coinbase and coinbase.outputs else 0
+        miner_address = None
+        if coinbase and coinbase.outputs:
+            miner_address = get_address_from_script_pubkey(coinbase.outputs[0].script_pubkey)
 
         return {
             'hash': block.get_hash_hex(),
@@ -288,8 +298,32 @@ class RPCServer:
             'previousblockhash': block.header.prev_block_hash[::-1].hex(),
             'rewardJack': reward_jack,
             'feeRewardJack': 0,
+            'minerAddress': miner_address,
             'isMainChain': self.blockchain.is_in_main_chain(block_hash),
-            'tx': [tx.get_txid().hex() for tx in block.transactions] if verbosity > 1 else [],
+            'tx': [
+                {
+                    'txid': tx.get_txid().hex(),
+                    'version': tx.version,
+                    'inputs': [
+                        {
+                            'txid': inp.prev_tx_id.hex(),
+                            'vout': inp.output_index,
+                        }
+                        for inp in tx.inputs
+                    ],
+                    'outputs': [
+                        {
+                            'n': output_index,
+                            'jack_value': output.jack_value,
+                            'assets': output.assets,
+                            'script_pubkey_hex': output.script_pubkey.hex(),
+                            'address': get_address_from_script_pubkey(output.script_pubkey),
+                        }
+                        for output_index, output in enumerate(tx.outputs)
+                    ],
+                }
+                for tx in block.transactions
+            ] if verbosity > 1 else [],
         }
 
     def _getblockhash(self, height: int) -> str:
@@ -368,7 +402,8 @@ class RPCServer:
         success, msg = self.mempool.add_tx(
             tx,
             self.blockchain.utxo_set,
-            self.blockchain.get_height()
+            self.blockchain.get_height(),
+            blockchain=self.blockchain,
         )
 
         if not success:
@@ -407,18 +442,7 @@ class RPCServer:
         from ..constants import ASSET_ID_POT, COIN
 
         current_height = self.blockchain.get_height()
-
-        if address:
-            # 특정 주소의 UTXO
-            utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
-        elif self.wallet:
-            # 지갑의 모든 주소 UTXO
-            utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
-        else:
-            raise Exception("Wallet not available")
-
-        # mature UTXO만 필터
-        mature_utxos = [u for u in utxos if u.is_mature(current_height)]
+        mature_utxos = self._get_visible_utxos(address, current_height)
 
         jack_balance = 0
         pot_balance = 0
@@ -444,39 +468,72 @@ class RPCServer:
 
     def _listunspent(self, address: str = None) -> list:
         """UTXO 목록 (주소 지정 가능)"""
-        if address:
-            # 특정 주소의 UTXO
-            utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
-            return [
-                {
-                    'txid': utxo.outpoint.txid.hex(),
-                    'vout': utxo.outpoint.index,
-                    'address': address,
-                    'amount': utxo.output.jack_value / 100_000_000,
-                    'assets': utxo.output.assets,
-                    'confirmations': self.blockchain.get_height() - utxo.block_height + 1
-                }
-                for utxo in utxos
-            ]
-
-        if not self.wallet:
-            raise Exception("Wallet not available")
-
         from ..script.standard import get_address_from_script_pubkey
 
-        utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
         current_height = self.blockchain.get_height()
+        utxos = self._get_visible_utxos(address, current_height)
+
         return [
             {
                 'txid': utxo.tx_id.hex(),
                 'vout': utxo.output_index,
-                'address': get_address_from_script_pubkey(utxo.output.script_pubkey),
+                'address': address or get_address_from_script_pubkey(utxo.output.script_pubkey),
                 'amount': utxo.output.jack_value / 100_000_000,
                 'assets': utxo.output.assets,
                 'confirmations': max(0, current_height - utxo.block_height + 1),
+                'is_coinbase': utxo.is_coinbase,
             }
             for utxo in utxos
         ]
+
+    def _listpoolunspent(self) -> list:
+        """잭팟 풀 UTXO 목록 조회 (클레임 서명용 로컬 QA 헬퍼)."""
+        from ..constants import COIN
+
+        current_height = self.blockchain.get_height()
+        result = []
+        for utxo in self.blockchain.utxo_set.get_pool_utxos():
+            if self.mempool and self.mempool.is_utxo_spent(utxo.tx_id, utxo.output_index):
+                continue
+            result.append({
+                'txid': utxo.tx_id.hex(),
+                'vout': utxo.output_index,
+                'amount': utxo.output.jack_value / COIN,
+                'jack_satoshi': utxo.output.jack_value,
+                'confirmations': max(0, current_height - utxo.block_height + 1),
+            })
+        return result
+
+    def _get_visible_utxos(self, address: str = None, current_height: int = None) -> list:
+        """주소별로 확정 UTXO와 사용 가능한 mempool 출력까지 합쳐 반환"""
+        from ..script.standard import get_address_from_script_pubkey
+
+        if current_height is None:
+            current_height = self.blockchain.get_height()
+
+        if address:
+            addresses = {address}
+            confirmed_utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
+        elif self.wallet:
+            addresses = set(self.wallet._addresses.keys())
+            confirmed_utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
+        else:
+            raise Exception("Wallet not available")
+
+        visible_confirmed = [
+            utxo
+            for utxo in confirmed_utxos
+            if utxo.is_mature(current_height)
+            and not (self.mempool and self.mempool.is_utxo_spent(utxo.tx_id, utxo.output_index))
+        ]
+
+        unconfirmed_utxos = (
+            self.mempool.get_unconfirmed_utxos(addresses, get_address_from_script_pubkey)
+            if self.mempool
+            else []
+        )
+
+        return [*visible_confirmed, *unconfirmed_utxos]
 
     async def _sendtoaddress(self, address: str, amount: float) -> str:
         """송금"""
@@ -502,7 +559,8 @@ class RPCServer:
         success, msg = self.mempool.add_tx(
             tx,
             self.blockchain.utxo_set,
-            self.blockchain.get_height()
+            self.blockchain.get_height(),
+            blockchain=self.blockchain,
         )
 
         if not success:
@@ -513,6 +571,208 @@ class RPCServer:
             await self.node.broadcast_tx(tx)
 
         return tx.get_txid().hex()
+
+    async def _grantonboardingreward(self, address: str, pot_amount: float = 1.0) -> dict:
+        """신규 지갑 onboarding 용 1 POT 지급"""
+        if not self.wallet:
+            raise Exception("Wallet not available")
+
+        from ..constants import ASSET_ID_POT, COIN, MIN_TX_FEE, TX_VERSION_TRANSFER
+        from ..core.transaction import Transaction, TxInput, TxOutput
+        from ..crypto.address import address_to_pubkey_hash, validate_address
+        from ..crypto.signature import sign
+        from ..script.standard import (
+            create_p2pkh_script_pubkey,
+            create_p2pkh_script_sig,
+            get_address_from_script_pubkey,
+        )
+
+        if not validate_address(address):
+            raise Exception(f"Invalid recipient address: {address}")
+
+        pot_satoshi = round(pot_amount * COIN)
+        current_height = self.blockchain.get_height()
+        mature_utxos = self._get_visible_utxos(current_height=current_height)
+
+        onboarding_fee_buffer = MIN_TX_FEE
+        required_jack_input = MIN_TX_FEE + onboarding_fee_buffer
+
+        selected = []
+        total_input = 0
+        for utxo in mature_utxos:
+            if utxo.output.jack_value <= 0:
+                continue
+            selected.append(utxo)
+            total_input += utxo.output.jack_value
+            if total_input >= required_jack_input:
+                break
+
+        if total_input < required_jack_input:
+            raise Exception("Insufficient JACK balance for onboarding reward fee buffer")
+
+        tx_inputs = [
+            TxInput(
+                prev_tx_id=utxo.tx_id,
+                output_index=utxo.output_index,
+                script_sig=b'',
+                sequence=0xFFFFFFFF,
+            )
+            for utxo in selected
+        ]
+
+        recipient_output = TxOutput(
+            jack_value=onboarding_fee_buffer,
+            script_pubkey=create_p2pkh_script_pubkey(address_to_pubkey_hash(address)),
+            assets={ASSET_ID_POT: pot_satoshi},
+        )
+        outputs = [recipient_output]
+
+        change_jack = total_input - required_jack_input
+        if change_jack > 0:
+            change_address = self.wallet.get_change_address()
+            outputs.append(TxOutput(
+                jack_value=change_jack,
+                script_pubkey=create_p2pkh_script_pubkey(address_to_pubkey_hash(change_address)),
+            ))
+
+        tx = Transaction(
+            version=TX_VERSION_TRANSFER,
+            inputs=tx_inputs,
+            outputs=outputs,
+            locktime=0,
+        )
+
+        for index, utxo in enumerate(selected):
+            source_address = get_address_from_script_pubkey(utxo.output.script_pubkey)
+            if not source_address or source_address not in self.wallet._addresses:
+                raise Exception("Cannot locate signing key for onboarding reward")
+
+            info = self.wallet._addresses[source_address]
+            sig_hash = tx.get_signature_hash(index, utxo.output.script_pubkey)
+            signature = sign(sig_hash, info.private_key)
+            tx.inputs[index].script_sig = create_p2pkh_script_sig(signature, info.public_key)
+
+        success, msg = self.mempool.add_tx(
+            tx,
+            self.blockchain.utxo_set,
+            current_height,
+            blockchain=self.blockchain,
+        )
+        if not success:
+            raise Exception(f"Failed to add onboarding reward to mempool: {msg}")
+
+        if self.node:
+            await self.node.broadcast_tx(tx)
+
+        return {
+            'success': True,
+            'tx_id': tx.get_txid().hex(),
+            'recipient_address': address,
+            'pot_amount': pot_amount,
+        }
+
+    async def _grantlocaljack(self, address: str, jack_amount: float = 200.0) -> dict:
+        """로컬 QA 전용 JACK 지급."""
+        if not self.wallet:
+            raise Exception("Wallet not available")
+
+        from ..bootstrap.local_onboarding_reward import ensure_local_onboarding_reward_bootstrap
+        from ..constants import COIN, MIN_TX_FEE, TX_VERSION_TRANSFER
+        from ..core.transaction import Transaction, TxInput, TxOutput
+        from ..crypto.address import address_to_pubkey_hash, validate_address
+        from ..crypto.signature import sign
+        from ..script.standard import (
+            create_p2pkh_script_pubkey,
+            create_p2pkh_script_sig,
+            get_address_from_script_pubkey,
+        )
+
+        if not validate_address(address):
+            raise Exception(f"Invalid recipient address: {address}")
+
+        jack_satoshi = round(jack_amount * COIN)
+        required_jack_input = jack_satoshi + MIN_TX_FEE
+        current_height = self.blockchain.get_height()
+        ensure_local_onboarding_reward_bootstrap(
+            self.blockchain,
+            self.wallet,
+            enabled=True,
+            minimum_available_jack_satoshi=required_jack_input,
+        )
+        mature_utxos = self._get_visible_utxos(current_height=current_height)
+
+        selected = []
+        total_input = 0
+        for utxo in mature_utxos:
+            if utxo.output.jack_value <= 0 or utxo.output.assets:
+                continue
+            selected.append(utxo)
+            total_input += utxo.output.jack_value
+            if total_input >= required_jack_input:
+                break
+
+        if total_input < required_jack_input:
+            raise Exception("Insufficient JACK balance for local QA funding")
+
+        tx_inputs = [
+            TxInput(
+                prev_tx_id=utxo.tx_id,
+                output_index=utxo.output_index,
+                script_sig=b'',
+                sequence=0xFFFFFFFF,
+            )
+            for utxo in selected
+        ]
+
+        outputs = [
+            TxOutput(
+                jack_value=jack_satoshi,
+                script_pubkey=create_p2pkh_script_pubkey(address_to_pubkey_hash(address)),
+            )
+        ]
+
+        change_jack = total_input - required_jack_input
+        if change_jack > 0:
+            change_address = self.wallet.get_change_address()
+            outputs.append(TxOutput(
+                jack_value=change_jack,
+                script_pubkey=create_p2pkh_script_pubkey(address_to_pubkey_hash(change_address)),
+            ))
+
+        tx = Transaction(
+            version=TX_VERSION_TRANSFER,
+            inputs=tx_inputs,
+            outputs=outputs,
+            locktime=0,
+        )
+
+        for index, utxo in enumerate(selected):
+            source_address = get_address_from_script_pubkey(utxo.output.script_pubkey)
+            if not source_address or source_address not in self.wallet._addresses:
+                raise Exception("Cannot locate signing key for local QA funding")
+            info = self.wallet._addresses[source_address]
+            sig_hash = tx.get_signature_hash(index, utxo.output.script_pubkey)
+            signature = sign(sig_hash, info.private_key)
+            tx.inputs[index].script_sig = create_p2pkh_script_sig(signature, info.public_key)
+
+        success, msg = self.mempool.add_tx(
+            tx,
+            self.blockchain.utxo_set,
+            current_height,
+            blockchain=self.blockchain,
+        )
+        if not success:
+            raise Exception(f"Failed to add local JACK funding to mempool: {msg}")
+
+        if self.node:
+            await self.node.broadcast_tx(tx)
+
+        return {
+            'success': True,
+            'tx_id': tx.get_txid().hex(),
+            'recipient_address': address,
+            'jack_amount': jack_amount,
+        }
 
     # =========================================================================
     # Network Methods
@@ -610,6 +870,115 @@ class RPCServer:
             'message': 'Mining stopped',
             'blocks_mined': self._mining_stats['blocks_mined']
         }
+
+    def _mineqablocks(
+        self,
+        count: int = 1,
+        address: str = None,
+        target_digits: Optional[List[Optional[int]]] = None,
+    ) -> dict:
+        """로컬 QA 전용 결정적 블록 채굴."""
+        from ..crypto.address import validate_address
+
+        if count < 1 or count > 200:
+            raise Exception("count must be between 1 and 200")
+
+        if address:
+            miner_address = address
+        elif self.wallet:
+            addresses = self.wallet.get_addresses()
+            miner_address = addresses[0] if addresses else self.wallet.generate_address("qa-miner")
+        else:
+            raise Exception("No mining address provided")
+
+        if not validate_address(miner_address):
+            raise Exception(f"Invalid miner address: {miner_address}")
+
+        if target_digits is None:
+            normalized_digits = [None] * count
+        else:
+            if len(target_digits) != count:
+                raise Exception("target_digits length must match count")
+            normalized_digits = []
+            for value in target_digits:
+                if value is None:
+                    normalized_digits.append(None)
+                    continue
+                if not isinstance(value, int) or value < 0 or value > 15:
+                    raise Exception("target_digits values must be null or integers between 0 and 15")
+                normalized_digits.append(value)
+
+        mined_blocks = []
+        for target_digit in normalized_digits:
+            mined_blocks.append(self._mine_single_qa_block(miner_address, target_digit))
+
+        return {
+            'success': True,
+            'address': miner_address,
+            'blocks': mined_blocks,
+        }
+
+    def _mine_single_qa_block(self, miner_address: str, target_digit: Optional[int] = None) -> dict:
+        """단일 QA 블록 채굴."""
+        from ..consensus.difficulty import compact_to_target
+
+        max_nonce = 1_000_000
+        timestamp_bump = 0
+
+        while timestamp_bump < 32:
+            txs = self.mempool.get_txs_for_block()
+            tip = self.blockchain.get_tip()
+            difficulty = get_next_difficulty(
+                self.blockchain.get_height(),
+                self.blockchain.get_block_by_height
+            )
+            block = create_block_template(
+                prev_block=tip,
+                miner_address=miner_address,
+                transactions=txs,
+                difficulty_target=difficulty,
+                height=self.blockchain.get_height() + 1,
+                blockchain=self.blockchain,
+            )
+            block.header.timestamp += timestamp_bump
+            block._hash = None
+            target = compact_to_target(block.header.difficulty_target)
+
+            for nonce in range(max_nonce + 1):
+                block.header.nonce = nonce
+                block._hash = None
+                block_hash = block.get_hash()
+                if int.from_bytes(block_hash, 'big') >= target:
+                    continue
+                matched_digit = block_hash[-1] & 0x0F
+                if target_digit is not None and matched_digit != target_digit:
+                    continue
+
+                success, message = self.blockchain.add_block(block)
+                if not success:
+                    raise Exception(f"Failed to add QA-mined block: {message}")
+
+                new_height = self.blockchain.get_height()
+                for tx in block.transactions[1:]:
+                    self.mempool.remove_tx(tx.get_txid())
+                self._update_pending_commits_for_block(block, new_height)
+
+                if self.node:
+                    asyncio.create_task(self.node.broadcast_block(block))
+
+                self._mining_stats['blocks_mined'] += 1
+
+                return {
+                    'height': new_height,
+                    'hash': block.get_hash_hex(),
+                    'matched_digit': matched_digit,
+                    'target_digit': target_digit,
+                    'tx_count': len(block.transactions),
+                }
+
+            timestamp_bump += 1
+
+        raise Exception("Unable to mine a QA block with the requested target digit")
 
     async def _mining_loop(self):
         """채굴 루프"""
@@ -718,7 +1087,7 @@ class RPCServer:
             'digit_count': 6,
             'digit_base': 16,
             'comparison_blocks': 'N+3, N+6, N+9, N+12, N+15, N+18',
-            'auto_payout': 'N+18 블록에서 자동 판정 및 지급',
+            'claim_window': 'N+18 ~ N+68 수동 claim',
             'prize_table': {
                 '1st (6 matches)': 'Jackpot Pool 50%',
                 '2nd (5 matches)': '100,000 JACK',
@@ -786,7 +1155,8 @@ class RPCServer:
         success, msg = self.mempool.add_tx(
             tx,
             self.blockchain.utxo_set,
-            self.blockchain.get_height()
+            self.blockchain.get_height(),
+            blockchain=self.blockchain,
         )
 
         if not success:
@@ -808,12 +1178,7 @@ class RPCServer:
         }
 
     def _lottocheckresult(self, tx_id_hex: str) -> dict:
-        """
-        로또 결과 확인 (자동 지급이므로 조회만 가능)
-
-        Args:
-            tx_id_hex: Commit TX ID (hex)
-        """
+        """로또 결과 확인 (수동 claim 상태 포함)."""
         tx_id = bytes.fromhex(tx_id_hex)
         commit_info = self.blockchain.get_commit_info(tx_id)
 
@@ -821,21 +1186,19 @@ class RPCServer:
             raise Exception("Commit TX not found in blockchain")
 
         current_height = self.blockchain.get_height()
-        from ..constants import LOTTO_MIN_CLAIM_GAP
-        from ..gacha.commit_reveal import get_comparison_heights, calculate_result_digits, count_matches, determine_prize, calculate_payout
-
         comparison_heights = get_comparison_heights(commit_info.block_height)
-        from ..constants import LOTTO_PAYOUT_GAP
-        payout_block = commit_info.block_height + LOTTO_PAYOUT_GAP
+        claimable_height = commit_info.block_height + LOTTO_MIN_CLAIM_GAP
+        from ..constants import LOTTO_MAX_CLAIM_GAP
+        claim_expire_height = commit_info.block_height + LOTTO_MAX_CLAIM_GAP
 
         if current_height <= comparison_heights[-1]:
             return {
                 'success': False,
                 'status': 'pending',
                 'commit_height': commit_info.block_height,
-                'payout_block': payout_block,
-                'blocks_remaining': payout_block - current_height,
-                'message': f"대기 중. 블록 {payout_block}에서 자동 판정됩니다."
+                'claimable_height': claimable_height,
+                'blocks_remaining': claimable_height - current_height,
+                'message': f"대기 중. 블록 {claimable_height}부터 claim 가능합니다."
             }
 
         # 결과 계산
@@ -851,9 +1214,23 @@ class RPCServer:
         chosen = commit_info.chosen_numbers or []
         matches = count_matches(chosen, result_digits)
         prize = determine_prize(matches)
-        payout_jack, payout_pot = calculate_payout(prize, 0)
+        payout_jack, payout_pot = calculate_payout(prize, commit_info.pool_snapshot)
 
         paid = commit_info.payout_height > 0
+        claimable = (
+            not paid
+            and current_height >= claimable_height
+            and current_height <= claim_expire_height
+            and (payout_jack > 0 or payout_pot > 0)
+        )
+        if paid:
+            status = 'claimed'
+        elif current_height > claim_expire_height:
+            status = 'expired'
+        elif payout_jack > 0 or payout_pot > 0:
+            status = 'claimable'
+        else:
+            status = 'losing'
 
         return {
             'success': True,
@@ -867,8 +1244,10 @@ class RPCServer:
             'payout_jack': payout_jack / 100_000_000,
             'payout_pot': payout_pot / 100_000_000,
             'paid': paid,
-            'payout_block': payout_block,
-            'status': 'paid' if paid else ('resolved' if current_height >= payout_block else 'pending'),
+            'claimable': claimable,
+            'claimable_height': claimable_height,
+            'claim_expire_height': claim_expire_height,
+            'status': status,
         }
 
     def _listlottocommits(self, address: str = None) -> list:
@@ -1007,7 +1386,8 @@ class RPCServer:
         success, msg = self.mempool.add_tx(
             tx,
             self.blockchain.utxo_set,
-            current_height
+            current_height,
+            blockchain=self.blockchain,
         )
 
         if not success:

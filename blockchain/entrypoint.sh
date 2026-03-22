@@ -10,6 +10,8 @@ WALLET_FILE="${NODE_WALLET_FILE:-${WALLET_DIR}/default.json}"
 NODE_SEED_VALUE="${NODE_SEED:-}"
 NODE_MINE_VALUE="${NODE_MINE:-false}"
 NODE_MINING_ADDRESS_VALUE="${NODE_MINING_ADDRESS:-}"
+NODE_BOOTSTRAP_ONBOARDING_REWARD_VALUE="${NODE_BOOTSTRAP_ONBOARDING_REWARD:-false}"
+NODE_DISABLE_DISCOVERY_VALUE="${NODE_DISABLE_DISCOVERY:-false}"
 
 mkdir -p "${DATA_DIR}" "$(dirname "${WALLET_FILE}")"
 
@@ -37,6 +39,14 @@ if [ "${NODE_MINE_VALUE}" = "true" ]; then
   if [ -n "${NODE_MINING_ADDRESS_VALUE}" ]; then
     set -- "$@" --address "${NODE_MINING_ADDRESS_VALUE}"
   fi
+fi
+
+if [ "${NODE_BOOTSTRAP_ONBOARDING_REWARD_VALUE}" = "true" ]; then
+  set -- "$@" --bootstrap-onboarding-reward
+fi
+
+if [ "${NODE_DISABLE_DISCOVERY_VALUE}" = "true" ]; then
+  set -- "$@" --disable-discovery
 fi
 
 exec "$@"
