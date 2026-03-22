@@ -6,6 +6,7 @@ const navItems = [
   { to: "/lotto", label: "로또" },
   { to: "/wallet", label: "지갑" },
   { to: "/mining", label: "채굴" },
+  { to: "/learn", label: "학습" },  // [학습 프론트엔드 v2] 추가: 학습 메뉴
 ];
 
 export default function Navbar() {
