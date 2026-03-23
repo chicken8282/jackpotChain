@@ -87,12 +87,22 @@ services:
       NODE_RPC_HOST: 0.0.0.0
       NODE_RPC_PORT: "9776"
       NODE_P2P_PORT: "9777"
+      NODE_RENDEZVOUS_PORT: "9778"
+      NODE_SEED_NODE: "false"
+      NODE_MINE: "false"
+      NODE_MAX_INBOUND: "128"
+      NODE_MAX_OUTBOUND: "16"
     expose:
       - "9776"
       - "9777"
+      - "9778"
     volumes:
       - node-dev-data:/data
       - node-dev-wallets:/wallets
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     healthcheck:
       test:
         [
