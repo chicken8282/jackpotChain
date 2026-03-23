@@ -201,35 +201,6 @@ def extract_commit_numbers(script: bytes) -> Optional[list]:
     return None
 
 
-def create_claim_script(commit_tx_id: bytes) -> bytes:
-    """
-    Lotto Claim TX용 OP_RETURN
-
-    Format: OP_RETURN "CLAIM" <commit_tx_id(32 bytes)>
-    """
-    if len(commit_tx_id) != 32:
-        raise ValueError("commit_tx_id must be 32 bytes")
-    return create_op_return_script(b'CLAIM' + commit_tx_id)
-
-
-def is_claim_script(script: bytes) -> bool:
-    """Claim 스크립트인지 확인"""
-    data = extract_op_return_data(script)
-    if data is None:
-        return False
-    return data.startswith(b'CLAIM') and len(data) >= 37
-
-
-def extract_claim_commit_tx_id(script: bytes) -> Optional[bytes]:
-    """Claim 스크립트에서 원본 commit tx id를 추출한다."""
-    data = extract_op_return_data(script)
-    if data is None:
-        return None
-    if data.startswith(b'CLAIM') and len(data) >= 37:
-        return data[5:37]
-    return None
-
-
 # =============================================================================
 # 로또 자동 지급 (Payout TX - 채굴자가 블록에 포함)
 # =============================================================================

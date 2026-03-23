@@ -299,6 +299,13 @@ def create_block_template(
     # 전체 TX 리스트 (Coinbase 먼저)
     all_transactions = [coinbase_tx] + transactions
 
+    # 로또 자동 지급 TX 생성
+    if blockchain:
+        payout_txs = create_lotto_payout_txs(height, blockchain)
+        if payout_txs:
+            all_transactions.extend(payout_txs)
+            print(f"[Miner] 로또 지급 TX {len(payout_txs)}건 블록에 포함")
+
     # 블록 헤더
     header = BlockHeader(
         version=1,

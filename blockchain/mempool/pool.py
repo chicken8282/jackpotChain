@@ -60,8 +60,7 @@ class Mempool:
         self,
         tx: Transaction,
         utxo_set: UTXOSet,
-        current_height: int,
-        blockchain=None,
+        current_height: int
     ) -> tuple:
         """
         TX 추가
@@ -81,7 +80,7 @@ class Mempool:
             return False, f"TX too large: {tx_size} > {MAX_TX_SIZE}"
 
         # 검증 (mempool 내 부모 TX 출력도 참조 가능)
-        result = validate_transaction(tx, utxo_set, current_height, blockchain=blockchain, mempool=self)
+        result = validate_transaction(tx, utxo_set, current_height, mempool=self)
         if not result.is_valid:
             return False, f"Invalid TX: {result.message}"
 

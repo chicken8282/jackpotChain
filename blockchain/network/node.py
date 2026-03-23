@@ -58,7 +58,6 @@ class NodeConfig:
     rendezvous_seeds: list = None  # 랑데부 시드 노드 (ip:port)
     is_seed_node: bool = False  # True면 랑데부 서버도 실행
     allow_private_ip: bool = False  # True면 사설 IP 피어도 캐시 허용 (로컬 테스트용)
-    discovery_enabled: bool = True  # False면 외부 피어 발견/동기화 비활성화
 
 
 class Node:
@@ -195,21 +194,20 @@ class Node:
             else:
                 _log('NAT', '포트 매핑 실패 - 아웃바운드 전용 모드')
 
-        if self.config.discovery_enabled:
-            # 피어 발견 초기화
-            initial_peers = self.discovery.initialize()
-            for addr in initial_peers:
-                self.peer_manager.add_peer_address(addr)
+        # 피어 발견 초기화
+        initial_peers = self.discovery.initialize()
+        for addr in initial_peers:
+            self.peer_manager.add_peer_address(addr)
 
-            # 시드 노드에 즉시 연결
-            for addr in initial_peers[:5]:
-                asyncio.create_task(self.connect_to_peer(addr))
+        # 시드 노드에 즉시 연결
+        for addr in initial_peers[:5]:
+            asyncio.create_task(self.connect_to_peer(addr))
 
-            # 연결 유지 태스크
-            asyncio.create_task(self._maintain_connections())
+        # 연결 유지 태스크
+        asyncio.create_task(self._maintain_connections())
 
-            # 피어 발견 태스크
-            asyncio.create_task(self._discovery_loop())
+        # 피어 발견 태스크
+        asyncio.create_task(self._discovery_loop())
 
         # 동기화 워치독
         asyncio.create_task(self._sync_watchdog())
@@ -462,8 +460,7 @@ class Node:
             _log('SYNC', f'IBD 시작: 로컬={self.height}, 피어={peer.start_height}, 주소={address.ip}:{address.port}')
             await self._request_blocks(address)
         else:
-            peer_height = peer.start_height if peer else "N/A"
-            _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer_height}')
+            _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer.start_height if peer else 'N/A'}')
 
     async def _handle_ping(self, address: PeerAddress, payload: bytes):
         """PING 처리"""
@@ -655,8 +652,7 @@ class Node:
             success, msg = self.mempool.add_tx(
                 tx,
                 self.blockchain.utxo_set,
-                self.blockchain.get_height(),
-                blockchain=self.blockchain,
+                self.blockchain.get_height()
             )
             if success:
                 # 다른 피어에게 재전파
@@ -689,8 +685,7 @@ class Node:
             success, msg = self.mempool.add_tx(
                 tx,
                 self.blockchain.utxo_set,
-                self.blockchain.get_height(),
-                blockchain=self.blockchain,
+                self.blockchain.get_height()
             )
             if success:
                 resolved.append(txid)

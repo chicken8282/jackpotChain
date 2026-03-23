@@ -36,13 +36,10 @@ def main():
     # node 명령
     node_parser = subparsers.add_parser('node', help='Run a node')
     node_parser.add_argument('--port', type=int, default=9777, help='P2P port')
-    node_parser.add_argument('--rpc-host', default='127.0.0.1', help='RPC host')
     node_parser.add_argument('--rpc-port', type=int, default=9776, help='RPC port')
     node_parser.add_argument('--data-dir', default=None, help='Data directory (default: %%APPDATA%%/JackpotChain/data)')
     node_parser.add_argument('--wallet-file', default=None, help='Wallet file path (default: %%APPDATA%%/JackpotChain/wallets/default.json)')
     node_parser.add_argument('--seed', action='append', help='Seed node (ip:port)')
-    node_parser.add_argument('--bootstrap-onboarding-reward', action='store_true', help='Enable local onboarding reward fee bootstrap')
-    node_parser.add_argument('--disable-discovery', action='store_true', help='Disable outbound peer discovery and sync')
     # 채굴 통합 옵션
     node_parser.add_argument('--mine', action='store_true', help='Enable mining')
     node_parser.add_argument('--address', help='Mining reward address (required if --mine)')
@@ -90,7 +87,6 @@ def main():
 def run_node(args):
     """노드 실행 (채굴 통합 지원)"""
     from jackpotchain.consensus.chain import Blockchain
-    from jackpotchain.bootstrap.local_onboarding_reward import ensure_local_onboarding_reward_bootstrap
     from jackpotchain.network.node import Node, NodeConfig
     from jackpotchain.rpc.server import RPCServer
     from jackpotchain.mempool.pool import Mempool
@@ -119,19 +115,12 @@ def run_node(args):
     mempool = Mempool()
     # 지갑 파일 로드
     wallet = Wallet(wallet_file)
-    if args.bootstrap_onboarding_reward:
-        bootstrap_result = ensure_local_onboarding_reward_bootstrap(blockchain, wallet, enabled=True)
-        print(
-            "[Local Bootstrap] onboarding reward funding address="
-            f"{bootstrap_result.address} created={bootstrap_result.created}"
-        )
 
     config = NodeConfig(
         port=args.port,
         is_seed_node=args.seed_node,
         rendezvous_port=args.rendezvous_port,
         rendezvous_seeds=args.rendezvous_seed or [],
-        discovery_enabled=not args.disable_discovery,
     )
     node = Node(config, blockchain, mempool)
 
@@ -152,7 +141,6 @@ def run_node(args):
         node=node,
         data_dir=data_dir,
         wallet_dir=wallet_dir,
-        host=args.rpc_host,
         port=args.rpc_port
     )
 
@@ -309,7 +297,7 @@ def run_node(args):
         await node.start()
         await rpc.start()
 
-        print(f"Node running. RPC at http://{args.rpc_host}:{args.rpc_port}")
+        print(f"Node running. RPC at http://127.0.0.1:{args.rpc_port}")
 
         tasks = []
 
