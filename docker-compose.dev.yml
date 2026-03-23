@@ -8,11 +8,10 @@ networks:
 
 volumes:
   postgresql-dev-data:
-    driver: local
   redis-dev-data:
-    driver: local
   rabbitmq-dev-data:
-    driver: local
+  node-dev-data:
+  node-dev-wallets:
 
 services:
   postgresql-dev:
@@ -24,17 +23,13 @@ services:
     env_file:
       - .env.dev
     environment:
-      POSTGRES_DB: ${DB_NAME:-jackpotchain_dev}
-      POSTGRES_USER: ${DB_USERNAME:-jackpot}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgresql-dev-data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${DB_USERNAME:-jackpot} -d ${DB_NAME:-jackpotchain_dev}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -77,8 +72,40 @@ services:
       timeout: 5s
       retries: 5
 
+  jackpotchain-node-dev:
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG}
+    container_name: jc-node-dev
+    restart: unless-stopped
+    networks:
+      - dev-net
+      - monitoring-net
+    env_file:
+      - .env.dev
+    environment:
+      NODE_DATA_DIR: /data
+      NODE_WALLET_FILE: /wallets/default.json
+      NODE_RPC_HOST: 0.0.0.0
+      NODE_RPC_PORT: "9776"
+      NODE_P2P_PORT: "9777"
+    expose:
+      - "9776"
+      - "9777"
+    volumes:
+      - node-dev-data:/data
+      - node-dev-wallets:/wallets
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -sf -X POST http://localhost:9776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   spring-dev:
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_IMAGE_BE:-jackpotchain-be}:${IMAGE_TAG:-develop}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
     container_name: jc-spring-dev
     restart: unless-stopped
     networks:
@@ -88,7 +115,7 @@ services:
       - .env.dev
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_URL: jdbc:postgresql://postgresql-dev:5432/${DB_NAME:-jackpotchain_dev}
+      DB_URL: jdbc:postgresql://postgresql-dev:5432/${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis-dev
@@ -99,16 +126,18 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node:8332
+      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node-dev:9776
       JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseContainerSupport"
     ports:
-      - "8082:8080"
+      - "127.0.0.1:8091:8080"
     depends_on:
       postgresql-dev:
         condition: service_healthy
       redis-dev:
         condition: service_healthy
       rabbitmq-dev:
+        condition: service_healthy
+      jackpotchain-node-dev:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
@@ -118,13 +147,16 @@ services:
       start_period: 30s
 
   frontend-dev:
-    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_IMAGE_FE:-jackpotchain-fe}:${IMAGE_TAG:-develop}
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
     container_name: jc-frontend-dev
     restart: unless-stopped
     networks:
       - dev-net
     ports:
-      - "3001:80"
+      - "127.0.0.1:8011:80"
+    depends_on:
+      spring-dev:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
       interval: 10s

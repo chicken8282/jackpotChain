@@ -1,32 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { useAnimateOnScroll } from "../../hooks/useAnimateOnScroll";
 import { dashboardStats } from "./dashboardMockData";
 
-const nodes = [
-  { id: "center", x: 210, y: 148, size: 16, label: "중앙 노드" },
-  { id: "n1", x: 128, y: 94, size: 11, label: "노드 01" },
-  { id: "n2", x: 212, y: 72, size: 11, label: "노드 02" },
-  { id: "n3", x: 294, y: 96, size: 11, label: "노드 03" },
-  { id: "n4", x: 98, y: 182, size: 10, label: "노드 04" },
-  { id: "n5", x: 320, y: 184, size: 10, label: "노드 05" },
-  { id: "n6", x: 146, y: 244, size: 11, label: "노드 06" },
-  { id: "n7", x: 274, y: 246, size: 11, label: "노드 07" },
-];
-
-const links = [
-  ["center", "n1"],
-  ["center", "n2"],
-  ["center", "n3"],
-  ["center", "n4"],
-  ["center", "n5"],
-  ["center", "n6"],
-  ["center", "n7"],
-  ["n1", "n2"],
-  ["n2", "n3"],
-  ["n4", "n6"],
-  ["n5", "n7"],
-] as const;
+interface NodeDef {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+  label: string;
+}
 
 interface NodeNetworkProps {
   activeNodes?: number;
@@ -36,9 +19,41 @@ export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
   const [activeNode, setActiveNode] = useState<string | null>(null);
 
+  const nodes = useMemo<NodeDef[]>(() => {
+    const count = Math.min(activeNodes, 8);
+    const cx = 210;
+    const cy = 148;
+    const rx = 95;
+    const ry = 75;
+    const center: NodeDef = { id: "center", x: cx, y: cy, size: 16, label: "서버 노드" };
+    const peripheral: NodeDef[] = Array.from({ length: count }, (_, i) => {
+      const angle = (2 * Math.PI * i) / count - Math.PI / 2;
+      return {
+        id: `n${i + 1}`,
+        x: Math.round(cx + rx * Math.cos(angle)),
+        y: Math.round(cy + ry * Math.sin(angle)),
+        size: i % 3 === 0 ? 11 : 10,
+        label: `노드 ${String(i + 1).padStart(2, "0")}`,
+      };
+    });
+    return [center, ...peripheral];
+  }, [activeNodes]);
+
+  const links = useMemo<Array<[string, string]>>(() => {
+    const count = Math.min(activeNodes, 8);
+    const result: Array<[string, string]> = [];
+    for (let i = 0; i < count; i++) {
+      result.push(["center", `n${i + 1}`]);
+    }
+    for (let i = 0; i < count - 1; i++) {
+      result.push([`n${i + 1}`, `n${i + 2}`]);
+    }
+    return result;
+  }, [activeNodes]);
+
   const getCurve = (
-    start: (typeof nodes)[number],
-    end: (typeof nodes)[number],
+    start: NodeDef,
+    end: NodeDef,
     from: string,
     to: string,
   ) => {
