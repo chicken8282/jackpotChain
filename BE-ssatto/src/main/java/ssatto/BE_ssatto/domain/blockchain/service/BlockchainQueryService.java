@@ -82,7 +82,9 @@ public class BlockchainQueryService {
             block.nonce(),
             block.difficultyDisplay(),
             block.minerAddress(),
-            block.mainChain()
+            block.mainChain(),
+            block.merkleRoot(),
+            calculateJackpotContribution(block.feeRewardJack())
         );
     }
 
@@ -101,7 +103,8 @@ public class BlockchainQueryService {
                 toLocalDateTime(block.timestamp()),
                 block.minerAddress(),
                 block.rewardJack(),
-                block.confirmations()
+                block.confirmations(),
+                calculateJackpotContribution(block.feeRewardJack())
             ));
         }
 
@@ -114,6 +117,10 @@ public class BlockchainQueryService {
             nodes.add(index + 1);
         }
         return nodes;
+    }
+
+    private long calculateJackpotContribution(long feeRewardJack) {
+        return feeRewardJack * 30 / 100;
     }
 
     private LocalDateTime toLocalDateTime(long epochSeconds) {

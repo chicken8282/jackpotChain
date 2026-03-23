@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
  * @param minerLabel 채굴자 라벨
  * @param rewardJack 블록 보상
  * @param confirmations 확인 수
+ * @param jackpotContribution 잭팟 풀 적립분 (수수료의 30%)
  */
 public record BlockchainDashboardBlockResponse(
     long height,
@@ -20,6 +21,7 @@ public record BlockchainDashboardBlockResponse(
     LocalDateTime minedAt,
     String minerLabel,
     long rewardJack,
-    int confirmations
+    int confirmations,
+    long jackpotContribution
 ) {
 }

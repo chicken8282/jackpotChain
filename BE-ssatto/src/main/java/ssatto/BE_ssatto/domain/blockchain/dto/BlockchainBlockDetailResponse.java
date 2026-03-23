@@ -19,6 +19,8 @@ import java.time.LocalDateTime;
  * @param difficulty 표시용 난이도 문자열
  * @param minerName 채굴자 라벨 또는 주소
  * @param isMainChain 메인 체인 여부
+ * @param merkleRoot 머클 루트
+ * @param jackpotContribution 잭팟 풀 적립분 (수수료의 30%)
  */
 public record BlockchainBlockDetailResponse(
     long height,
@@ -34,6 +36,8 @@ public record BlockchainBlockDetailResponse(
     long nonce,
     String difficulty,
     String minerName,
-    boolean isMainChain
+    boolean isMainChain,
+    String merkleRoot,
+    long jackpotContribution
 ) {
 }

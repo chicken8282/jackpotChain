@@ -89,6 +89,8 @@ class BlockchainQueryServiceTest {
         assertThat(response.difficulty()).isEqualTo("0x1E100000");
         assertThat(response.minerName()).isEqualTo("JACK_TEST_ADDRESS");
         assertThat(response.isMainChain()).isTrue();
+        assertThat(response.merkleRoot()).isEqualTo("merkle");
+        assertThat(response.jackpotContribution()).isEqualTo(90_000_000L);
     }
 
     private JackpotChainBlock block(
