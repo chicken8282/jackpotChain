@@ -155,6 +155,7 @@ class RPCServer:
         # Exchange (JACK -> POT)
         self._methods['exchangetopot'] = self._exchangetopot
         self._methods['getexchangeinfo'] = self._getexchangeinfo
+        self._methods['grantonboardingreward'] = self._grantonboardingreward
 
         # Wallet Management
         self._methods['listwallets'] = self._listwallets
@@ -1016,6 +1017,118 @@ class RPCServer:
             'jack_burned': result.jack_burned / COIN,
             'pot_received': result.pot_amount / COIN,
             'jack_change': result.jack_change / COIN,
+        }
+
+    # =========================================================================
+    # Onboarding Reward
+    # =========================================================================
+
+    async def _grantonboardingreward(self, recipient_address: str) -> dict:
+        """
+        신규 지갑에 온보딩 보상 지급 (1 POT)
+
+        서버 운영자 지갑에서 100 JACK을 교환하여 1 POT을 recipient_address로 전송.
+
+        Args:
+            recipient_address: 보상 받을 지갑 주소
+
+        Returns:
+            {tx_id, pot_amount}
+        """
+        if not self.wallet:
+            raise Exception("Wallet not available")
+
+        from ..asset.exchange import calculate_exchange, create_exchange_tx
+        from ..constants import COIN, EXCHANGE_RATE
+        from ..crypto.address import validate_address
+
+        if not validate_address(recipient_address):
+            raise Exception(f"Invalid recipient address: {recipient_address}")
+
+        # 1 POT = 100 JACK
+        jack_satoshi = EXCHANGE_RATE * COIN
+
+        # 교환 계산
+        result = calculate_exchange(jack_satoshi)
+        if not result.success:
+            raise Exception(result.error)
+
+        # 운영자 지갑 UTXO 선택
+        utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
+        current_height = self.blockchain.get_height()
+
+        mature_utxos = [
+            u for u in utxos
+            if u.is_mature(current_height)
+            and not (self.mempool and self.mempool.is_utxo_spent(u.tx_id, u.output_index))
+        ]
+
+        # 충분한 JACK 수집
+        selected = []
+        total = 0
+        for utxo in mature_utxos:
+            if utxo.output.jack_value > 0:
+                from ..core.transaction import TxInput
+                inp = TxInput(
+                    prev_tx_id=utxo.tx_id,
+                    output_index=utxo.output_index,
+                    script_sig=b'',
+                    sequence=0xFFFFFFFF
+                )
+                selected.append((inp, utxo))
+                total += utxo.output.jack_value
+                if total >= jack_satoshi:
+                    break
+
+        if total < jack_satoshi:
+            raise Exception(
+                f"Insufficient JACK in operator wallet: "
+                f"{total / COIN} < {EXCHANGE_RATE} JACK required"
+            )
+
+        # 잔돈 주소는 운영자 지갑
+        change_addr = self.wallet.get_change_address()
+
+        # 교환 TX 생성 — POT 수신자는 recipient_address
+        tx, error = create_exchange_tx(
+            inputs=selected,
+            exchange_jack=jack_satoshi,
+            recipient_address=recipient_address,
+            change_address=change_addr
+        )
+
+        if error:
+            raise Exception(error)
+
+        # 서명 (운영자 지갑 키로)
+        from ..crypto.signature import sign
+        from ..script.standard import create_p2pkh_script_sig, get_address_from_script_pubkey
+
+        for i, (inp, utxo) in enumerate(selected):
+            addr = get_address_from_script_pubkey(utxo.output.script_pubkey)
+            if addr and addr in self.wallet._addresses:
+                info = self.wallet._addresses[addr]
+                sig_hash = tx.get_signature_hash(i, utxo.output.script_pubkey)
+                signature = sign(sig_hash, info.private_key)
+                tx.inputs[i].script_sig = create_p2pkh_script_sig(signature, info.public_key)
+
+        # Mempool 추가
+        success, msg = self.mempool.add_tx(
+            tx,
+            self.blockchain.utxo_set,
+            current_height
+        )
+
+        if not success:
+            raise Exception(f"Failed to add to mempool: {msg}")
+
+        # 네트워크 전파
+        if self.node:
+            await self.node.broadcast_tx(tx)
+
+        return {
+            'tx_id': tx.get_txid().hex(),
+            'pot_amount': result.pot_amount / COIN,
         }
 
     # =========================================================================
