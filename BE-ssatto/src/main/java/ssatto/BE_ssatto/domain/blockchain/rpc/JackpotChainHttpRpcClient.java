@@ -386,6 +386,33 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     }
 
     /**
+     * mempool 트랜잭션 상세 목록을 조회한다.
+     *
+     * @return txId → 항목 맵
+     */
+    @Override
+    public Map<String, MempoolTransactionEntry> getRawMempool() {
+        JsonNode responseNode = invoke("getrawmempool", List.of(true));
+        JsonNode resultNode = responseNode.path("result");
+        if (!resultNode.isObject()) {
+            return Map.of();
+        }
+
+        Map<String, MempoolTransactionEntry> entries = new LinkedHashMap<>();
+        Iterator<Map.Entry<String, JsonNode>> fields = resultNode.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> field = fields.next();
+            JsonNode entryNode = field.getValue();
+            entries.put(field.getKey(), new MempoolTransactionEntry(
+                entryNode.path("fee").asLong(0),
+                entryNode.path("size").asInt(0),
+                entryNode.path("time").asLong(0)
+            ));
+        }
+        return entries;
+    }
+
+    /**
      * 신규 지갑 onboarding 용 1 POT 지급을 수행한다.
      *
      * @param address 지급 대상 지갑 주소

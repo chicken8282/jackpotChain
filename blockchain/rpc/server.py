@@ -155,6 +155,7 @@ class RPCServer:
         # Exchange (JACK -> POT)
         self._methods['exchangetopot'] = self._exchangetopot
         self._methods['getexchangeinfo'] = self._getexchangeinfo
+        self._methods['grantonboardingreward'] = self._grantonboardingreward
 
         # Wallet Management
         self._methods['listwallets'] = self._listwallets
@@ -251,7 +252,7 @@ class RPCServer:
         return {
             'chain': 'jackpotchain',
             'blocks': self.blockchain.get_height(),
-            'bestblockhash': self.blockchain.get_tip_hash().hex(),
+            'bestblockhash': self.blockchain.get_tip_hash()[::-1].hex(),
             'difficulty': self.blockchain.get_difficulty(),
             'mediantime': 0,
             'verificationprogress': 1.0,
@@ -260,7 +261,7 @@ class RPCServer:
 
     def _getblock(self, blockhash: str, verbosity: int = 1) -> Any:
         """블록 조회"""
-        block_hash = bytes.fromhex(blockhash)
+        block_hash = bytes.fromhex(blockhash)[::-1]
         block = self.blockchain.get_block(block_hash)
 
         if block is None:
@@ -270,19 +271,72 @@ class RPCServer:
             return block.serialize().hex()
 
         index = self.blockchain.get_block_index(block_hash)
-        return {
+        height = index.height if index else 0
+
+        # 코인베이스 TX에서 보상/수수료/채굴자 주소 추출
+        reward_jack = 0
+        fee_reward_jack = 0
+        miner_address = None
+        if block.transactions:
+            coinbase_tx = block.transactions[0]
+            for out in coinbase_tx.outputs:
+                reward_jack += out.jack_value
+            from ..constants import BLOCK_REWARD
+            base_reward = BLOCK_REWARD
+            fee_reward_jack = max(0, reward_jack - base_reward)
+            # 채굴자 주소: 코인베이스 첫 출력
+            if coinbase_tx.outputs:
+                from ..script.standard import get_address_from_script_pubkey
+                miner_address = get_address_from_script_pubkey(coinbase_tx.outputs[0].script_pubkey)
+
+        result = {
             'hash': block.get_hash_hex(),
             'confirmations': self.blockchain.get_confirmations(block_hash),
-            'height': index.height if index else 0,
+            'height': height,
             'version': block.header.version,
+            'versionHex': f'0x{block.header.version:08x}',
             'merkleroot': block.header.merkle_root.hex(),
             'time': block.header.timestamp,
             'nonce': block.header.nonce,
             'difficulty': block.header.difficulty_target,
+            'difficultyDisplay': hex(block.header.difficulty_target),
             'nTx': len(block.transactions),
-            'previousblockhash': block.header.prev_block_hash.hex(),
-            'tx': [tx.get_txid().hex() for tx in block.transactions] if verbosity > 1 else [],
+            'previousblockhash': block.header.prev_block_hash[::-1].hex(),
+            'rewardJack': reward_jack,
+            'feeRewardJack': fee_reward_jack,
+            'minerAddress': miner_address,
+            'isMainChain': self.blockchain.is_in_main_chain(block_hash),
         }
+
+        if verbosity > 1:
+            tx_list = []
+            for tx in block.transactions:
+                inputs = []
+                for inp in tx.inputs:
+                    inputs.append({
+                        'txid': inp.prev_tx_id[::-1].hex() if inp.prev_tx_id else '0' * 64,
+                        'vout': inp.output_index,
+                    })
+                outputs = []
+                for idx, out in enumerate(tx.outputs):
+                    from ..script.standard import get_address_from_script_pubkey
+                    addr = get_address_from_script_pubkey(out.script_pubkey)
+                    outputs.append({
+                        'n': idx,
+                        'jack_value': out.jack_value,
+                        'assets': {k: v for k, v in out.assets.items()} if hasattr(out, 'assets') and out.assets else {},
+                        'script_pubkey_hex': out.script_pubkey.hex(),
+                        'address': addr,
+                    })
+                tx_list.append({
+                    'txid': tx.get_txid().hex(),
+                    'version': tx.version,
+                    'inputs': inputs,
+                    'outputs': outputs,
+                })
+            result['tx'] = tx_list
+
+        return result
 
     def _getblockhash(self, height: int) -> str:
         """높이로 블록 해시 조회"""
@@ -297,7 +351,7 @@ class RPCServer:
 
     def _getbestblockhash(self) -> str:
         """최신 블록 해시"""
-        return self.blockchain.get_tip_hash().hex()
+        return self.blockchain.get_tip_hash()[::-1].hex()
 
     def _getrecentblocks(self, count: int = 10) -> list:
         """최근 N개 블록 요약"""
@@ -1016,6 +1070,118 @@ class RPCServer:
             'jack_burned': result.jack_burned / COIN,
             'pot_received': result.pot_amount / COIN,
             'jack_change': result.jack_change / COIN,
+        }
+
+    # =========================================================================
+    # Onboarding Reward
+    # =========================================================================
+
+    async def _grantonboardingreward(self, recipient_address: str) -> dict:
+        """
+        신규 지갑에 온보딩 보상 지급 (1 POT)
+
+        서버 운영자 지갑에서 100 JACK을 교환하여 1 POT을 recipient_address로 전송.
+
+        Args:
+            recipient_address: 보상 받을 지갑 주소
+
+        Returns:
+            {tx_id, pot_amount}
+        """
+        if not self.wallet:
+            raise Exception("Wallet not available")
+
+        from ..asset.exchange import calculate_exchange, create_exchange_tx
+        from ..constants import COIN, EXCHANGE_RATE
+        from ..crypto.address import validate_address
+
+        if not validate_address(recipient_address):
+            raise Exception(f"Invalid recipient address: {recipient_address}")
+
+        # 1 POT = 100 JACK
+        jack_satoshi = EXCHANGE_RATE * COIN
+
+        # 교환 계산
+        result = calculate_exchange(jack_satoshi)
+        if not result.success:
+            raise Exception(result.error)
+
+        # 운영자 지갑 UTXO 선택
+        utxos = self.wallet.get_utxos(self.blockchain.utxo_set)
+        current_height = self.blockchain.get_height()
+
+        mature_utxos = [
+            u for u in utxos
+            if u.is_mature(current_height)
+            and not (self.mempool and self.mempool.is_utxo_spent(u.tx_id, u.output_index))
+        ]
+
+        # 충분한 JACK 수집
+        selected = []
+        total = 0
+        for utxo in mature_utxos:
+            if utxo.output.jack_value > 0:
+                from ..core.transaction import TxInput
+                inp = TxInput(
+                    prev_tx_id=utxo.tx_id,
+                    output_index=utxo.output_index,
+                    script_sig=b'',
+                    sequence=0xFFFFFFFF
+                )
+                selected.append((inp, utxo))
+                total += utxo.output.jack_value
+                if total >= jack_satoshi:
+                    break
+
+        if total < jack_satoshi:
+            raise Exception(
+                f"Insufficient JACK in operator wallet: "
+                f"{total / COIN} < {EXCHANGE_RATE} JACK required"
+            )
+
+        # 잔돈 주소는 운영자 지갑
+        change_addr = self.wallet.get_change_address()
+
+        # 교환 TX 생성 — POT 수신자는 recipient_address
+        tx, error = create_exchange_tx(
+            inputs=selected,
+            exchange_jack=jack_satoshi,
+            recipient_address=recipient_address,
+            change_address=change_addr
+        )
+
+        if error:
+            raise Exception(error)
+
+        # 서명 (운영자 지갑 키로)
+        from ..crypto.signature import sign
+        from ..script.standard import create_p2pkh_script_sig, get_address_from_script_pubkey
+
+        for i, (inp, utxo) in enumerate(selected):
+            addr = get_address_from_script_pubkey(utxo.output.script_pubkey)
+            if addr and addr in self.wallet._addresses:
+                info = self.wallet._addresses[addr]
+                sig_hash = tx.get_signature_hash(i, utxo.output.script_pubkey)
+                signature = sign(sig_hash, info.private_key)
+                tx.inputs[i].script_sig = create_p2pkh_script_sig(signature, info.public_key)
+
+        # Mempool 추가
+        success, msg = self.mempool.add_tx(
+            tx,
+            self.blockchain.utxo_set,
+            current_height
+        )
+
+        if not success:
+            raise Exception(f"Failed to add to mempool: {msg}")
+
+        # 네트워크 전파
+        if self.node:
+            await self.node.broadcast_tx(tx)
+
+        return {
+            'tx_id': tx.get_txid().hex(),
+            'pot_amount': result.pot_amount / COIN,
         }
 
     # =========================================================================

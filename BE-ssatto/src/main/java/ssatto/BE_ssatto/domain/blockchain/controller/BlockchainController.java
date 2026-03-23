@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainBlockDetailResponse;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainDashboardResponse;
+import ssatto.BE_ssatto.domain.blockchain.dto.MempoolTransactionResponse;
+
+import java.util.List;
 import ssatto.BE_ssatto.domain.blockchain.service.BlockchainQueryService;
 import ssatto.BE_ssatto.global.exception.BusinessException;
 import ssatto.BE_ssatto.global.exception.ErrorCode;
@@ -29,6 +32,7 @@ public class BlockchainController {
     private static final int SUCCESS_CODE = HttpStatus.OK.value();
     private static final String DASHBOARD_SUCCESS_MESSAGE = "대시보드 조회가 완료되었습니다.";
     private static final String BLOCK_DETAIL_SUCCESS_MESSAGE = "블록 상세 조회가 완료되었습니다.";
+    private static final String MEMPOOL_SUCCESS_MESSAGE = "멤풀 트랜잭션 조회가 완료되었습니다.";
 
     private final BlockchainQueryService blockchainQueryService;
 
@@ -64,6 +68,20 @@ public class BlockchainController {
             SUCCESS_CODE,
             BLOCK_DETAIL_SUCCESS_MESSAGE,
             blockchainQueryService.getBlockDetail(height)
+        );
+    }
+
+    /**
+     * 멤풀 트랜잭션 목록을 조회한다.
+     *
+     * @return 멤풀 트랜잭션 목록
+     */
+    @GetMapping("/mempool/transactions")
+    public ApiResponse<List<MempoolTransactionResponse>> getMempoolTransactions() {
+        return ApiResponse.success(
+            SUCCESS_CODE,
+            MEMPOOL_SUCCESS_MESSAGE,
+            blockchainQueryService.getMempoolTransactions()
         );
     }
 }

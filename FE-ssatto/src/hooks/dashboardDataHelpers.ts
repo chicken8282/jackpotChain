@@ -25,6 +25,8 @@ export interface BlockDetailApiResponse {
   difficulty: string;
   minerName: string | null;
   isMainChain: boolean;
+  merkleRoot: string | null;
+  jackpotContribution: number;
 }
 
 function formatDateTime(value: string) {
@@ -63,7 +65,7 @@ export function mapDashboardBlock(
     hash: summary.hash,
     reward: summary.rewardJack / 100_000_000,
     feeReward: detail.feeReward / 100_000_000,
-    jackpotContribution: 0,
+    jackpotContribution: detail.jackpotContribution / 100_000_000,
     status: "confirmed",
     txCount: summary.txCount,
     confirmations: summary.confirmations,
@@ -75,5 +77,6 @@ export function mapDashboardBlock(
     miningElapsed: `${detail.miningElapsed}초`,
     isMainChain: detail.isMainChain,
     minerLabel: summary.minerLabel ?? detail.minerName ?? "Unknown Miner",
+    merkleRoot: detail.merkleRoot ?? undefined,
   };
 }

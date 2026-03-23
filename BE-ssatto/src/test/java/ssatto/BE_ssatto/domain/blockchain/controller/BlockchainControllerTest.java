@@ -65,7 +65,8 @@ class BlockchainControllerTest {
                     LocalDateTime.of(2024, 3, 19, 1, 23, 20),
                     null,
                     5_000_000_000L,
-                    8
+                    8,
+                    90_000_000L
                 )),
                 List.of(1, 2)
             ));
@@ -113,7 +114,9 @@ class BlockchainControllerTest {
                 12345L,
                 "0x1E100000",
                 "JACK_TEST_ADDRESS",
-                true
+                true,
+                "merkle",
+                90_000_000L
             ));
 
         mockMvc.perform(get("/api/v1/blockchain/blocks/11")
