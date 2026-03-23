@@ -155,8 +155,13 @@ COINBASE_MATURITY = 100          # Coinbase 사용 가능까지 필요한 확인
 # =============================================================================
 # 네트워크 제한
 # =============================================================================
+<<<<<<< HEAD:blockchain/constants.py
 MAX_OUTBOUND_CONNECTIONS = int(os.environ.get('NODE_MAX_OUTBOUND', 8))
 MAX_INBOUND_CONNECTIONS = int(os.environ.get('NODE_MAX_INBOUND', 32))  # 시드노드는 많은 연결 수용
+=======
+MAX_OUTBOUND_CONNECTIONS = 8
+MAX_INBOUND_CONNECTIONS = 32  # 시드노드는 많은 연결 수용
+>>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/constants.py
 MAX_INV_SIZE = 50000             # INV 메시지 최대 항목
 MAX_HEADERS_SIZE = 2000          # HEADERS 응답 최대 개수
 
