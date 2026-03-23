@@ -2,13 +2,13 @@ import { motion } from "motion/react";
 import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
 import { useAnimateOnScroll } from "../../hooks/useAnimateOnScroll";
-import { dashboardStats } from "./dashboardMockData";
 
 interface JackpotPoolProps {
   className?: string;
+  value?: number;
 }
 
-export default function JackpotPool({ className = "" }: JackpotPoolProps) {
+export default function JackpotPool({ className = "", value = 0 }: JackpotPoolProps) {
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
   const coins = Array.from({ length: 8 }, (_, index) => ({
     id: index,
@@ -77,7 +77,7 @@ export default function JackpotPool({ className = "" }: JackpotPoolProps) {
           <div className="mt-[36px]">
             <div className="flex items-baseline gap-3">
               <p className="font-display text-5xl sm:text-[4.5rem] font-black tracking-[-0.04em] text-white drop-shadow-[0_0_30px_rgba(245,158,11,0.2)]">
-                <AnimatedNumber value={dashboardStats.jackpotPool} delay={0.12} />
+                <AnimatedNumber value={value} delay={0.12} />
               </p>
               <p className="text-2xl font-bold text-accent-gold">JACK</p>
             </div>

@@ -1,10 +1,11 @@
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { createWalletCredentials } from "../../lib/crypto/wallet";
 import AnimatedNumber from "../common/AnimatedNumber";
 import GoldButton from "../common/GoldButton";
-import { useWalletStore } from "../../stores/useWalletStore";
 import { getWalletTheme, WALLET_THEME_OPTIONS, type WalletThemeId } from "./walletThemes";
+import { prepareWalletAddSubmission } from "../../services/walletAddFormService";
 
 interface WalletEntry {
   nickname: string;
@@ -21,17 +22,10 @@ interface WalletInfoProps {
   onAddWallet?: (
     nickname: string,
     type: "create" | "restore",
-    payload?: { address?: string; privateKey?: string },
+    payload?: { address?: string; privateKey?: string; password?: string },
     color?: WalletThemeId,
   ) => void;
-}
-
-function generateAddress() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(40, "0").slice(0, 40)}`;
-}
-
-function generatePrivateKey() {
-  return `0x${Math.random().toString(16).slice(2).toUpperCase().padEnd(64, "A").slice(0, 64)}`;
+  onExchangeJackToPot?: (walletAddress: string) => Promise<void> | void;
 }
 
 export default function WalletInfo({
@@ -39,24 +33,40 @@ export default function WalletInfo({
   activeIndex,
   onChangeIndex,
   onAddWallet,
+  onExchangeJackToPot,
 }: WalletInfoProps) {
-  const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
-
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"choose" | "create" | "restore">("choose");
   const [newNickname, setNewNickname] = useState("");
   const [newColor, setNewColor] = useState<WalletThemeId>("gray");
-  const [restoreAddress, setRestoreAddress] = useState("");
   const [restorePrivateKey, setRestorePrivateKey] = useState("");
+  const [generatedAddress, setGeneratedAddress] = useState("");
+  const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showTooltip, setShowTooltip] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [isExchanging, setIsExchanging] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const lastNavTime = useRef(0);
   const navCooldown = 350;
 
   const total = wallets.length;
-  const activeWallet = wallets[activeIndex];
-  const activeTheme = getWalletTheme(activeWallet.color);
+  const resolvedActiveIndex = activeIndex >= 0 && activeIndex < total ? activeIndex : 0;
+  const activeWallet = wallets[resolvedActiveIndex];
+  const activeTheme = getWalletTheme(activeWallet?.color ?? "gray");
+
+  useEffect(() => {
+    if (!showAddModal || addMode !== "create") {
+      return;
+    }
+
+    const credentials = createWalletCredentials();
+    setGeneratedAddress(credentials.address);
+    setGeneratedPrivateKey(credentials.privateKey);
+    setModalError(null);
+  }, [addMode, showAddModal]);
 
   const navigate = useCallback(
     (dir: 1 | -1) => {
@@ -66,9 +76,9 @@ export default function WalletInfo({
       }
 
       lastNavTime.current = now;
-      onChangeIndex((activeIndex + dir + total) % total);
+      onChangeIndex((resolvedActiveIndex + dir + total) % total);
     },
-    [activeIndex, total, onChangeIndex],
+    [resolvedActiveIndex, total, onChangeIndex],
   );
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -79,46 +89,61 @@ export default function WalletInfo({
     }
   };
 
-  const handleExchangeJackToPot = () => {
-    if (activeIndex !== 0) {
-      setExchangeError("추가된 Mock 지갑에서는 교환 기능을 사용할 수 없습니다.");
-      setTimeout(() => setExchangeError(null), 2500);
-      return;
-    }
-
+  const handleExchangeJackToPot = async () => {
     if (activeWallet.jackBalance < 100) {
       setExchangeError("JACK 잔액이 부족합니다. 최소 100 JACK이 필요합니다.");
       setTimeout(() => setExchangeError(null), 2500);
       return;
     }
 
-    exchangeJackToPot(100);
-  };
-
-  const handleAdd = () => {
-    if (!newNickname.trim()) {
+    if (!onExchangeJackToPot) {
       return;
     }
 
-    onAddWallet?.(
-      newNickname.trim(),
-      addMode === "restore" ? "restore" : "create",
-      addMode === "restore"
-        ? { address: restoreAddress.trim(), privateKey: restorePrivateKey.trim() }
-        : { address: generateAddress(), privateKey: generatePrivateKey() },
-      newColor,
-    );
-    setShowAddModal(false);
-    setAddMode("choose");
-    setNewNickname("");
-    setNewColor("gray");
-    setRestoreAddress("");
-    setRestorePrivateKey("");
-    onChangeIndex(wallets.length);
+    setExchangeError(null);
+    setIsExchanging(true);
+    try {
+      await onExchangeJackToPot(activeWallet.address);
+    } catch (error) {
+      setExchangeError(error instanceof Error ? error.message : "교환 처리에 실패했습니다.");
+    } finally {
+      setIsExchanging(false);
+    }
+  };
+
+  const handleAdd = () => {
+    try {
+      const submission = prepareWalletAddSubmission({
+        mode: addMode === "restore" ? "restore" : "create",
+        nickname: newNickname,
+        color: newColor,
+        password,
+        passwordConfirm,
+        restorePrivateKey,
+        generatedCredentials: {
+          address: generatedAddress,
+          privateKey: generatedPrivateKey,
+        },
+      });
+
+      onAddWallet?.(submission.nickname, submission.type, submission.payload, submission.color);
+      setShowAddModal(false);
+      setAddMode("choose");
+      setNewNickname("");
+      setNewColor("gray");
+      setRestorePrivateKey("");
+      setGeneratedAddress("");
+      setGeneratedPrivateKey("");
+      setPassword("");
+      setPasswordConfirm("");
+      setModalError(null);
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "지갑 처리에 실패했습니다.");
+    }
   };
 
   const getCardStyle = (index: number) => {
-    let diff = index - activeIndex;
+    let diff = index - resolvedActiveIndex;
     if (diff > total / 2) diff -= total;
     if (diff < -total / 2) diff += total;
 
@@ -130,7 +155,7 @@ export default function WalletInfo({
   };
 
   const isVisible = (index: number) => {
-    let diff = index - activeIndex;
+    let diff = index - resolvedActiveIndex;
     if (diff > total / 2) diff -= total;
     if (diff < -total / 2) diff += total;
     return Math.abs(diff) <= 2;
@@ -147,6 +172,11 @@ export default function WalletInfo({
             onClick={() => {
               setShowAddModal(true);
               setAddMode("choose");
+              setModalError(null);
+              setGeneratedAddress("");
+              setGeneratedPrivateKey("");
+              setPassword("");
+              setPasswordConfirm("");
             }}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/8 text-xl text-white/60 shadow-sm transition-all hover:scale-110 hover:bg-white/20 hover:text-white"
           >
@@ -194,7 +224,7 @@ export default function WalletInfo({
           }
 
           const style = getCardStyle(index);
-          const isCurrent = index === activeIndex;
+          const isCurrent = index === resolvedActiveIndex;
           const theme = getWalletTheme(wallet.color);
 
           return (
@@ -246,7 +276,7 @@ export default function WalletInfo({
                   >
                     <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>JACK 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
-                      <AnimatedNumber key={`jack-${activeIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
+                      <AnimatedNumber key={`jack-${resolvedActiveIndex}-${wallet.jackBalance}`} value={wallet.jackBalance} />
                       <span className={`text-base font-bold ${theme.accentClassName}`}>JACK</span>
                     </div>
                   </div>
@@ -257,8 +287,10 @@ export default function WalletInfo({
                     </p>
                     <div className="flex items-center rounded-full border border-white/10 bg-white/5 p-1.5 shadow-inner">
                       <button
+                        type="button"
                         onClick={handleExchangeJackToPot}
                         title="JACK to POT"
+                        disabled={isExchanging}
                         className="rounded-full p-2 text-white/40 transition-colors hover:bg-white/15 hover:text-info"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,7 +305,7 @@ export default function WalletInfo({
                   >
                     <p className={`text-xs font-bold uppercase tracking-widest ${theme.accentClassName}`}>POT 코인</p>
                     <div className="mt-3 flex items-baseline justify-center gap-2 font-display text-3xl font-black text-white">
-                      <AnimatedNumber key={`pot-${activeIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
+                      <AnimatedNumber key={`pot-${resolvedActiveIndex}-${wallet.potBalance}`} value={wallet.potBalance} />
                       <span className={`text-base font-bold ${theme.accentClassName}`}>POT</span>
                     </div>
                   </div>
@@ -291,6 +323,9 @@ export default function WalletInfo({
                     </motion.p>
                   )}
                 </AnimatePresence>
+                {isExchanging ? (
+                  <p className="mt-2 text-center text-xs font-bold text-info">교환 트랜잭션을 전송하는 중입니다.</p>
+                ) : null}
               </div>
             </motion.div>
           );
@@ -304,7 +339,7 @@ export default function WalletInfo({
             type="button"
             onClick={() => onChangeIndex(index)}
             className={`h-2 rounded-full transition-all duration-300 ${
-              index === activeIndex ? "w-6 bg-white" : "w-2 bg-white/20 hover:bg-white/40"
+              index === resolvedActiveIndex ? "w-6 bg-white" : "w-2 bg-white/20 hover:bg-white/40"
             }`}
             aria-label={`지갑 ${index + 1}`}
           />
@@ -319,7 +354,14 @@ export default function WalletInfo({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 p-4 backdrop-blur-md sm:items-center"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setShowAddModal(false);
+                setModalError(null);
+                setGeneratedAddress("");
+                setGeneratedPrivateKey("");
+                setPassword("");
+                setPasswordConfirm("");
+              }}
             >
               <motion.div
                 initial={{ y: 80, opacity: 0, scale: 0.96 }}
@@ -331,7 +373,14 @@ export default function WalletInfo({
               >
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setModalError(null);
+                    setGeneratedAddress("");
+                    setGeneratedPrivateKey("");
+                    setPassword("");
+                    setPasswordConfirm("");
+                  }}
                   className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-text-secondary transition-colors hover:bg-white/15 hover:text-white"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -342,26 +391,38 @@ export default function WalletInfo({
                 <div className="relative">
                   <h3 className="font-display text-2xl font-bold text-white">지갑 추가</h3>
                   <p className="mt-1 text-sm text-text-secondary">
-                    새 지갑을 생성하거나 기존 지갑 주소와 private key로 등록할 수 있습니다.
+                    새 지갑을 생성하거나 private key로 기존 지갑을 다시 불러올 수 있습니다.
                   </p>
 
                   {addMode === "choose" && (
                     <div className="mt-6 flex flex-col gap-3">
                       <button
                         type="button"
-                        onClick={() => setAddMode("create")}
+                        onClick={() => {
+                          setAddMode("create");
+                          setNewNickname("내 지갑");
+                          setModalError(null);
+                          setPassword("");
+                          setPasswordConfirm("");
+                        }}
                         className="rounded-[20px] border border-accent-gold/25 bg-accent-gold/8 px-6 py-5 text-left transition-all hover:border-accent-gold/50 hover:bg-accent-gold/12"
                       >
                         <p className="font-bold text-white">새 지갑 생성하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">생성 즉시 새 주소를 추가합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">실제 blockchain 주소 규칙으로 지갑을 생성합니다.</p>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAddMode("restore")}
+                        onClick={() => {
+                          setAddMode("restore");
+                          setNewNickname("기존 지갑");
+                          setModalError(null);
+                          setPassword("");
+                          setPasswordConfirm("");
+                        }}
                         className="rounded-[20px] border border-info/25 bg-info/8 px-6 py-5 text-left transition-all hover:border-info/50 hover:bg-info/12"
                       >
                         <p className="font-bold text-white">기존 지갑 등록하기</p>
-                        <p className="mt-0.5 text-xs text-text-secondary">주소와 private key로 지갑을 등록합니다.</p>
+                        <p className="mt-0.5 text-xs text-text-secondary">private key로 주소를 다시 계산해 지갑을 등록합니다.</p>
                       </button>
                     </div>
                   )}
@@ -370,7 +431,7 @@ export default function WalletInfo({
                     <div className="mt-6 space-y-4">
                       <div>
                         <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                          Nickname
+                          지갑 이름
                         </label>
                         <input
                           type="text"
@@ -395,39 +456,86 @@ export default function WalletInfo({
                         ))}
                       </div>
 
-                      {addMode === "restore" && (
+                      {addMode === "create" ? (
                         <>
                           <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                              Wallet Address
+                              지갑 주소
                             </label>
-                            <input
-                              type="text"
-                              value={restoreAddress}
-                              onChange={(event) => setRestoreAddress(event.target.value)}
-                              placeholder="0x..."
-                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                            />
+                            <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                              {generatedAddress}
+                            </div>
                           </div>
+
                           <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
-                              Private Key
+                              개인 키
                             </label>
-                            <input
-                              type="text"
-                              value={restorePrivateKey}
-                              onChange={(event) => setRestorePrivateKey(event.target.value)}
-                              placeholder="0x..."
-                              className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
-                            />
+                            <div className="mt-2 break-all rounded-[14px] border border-white/10 bg-white/[0.04] px-4 py-3 font-mono text-sm text-white">
+                              {generatedPrivateKey}
+                            </div>
                           </div>
                         </>
+                      ) : null}
+
+                      {addMode === "restore" && (
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                            개인 키
+                          </label>
+                          <input
+                            type="text"
+                            value={restorePrivateKey}
+                            onChange={(event) => setRestorePrivateKey(event.target.value)}
+                            placeholder="0x..."
+                            className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-info/40 focus:ring-1 focus:ring-info/20"
+                          />
+                        </div>
                       )}
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                          지갑 비밀번호
+                        </label>
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="지갑 비밀번호를 입력하세요"
+                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+                          비밀번호 확인
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordConfirm}
+                          onChange={(event) => setPasswordConfirm(event.target.value)}
+                          placeholder="비밀번호를 한 번 더 입력하세요"
+                          className="mt-2 w-full rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition-colors placeholder:text-text-tertiary focus:border-accent-gold/40 focus:ring-1 focus:ring-accent-gold/20"
+                        />
+                      </div>
+
+                      {modalError ? (
+                        <p className="rounded-[14px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+                          {modalError}
+                        </p>
+                      ) : null}
 
                       <div className="flex gap-3 pt-2">
                         <button
                           type="button"
-                          onClick={() => setAddMode("choose")}
+                          onClick={() => {
+                            setAddMode("choose");
+                            setModalError(null);
+                            setGeneratedAddress("");
+                            setGeneratedPrivateKey("");
+                            setPassword("");
+                            setPasswordConfirm("");
+                          }}
                           className="flex-1 rounded-[16px] border border-white/10 bg-white/5 py-3.5 font-bold text-text-secondary transition-colors hover:bg-white/10"
                         >
                           이전

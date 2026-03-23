@@ -5,7 +5,11 @@ import { dashboardStats } from "./dashboardMockData";
 
 const stackLayers = [712, 780, 835, 881, 915, 928];
 
-export default function BlockHeight() {
+interface BlockHeightProps {
+  currentHeight?: number;
+}
+
+export default function BlockHeight({ currentHeight = dashboardStats.currentHeight }: BlockHeightProps) {
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
 
   return (
@@ -26,7 +30,7 @@ export default function BlockHeight() {
           <div className="text-center">
             <p className="text-[10px] tracking-[0.2em] font-bold uppercase text-text-secondary">현재 높이</p>
             <p className="mt-1 font-display text-[clamp(2.2rem,4.8vw,3.1rem)] font-black tracking-tight text-white">
-              <AnimatedNumber value={dashboardStats.currentHeight} />
+              <AnimatedNumber value={currentHeight} />
             </p>
           </div>
 
@@ -43,7 +47,7 @@ export default function BlockHeight() {
                 const width = 124 + index * 14;
                 const bottom = index * 6;
                 const leftOffset = index * 6;
-                const isCurrent = layer === dashboardStats.currentHeight;
+                const isCurrent = layer === currentHeight;
 
                 return (
                   <motion.div

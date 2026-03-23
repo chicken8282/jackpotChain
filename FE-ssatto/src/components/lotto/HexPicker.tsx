@@ -6,24 +6,20 @@ import { createPortal } from "react-dom";
 import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
 import InteractiveHoverButton from "../common/InteractiveHoverButton";
-import { useWalletStore } from "../../stores/useWalletStore";
-import type { LottoEntry as StoreLottoEntry } from "../../types";
-
-interface HistoryEntry {
-  id: string;
-  numbers: string[];
-  resultNumbers: string[];
-  date: string;
-  statusLabel: "DRAWING" | "WINNING" | "LOSING";
-  rewardLabel?: string;
-  claimable: boolean;
-}
+import type { LottoHistoryDetail, LottoHistoryEntry } from "../../services/readModelAdapters";
+import { getLottoParticipationState } from "../../services/lottoParticipationGuard";
 
 interface HexPickerProps {
   disabled?: boolean;
-  onCommit?: (hexNumbers: string[]) => void;
-  entries?: StoreLottoEntry[];
-  onClaim?: (entryId: string) => void;
+  jackBalance: number;
+  potBalance: number;
+  onExchangeJackToPot?: () => Promise<void> | void;
+  onCommit?: (chosenNumbers: number[]) => Promise<void> | void;
+  entries?: LottoHistoryEntry[];
+  onClaim?: (entryId: string) => Promise<void> | void;
+  onLoadResult?: (commitHash: string) => Promise<LottoHistoryDetail>;
+  hasWallet?: boolean;
+  onRequireWallet?: () => void;
 }
 
 const slotThemes = [
@@ -59,47 +55,6 @@ const slotThemes = [
   },
 ];
 
-const fallbackHistory: HistoryEntry[] = [
-  {
-    id: "history-1",
-    numbers: ["a", "f", "b", "d", "4", "e"],
-    resultNumbers: ["a", "0", "b", "c", "4", "f"],
-    date: "2026.03.15 14:30",
-    statusLabel: "WINNING",
-    rewardLabel: "2,500 POT",
-    claimable: false,
-  },
-  {
-    id: "history-2",
-    numbers: ["2", "3", "5", "8", "c", "9"],
-    resultNumbers: ["1", "3", "0", "9", "c", "8"],
-    date: "2026.03.14 09:15",
-    statusLabel: "LOSING",
-    claimable: false,
-  },
-];
-
-function normalizeHexDigit(value: string) {
-  const numeric = Number.parseInt(value, 16);
-  if (Number.isNaN(numeric)) {
-    return "0";
-  }
-
-  return (numeric % 16).toString(16);
-}
-
-function buildResultNumbers(numbers: string[], seed: string) {
-  return numbers.map((value, index) => {
-    const numeric = Number.parseInt(value, 16) % 16;
-    const offset = (seed.charCodeAt(index % seed.length) + index * 7) % 16;
-    return ((numeric + offset) % 16).toString(16);
-  });
-}
-
-function countMatches(numbers: string[], resultNumbers: string[]) {
-  return numbers.filter((value, index) => value === resultNumbers[index]).length;
-}
-
 function getNeighborValue(hex: string, delta: number) {
   let value = Number.parseInt(hex, 16);
   value = (value + delta + 16) % 16;
@@ -116,12 +71,10 @@ function HistoryModal({
   onClose,
   onClaim,
 }: {
-  entry: HistoryEntry;
+  entry: LottoHistoryDetail;
   onClose: () => void;
   onClaim?: (entryId: string) => void;
 }) {
-  const matches = countMatches(entry.numbers, entry.resultNumbers);
-
   if (typeof document === "undefined") {
     return null;
   }
@@ -168,7 +121,7 @@ function HistoryModal({
           <div className="rounded-[24px] border border-info/20 bg-info/5 p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-widest text-info">블록 결과 번호</p>
             <div className="grid grid-cols-3 gap-3">
-              {entry.resultNumbers.map((number, index) => {
+              {(entry.resultNumbers ?? ["-", "-", "-", "-", "-", "-"]).map((number, index) => {
                 const matched = entry.numbers[index] === number;
 
                 return (
@@ -194,7 +147,7 @@ function HistoryModal({
               비교 결과
             </span>
             <p className="font-bold text-white">
-              {matches}/6일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
+              {(entry.matchCount ?? 0)}/6일치 · {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
             </p>
             {entry.rewardLabel ? (
               <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
@@ -254,22 +207,26 @@ function SuccessModal({ open }: { open: boolean }) {
 
 export default function HexPicker({
   disabled = false,
+  jackBalance,
+  potBalance,
+  onExchangeJackToPot,
   onCommit,
   entries,
   onClaim,
+  onLoadResult,
+  hasWallet = true,
+  onRequireWallet,
 }: HexPickerProps) {
-  const jackBalance = useWalletStore((state) => state.jackBalance);
-  const potBalance = useWalletStore((state) => state.potBalance);
-  const exchangeJackToPot = useWalletStore((state) => state.exchangeJackToPot);
-
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
   const [randomizing, setRandomizing] = useState(false);
-  const [selectedHistory, setSelectedHistory] = useState<HistoryEntry | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<LottoHistoryDetail | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
+  const [historyLoadingCommitHash, setHistoryLoadingCommitHash] = useState<string | null>(null);
   const randomizeSpinIntervalRef = useRef<number | null>(null);
   const randomizeRevealIntervalRef = useRef<number | null>(null);
   const randomizeFinalValuesRef = useRef<string[]>(selected);
@@ -329,34 +286,27 @@ export default function HexPicker({
     [],
   );
 
-  const mergedHistory = useMemo(() => {
-    const storeHistory: HistoryEntry[] =
-      entries?.map((entry) => {
-        const numbers = entry.numbers.map(normalizeHexDigit);
-        const resultNumbers = buildResultNumbers(numbers, entry.id);
-        const rewardLabel = entry.reward > 0 ? `${entry.reward.toLocaleString("ko-KR")} JACK` : undefined;
+  const mergedHistory = useMemo(() => entries ?? [], [entries]);
 
-        return {
-          id: entry.id,
-          numbers,
-          resultNumbers,
-          date: entry.createdAt,
-          statusLabel:
-            entry.status === "당첨" ? "WINNING" : entry.status === "미당첨" ? "LOSING" : "DRAWING",
-          rewardLabel,
-          claimable: entry.status === "당첨" && !entry.claimed,
-        };
-      }) ?? [];
+  const handleSelectHistory = async (entry: LottoHistoryEntry) => {
+    if (!onLoadResult) {
+      setSelectedHistory({
+        ...entry,
+        resultNumbers: null,
+      });
+      return;
+    }
 
-    const seen = new Set<string>();
-    return [...storeHistory, ...fallbackHistory].filter((entry) => {
-      if (seen.has(entry.id)) {
-        return false;
-      }
-      seen.add(entry.id);
-      return true;
-    });
-  }, [entries]);
+    setHistoryLoadingCommitHash(entry.commitHash);
+    try {
+      const detail = await onLoadResult(entry.commitHash);
+      setSelectedHistory(detail);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "로또 결과를 불러오지 못했습니다.");
+    } finally {
+      setHistoryLoadingCommitHash(null);
+    }
+  };
 
   const handleRandomize = () => {
     if (randomizing) {
@@ -401,14 +351,24 @@ export default function HexPicker({
     window.setTimeout(() => setNotice(null), 2000);
   };
 
-  const handleExchangeJackToPot = () => {
+  const handleExchangeJackToPot = async () => {
     if (jackBalance < 100) {
       showNotice("교환하려면 최소 100 JACK이 필요합니다.");
       return;
     }
 
-    exchangeJackToPot(100);
-    showNotice("100 JACK을 1 POT로 교환했습니다.");
+    if (!onExchangeJackToPot) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onExchangeJackToPot();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "교환 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const cycleSlot = (index: number, delta: number) => {
@@ -426,18 +386,57 @@ export default function HexPicker({
     triggerSlotPulse(index);
   };
 
-  const handleParticipate = () => {
-    if (disabled || randomizing) {
+  const handleParticipate = async () => {
+    const state = getLottoParticipationState({
+      hasWallet,
+      disabled,
+      randomizing,
+      isSubmitting,
+      potBalance,
+    });
+
+    if (state === "blocked") {
       return;
     }
 
-    if (potBalance < 1) {
+    if (state === "require-wallet") {
+      onRequireWallet?.();
+      return;
+    }
+
+    if (state === "insufficient-pot") {
       showNotice("로또 참여에는 최소 1 POT가 필요합니다.");
       return;
     }
 
-    onCommit?.(selected);
-    setShowSuccessModal(true);
+    if (!onCommit) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onCommit(selected.map((value) => Number.parseInt(value, 16)));
+      setShowSuccessModal(true);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "로또 참여 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClaim = async (entryId: string) => {
+    if (!onClaim) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onClaim(entryId);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "수령 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -500,8 +499,11 @@ export default function HexPicker({
                     </p>
                     <button
                       type="button"
-                      onClick={handleExchangeJackToPot}
+                      onClick={() => {
+                        void handleExchangeJackToPot();
+                      }}
                       title="JACK to POT"
+                      disabled={isSubmitting}
                       className="rounded-full border border-white/10 bg-white/5 p-3 text-text-secondary transition-colors hover:border-info/40 hover:bg-white/10 hover:text-info"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -521,8 +523,10 @@ export default function HexPicker({
                 <div className="absolute right-[18px] top-1/2 hidden -translate-y-1/2 xl:block">
                   <InteractiveHoverButton
                     type="button"
-                    onClick={handleParticipate}
-                    disabled={disabled || randomizing}
+                    onClick={() => {
+                      void handleParticipate();
+                    }}
+                    disabled={randomizing || isSubmitting}
                     text="로또 추첨"
                     hoverText="참여하기"
                   />
@@ -617,11 +621,17 @@ export default function HexPicker({
             </>
           ) : (
             <div className="subtle-scroll max-h-[480px] space-y-3 overflow-y-auto pr-2">
-              {mergedHistory.map((entry) => (
+              {mergedHistory.length === 0 ? (
+                <div className="flex items-center justify-center rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-10 text-sm font-bold text-text-secondary">
+                  참여 내역이 아직 없습니다.
+                </div>
+              ) : mergedHistory.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => setSelectedHistory(entry)}
+                  onClick={() => {
+                    void handleSelectHistory(entry);
+                  }}
                   className="group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all hover:border-white/15 hover:bg-white/[0.04]"
                 >
                   <div className="flex flex-col gap-1">
@@ -633,10 +643,12 @@ export default function HexPicker({
                             ? "bg-accent-gold/20 text-accent-gold"
                             : entry.statusLabel === "DRAWING"
                               ? "bg-info/15 text-info"
+                              : entry.statusLabel === "EXPIRED"
+                                ? "bg-danger/15 text-danger"
                               : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : "미당첨"}
+                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -653,7 +665,7 @@ export default function HexPicker({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onClaim(entry.id);
+                          void handleClaim(entry.id);
                         }}
                         className="rounded-full border border-accent-gold/35 bg-accent-gold/10 px-3 py-1 text-xs font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
                       >
@@ -661,7 +673,11 @@ export default function HexPicker({
                       </button>
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
-                      {countMatches(entry.numbers, entry.resultNumbers)}/6일치
+                      {historyLoadingCommitHash === entry.commitHash
+                        ? "결과 조회 중"
+                        : entry.matchCount == null
+                          ? "추첨 대기"
+                          : `${entry.matchCount}/6일치`}
                     </span>
                     <svg
                       className="h-4 w-4 text-text-tertiary transition-transform group-hover:translate-x-0.5"
@@ -681,7 +697,13 @@ export default function HexPicker({
 
       <SuccessModal open={showSuccessModal} />
       {selectedHistory ? (
-        <HistoryModal entry={selectedHistory} onClose={() => setSelectedHistory(null)} onClaim={onClaim} />
+        <HistoryModal
+          entry={selectedHistory}
+          onClose={() => setSelectedHistory(null)}
+          onClaim={(entryId) => {
+            void handleClaim(entryId);
+          }}
+        />
       ) : null}
     </>
   );

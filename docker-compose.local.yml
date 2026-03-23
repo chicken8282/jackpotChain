@@ -1,0 +1,139 @@
+name: jackpotchain-local
+
+networks:
+  local-net:
+    driver: bridge
+
+volumes:
+  postgres-local-data:
+  redis-local-data:
+  node-local-data:
+  node-local-wallets:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jc-postgres-local
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    networks:
+      - local-net
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres-local-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jackpot -d jackpotchain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: jc-redis-local
+    restart: unless-stopped
+    networks:
+      - local-net
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis-local-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: jc-rabbitmq-local
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    networks:
+      - local-net
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  jackpotchain-node:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    container_name: jc-node-local
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    networks:
+      - local-net
+    ports:
+      - "9776:9776"
+      - "9777:9777"
+    volumes:
+      - node-local-data:/data
+      - node-local-wallets:/wallets
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf -X POST http://localhost:9776 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"id\":1}' || exit 1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./BE-ssatto
+      dockerfile: Dockerfile
+    container_name: jc-backend-local
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    networks:
+      - local-net
+    ports:
+      - "${LOCAL_BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      jackpotchain-node:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./FE-ssatto
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: jc-frontend-local
+    restart: unless-stopped
+    networks:
+      - local-net
+    ports:
+      - "13000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

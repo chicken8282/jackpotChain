@@ -1,14 +1,19 @@
 import type { PointerEventHandler } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import BlockDetailModal from "./BlockDetailModal";
 import BlockPrism from "./BlockPrism";
 import {
-  candidateBlocks,
   confirmedBlocks,
   dashboardStats,
   type DashboardBlockDetail,
 } from "./dashboardMockData";
+
+interface BlockchainVisualizerProps {
+  blocks?: DashboardBlockDetail[];
+  currentHeight?: number;
+  activeNodes?: number;
+}
 
 interface DashboardBlockProps {
   block: DashboardBlockDetail;
@@ -64,7 +69,40 @@ function ChainLink({
   );
 }
 
-export default function BlockchainVisualizer() {
+export default function BlockchainVisualizer({
+  blocks = confirmedBlocks,
+  currentHeight = dashboardStats.currentHeight,
+  activeNodes = dashboardStats.activeNodes,
+}: BlockchainVisualizerProps) {
+  const sortedBlocks = useMemo(
+    () => [...blocks].sort((a, b) => a.height - b.height),
+    [blocks],
+  );
+
+  const dynamicCandidates = useMemo<DashboardBlockDetail[]>(
+    () =>
+      Array.from({ length: activeNodes }, (_, i) => ({
+        id: `candidate-${currentHeight + 1 + i}`,
+        height: currentHeight + 1 + i,
+        hash: `0x${"0".repeat(40)}`,
+        reward: 0,
+        feeReward: 0,
+        jackpotContribution: 0,
+        status: "candidate" as const,
+        txCount: 0,
+        confirmations: 0,
+        version: "0x20000000",
+        previousHash: "",
+        nonce: 0,
+        difficulty: "-",
+        minedAt: "대기 중",
+        miningElapsed: "대기 중",
+        isMainChain: true,
+        minerLabel: "Pending Queue",
+      })),
+    [activeNodes, currentHeight],
+  );
+
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<DashboardBlockDetail | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +196,9 @@ export default function BlockchainVisualizer() {
 
   const handleSelect = (block: DashboardBlockDetail) => {
     if (Date.now() < suppressClickUntil.current) {
+      return;
+    }
+    if (block.status === "candidate") {
       return;
     }
 
@@ -275,11 +316,11 @@ export default function BlockchainVisualizer() {
           <div className="flex flex-row items-center gap-4">
             <div className="flex flex-col items-center justify-center rounded-[16px] border border-border bg-surface px-5 py-4 shadow-sm min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1">현재 높이</span>
-              <span className="font-display text-2xl font-bold text-text-primary">#{dashboardStats.currentHeight}</span>
+              <span className="font-display text-2xl font-bold text-text-primary">#{currentHeight}</span>
             </div>
             <div className="flex flex-col items-center justify-center rounded-[16px] border border-info/30 bg-info/5 px-5 py-4 shadow-[0_4px_24px_rgba(59,130,246,0.1)] min-w-[140px] text-center">
               <span className="text-[11px] font-bold text-info uppercase tracking-widest mb-1">활성 노드</span>
-              <span className="font-display text-2xl font-bold text-text-primary">{dashboardStats.activeNodes}</span>
+              <span className="font-display text-2xl font-bold text-text-primary">{activeNodes}</span>
             </div>
           </div>
         </div>
@@ -296,7 +337,7 @@ export default function BlockchainVisualizer() {
           >
 
             <div ref={contentRef} className="flex min-w-max items-center will-change-transform xl:px-[18vw]">
-              {confirmedBlocks.map((block, index) => (
+              {sortedBlocks.map((block, index) => (
                 <div key={block.id} className="group flex items-center">
                   <DashboardBlock
                     block={block}
@@ -304,10 +345,10 @@ export default function BlockchainVisualizer() {
                     onHover={setHoveredId}
                     onSelect={handleSelect}
                   />
-                  {index < confirmedBlocks.length - 1 ? (
+                  {index < sortedBlocks.length - 1 ? (
                     <div className="-mx-[6px] z-0">
                       <ChainLink
-                        active={hoveredId === block.id || hoveredId === confirmedBlocks[index + 1].id}
+                        active={hoveredId === block.id || hoveredId === sortedBlocks[index + 1].id}
                       />
                     </div>
                   ) : null}
@@ -346,7 +387,7 @@ export default function BlockchainVisualizer() {
                 </motion.div>
               </div>
 
-              {candidateBlocks.map((block, index) => (
+              {dynamicCandidates.map((block, index) => (
                 <div key={block.id} className="group flex items-center">
                   {index === 0 ? (
                     <div className="-mx-[6px] z-0">
@@ -359,10 +400,10 @@ export default function BlockchainVisualizer() {
                     onHover={setHoveredId}
                     onSelect={handleSelect}
                   />
-                  {index < candidateBlocks.length - 1 ? (
+                  {index < dynamicCandidates.length - 1 ? (
                     <div className="-mx-[6px] z-0">
                       <ChainLink
-                        active={hoveredId === block.id || hoveredId === candidateBlocks[index + 1].id}
+                        active={hoveredId === block.id || hoveredId === dynamicCandidates[index + 1].id}
                       />
                     </div>
                   ) : null}

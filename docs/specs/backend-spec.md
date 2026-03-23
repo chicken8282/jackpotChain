@@ -1,437 +1,236 @@
-# Backend Spec
-## Project
-JackpotChain Blockchain Lottery Experience
+# Backend Spec - JackpotChain
+
+> Source of truth: `docs/reviews/api.md`, `docs/reviews/erd.md`, `AGENTS.md`
 
 ---
 
-## 1. Goal
+## 1. Hard Rules
 
-Build a backend service layer that can safely expose JackpotChain functionality to the frontend while preserving correct boundaries between:
+- 백엔드는 API 조합, 영속화, 캐시, JackpotChain RPC 어댑터를 담당한다.
+- 백엔드는 체인 합의, 채굴 실행, 개인키 보관을 담당하지 않는다.
+- 서버 인프라에서는 `jackpotchain-node`만 운영 대상으로 본다.
+- 채굴은 사용자가 별도 TUI 실행파일로 참여하는 외부 행위다.
+- 백엔드는 서버 노드 RPC로 체인 정보를 조회하고, 이미 서명된 트랜잭션만 제출한다.
 
-- blockchain node truth,
-- service-layer projections,
-- cache and async infrastructure,
-- frontend-friendly APIs.
+금지 규칙:
 
-The backend must make it possible to support:
-- Dashboard
-- Lottery
-- Wallet
-- Mining
-- Admin / operations visibility
-
-without turning the service layer into the canonical blockchain authority.
+- private key 저장 금지
+- 백엔드에서 miner 프로세스 제어 금지
+- Controller에서 RPC 직접 호출 금지
+- cross-module Repository 직접 주입 금지
+- 불확실한 RPC 결과를 성공으로 위장 금지
 
 ---
 
-## 2. Scope
+## 2. Touched Layers 기본 경계
 
-Included in this phase:
-- backend-facing API design
-- service / controller / adapter boundaries
-- node integration boundary
-- wallet / lottery / mining / dashboard query shapes
-- projection and cache-friendly response design
-- observability-ready service points
-- future MQ / Redis / DB extension points
-
-Excluded for now:
-- full production security hardening
-- final distributed deployment
-- complete event-driven production topology
-- final real-time websocket architecture
-- complete admin console implementation
+- Controller: 요청/응답 변환만 담당
+- Service: 유즈케이스 조합, 트랜잭션 경계, 로그 정책 담당
+- Repository: 로컬 프로젝션/조회 담당
+- RPC Client: JackpotChain JSON-RPC 어댑터 담당
+- MQ: 이번 범위에서는 선택 사항이며 RPC 조회/제출의 대체 수단이 아님
 
 ---
 
-## 3. Core Backend Role
+## 3. Node Integration Rules
 
-The backend is responsible for:
-- frontend-facing API shaping
-- service orchestration
-- projection and aggregation
-- admin / operations API support
-- cache integration
-- monitoring integration
-- node/RPC adapter behavior
+백엔드와 JackpotChain 간 기본 흐름:
 
-The backend is not responsible for:
-- owning blockchain canonical truth
-- storing private keys
-- replacing node validation rules
-- inventing chain state locally
+```text
+Controller -> Service -> RpcClient -> jackpotchain-node(JSON-RPC)
+```
 
----
+허용 RPC 범위:
 
-## 4. Domain Boundaries
+- 조회: `getblockchaininfo`, `getblockcount`, `getpeerinfo`, `getmempoolinfo`
+- 제출: `sendrawtransaction`
 
-### Node-owned truth
-The blockchain node should remain the canonical source for:
-- block chain state
-- transaction validity
-- mining-related chain updates
-- lottery-related on-chain truth
-- claim validation if node logic owns it
+불허 범위:
 
-### Service-layer responsibilities
-The backend may:
-- aggregate node + DB + cache data
-- expose frontend-friendly summaries
-- maintain projection data
-- maintain admin/ops summaries
-- provide paginated read models
-- provide controlled orchestration endpoints
+- `startmining`, `stopmining` 같은 서버 측 채굴 제어
+- 백엔드에서 miner node/worker 기동
 
-### Forbidden boundary violations
-- never store private keys
-- do not treat PostgreSQL or Redis as blockchain truth
-- do not re-implement final chain validity in the service layer unless explicitly required and documented
-- do not expose unsafe internal details to the frontend
+제출 규칙:
+
+- 백엔드는 `signedTxHex`를 그대로 서버 노드에 제출한다.
+- 서명이 비어 있거나 포맷이 잘못되면 `COMMON_INVALID_REQUEST`
+- RPC 실패, 타임아웃, HTTP 실패, JSON-RPC error, 응답 파싱 실패는 `BLOCKCHAIN_RPC_FAILED`
+
+조회 규칙:
+
+- 조회 RPC는 재시도 없이 단발 호출을 기본으로 한다.
+- 조회 실패 시에는 `BLOCKCHAIN_RPC_FAILED`
+- 조회 메서드는 `INFO` 로그를 남기지 않는다.
 
 ---
 
-## 5. Backend Functional Areas
+## 4. Mining Boundary
 
-### 5.1 Dashboard
-Backend should support:
-- current height
-- recent blocks
-- recent transactions
-- confirmed / candidate block distinction
-- network/node summaries
-- jackpot pool summary
-- block detail modal data
-
-### 5.2 Lottery
-Backend should support:
-- participation/entry orchestration
-- selected number submission
-- entry cost information
-- current round or active round status
-- participation history
-- result / claimable state
-- reward tier info
-- pool contribution visibility
-
-### 5.3 Wallet
-Backend should support:
-- wallet summary
-- JACK / POT balances
-- activity timeline
-- reward history
-- exchange history
-- recent status
-- wallet-related projections
-
-### 5.4 Mining
-Backend should support:
-- mined block summaries
-- reward per block
-- mining pipeline data
-- recent mining reward events
-- mining-related operational summaries
-- technical rule/policy summaries if needed
-
-### 5.5 Admin / Operations
-Backend should support:
-- chain status
-- node status
-- anomaly detection surfaces
-- commit/claim counts
-- reward event counts
-- operational summaries
+- `jackpotchain-node`는 서버 노드다.
+- 서버 노드는 네트워크 참여, 정보 조회, 트랜잭션 전파 대상이다.
+- 채굴은 `docker-compose.local.yml`이나 백엔드가 제공하지 않는다.
+- 사용자가 채굴에 참여하려면 별도 TUI 실행파일 또는 클라이언트를 사용한다.
+- `GET /mining/blocks`가 유지되더라도 의미는 “체인에 반영된 채굴 결과 조회”이며, 채굴 실행 제어가 아니다.
 
 ---
 
-## 6. Suggested API Families
+## 5. Package Structure
 
-### Dashboard APIs
-- GET /api/dashboard/summary
-- GET /api/dashboard/blocks/recent
-- GET /api/dashboard/blocks/{blockId}
-- GET /api/dashboard/network-summary
+기본 패키지:
 
-### Lottery APIs
-- GET /api/lottery/summary
-- POST /api/lottery/entries
-- GET /api/lottery/entries/{walletAddress}
-- GET /api/lottery/prize-tiers
-- GET /api/lottery/claimables/{walletAddress}
-- POST /api/lottery/claims
+```text
+src/main/java/ssatto/BE_ssatto/
+  global/
+    config/
+    exception/
+    response/
+    util/
+  domain/
+    blockchain/
+      controller/
+      service/
+      repository/
+      entity/
+      dto/
+      exception/
+      rpc/
+    wallet/
+      controller/
+      service/
+      repository/
+      entity/
+      dto/
+      exception/
+    lotto/
+      controller/
+      service/
+      repository/
+      entity/
+      dto/
+      exception/
+    auth/
+      controller/
+      service/
+      dto/
+      exception/
+    exchange/
+      controller/
+      service/
+      dto/
+      exception/
+    mining/
+      controller/
+      service/
+      dto/
+      exception/
+```
 
-### Wallet APIs
-- GET /api/wallets/{walletAddress}/summary
-- GET /api/wallets/{walletAddress}/timeline
-- GET /api/wallets/{walletAddress}/assets
-- POST /api/wallets/{walletAddress}/swap
-
-### Mining APIs
-- GET /api/mining/summary
-- GET /api/mining/blocks/{walletAddress}
-- GET /api/mining/rewards/{walletAddress}
-- GET /api/mining/pipeline
-
-### Admin APIs
-- GET /api/admin/summary
-- GET /api/admin/node-status
-- GET /api/admin/anomalies
-- GET /api/admin/reward-events
-
-These are working API suggestions and may be adapted after node analysis.
-
----
-
-## 7. Data Source Strategy
-
-Backend responses may come from:
-- direct node query / JSON-RPC style integration
-- database projections
-- Redis cache
-- derived service-layer aggregation
-
-For each endpoint, the implementation should explicitly decide:
-- source of truth
-- cacheability
-- fallback strategy
-- staleness tolerance
-- whether projection is needed
-
----
-
-## 8. Node Integration Principles
-
-- The node integration layer must be isolated from controller logic.
-- Controllers should call services, and services should use adapters/clients for node communication.
-- Read and write node operations must be treated differently.
-
-### Read operations
-Examples:
-- get current height
-- get block details
-- get recent chain status
-
-Rules:
-- may allow bounded retry
-- may allow degraded fallback if safe
-- may allow cached summary in controlled cases
-
-### Write/orchestration operations
-Examples:
-- lottery entry
-- claim
-- wallet-affecting reward settlement actions if externalized
-
-Rules:
-- retry must be cautious
-- idempotency must be considered
-- duplicate execution must be prevented where needed
-- success must not be faked if node result is uncertain
+`blockchain/rpc`는 필수다.
 
 ---
 
-## 9. Projection Strategy
+## 6. Development Standards
 
-The backend should be ready to maintain projection-friendly models for:
-- recent blocks list
-- block detail summary
-- wallet activity timeline
-- lottery participation history
-- reward history
-- mining reward history
-- admin/ops counts and summaries
+### TDD Cycle
 
-Projection candidates should be designed so the frontend does not need to understand node-internal complexity.
+```text
+Write test -> ./gradlew test -> confirm failure -> implement -> re-run -> confirm pass
+```
 
----
+필수 원칙:
 
-## 10. Cache Strategy
+- 테스트 없이 핵심 로직 구현 시작 금지
+- 실패 확인 없이 구현 완료 처리 금지
+- 성공/실패 경계 모두 테스트
 
-Initial assumption:
-- cache-aside strategy
+권장 테스트 레벨:
 
-Good cache candidates:
-- dashboard summary
-- current height summary
-- recent block summary
-- recent transaction summary
-- wallet summary snapshot
-- admin summary snapshot
-- mining summary snapshot
+- RPC Client: 단위 테스트 필수
+- Service: 단위 테스트 필수
+- Controller: 엔드포인트 추가 시 MockMvc 테스트
+- Repository: 복잡한 쿼리일 때만 `@DataJpaTest`
 
-Rules:
-- define TTL explicitly
-- define stale tolerance explicitly
-- define invalidation triggers explicitly
-- never treat cache as canonical truth
+### Comments
 
-Suggested early TTL assumptions:
-- dashboard summary: 5–15 seconds
-- recent blocks summary: 5–10 seconds
-- wallet summary: 5–10 seconds
-- admin summary: 10–30 seconds
-- mining summary: 5–15 seconds
+- 모든 클래스와 public 메서드는 한국어 설명 주석을 가진다.
+- DTO/record도 역할이 불명확하면 주석을 붙인다.
+
+### Result Documentation
+
+- 작업 종료 시 `docs/result/{task-name}.md` 작성
+- 반드시 `File & Class Change Log` 포함
 
 ---
 
-## 11. MQ / Event Strategy
+## 7. Logging
 
-The backend should remain ready for event-driven extensions.
+로그 정책:
 
-Potential MQ event families:
-- block confirmed
-- reward settled
-- lottery entry processed
-- claim available
-- claim completed
-- mining reward reflected
-- node anomaly detected
-- RPC error threshold exceeded
+| Level | 사용 기준 |
+|---|---|
+| `INFO` | 핵심 비즈니스 이벤트 완료 시점만 |
+| `ERROR` | RPC/인프라 실패 |
+| `WARN` | 비즈니스 예외, 점진적 저하 |
+| `DEBUG` | 로컬 디버깅 전용 |
 
-MQ should be used for:
-- async side effects
-- notifications
-- fan-out
-- operational logging/event distribution
-- aggregation updates
+필수 규칙:
 
-MQ should not be used as a replacement for all synchronous query paths.
+- `log.info()`를 request entry에 두지 않는다.
+- `log.info()`를 query 호출에 두지 않는다.
+- variable data를 message 본문에 이어붙이지 않고 placeholder 사용
+- RPC 실패는 `ERROR`로 남긴다.
 
----
+예시:
 
-## 12. Persistence Strategy
-
-Expected persistence layers:
-- PostgreSQL for service metadata and projections
-- Redis for cache / short-lived support state
-- node data_dir for canonical blockchain persistence
-
-Rules:
-- do not mix canonical blockchain truth into service DB
-- DB should store service-friendly models
-- schemas should support pagination and timeline views
-- balances exposed to UI should be clearly sourced or projected
+```java
+log.info("JACKPOTCHAIN_TRANSACTION_SUBMITTED txId={}", txId);
+log.error("JACKPOTCHAIN_RPC_FAILURE method={} message={}", method, exception.getMessage(), exception);
+```
 
 ---
 
-## 13. Validation and Error Strategy
+## 8. Error Handling
 
-### Request validation
-- validate all external inputs
-- use typed request DTOs
-- reject malformed requests early
+- 단일 에러 계약은 `ErrorCode + BusinessException + GlobalExceptionHandler`
+- RPC 계층 예외는 서비스/클라이언트 경계에서 `BusinessException`으로 변환
 
-### Error exposure
-- errors returned to clients must be safe and structured
-- internal implementation details must not leak
-- user-facing errors should distinguish:
-  - invalid request
-  - insufficient balance/resource
-  - temporary system delay
-  - unavailable dependency
-  - operation not allowed
+사용 에러 코드:
 
-### Domain-sensitive validation
-- lottery entry validation
-- claim eligibility validation
-- wallet-related operation validation
-- mining/reward visibility validation where applicable
+- `COMMON_INVALID_REQUEST`
+- `BLOCKCHAIN_RPC_FAILED`
+- `BLOCKCHAIN_BLOCK_NOT_FOUND`
+- `BLOCKCHAIN_TX_NOT_FOUND`
 
 ---
 
-## 14. Non-Functional Requirements
+## 9. Config Rules
 
-### 14.1 Scalability
-- APIs must support future growth without redesigning basic contracts
-- list-style endpoints must support pagination
-- avoid local in-memory assumptions for cross-instance state
-- keep service boundaries compatible with future horizontal scaling
-- design read-heavy responses for cache/projection use
+필수 프로퍼티:
 
-### 14.2 Availability
-- prefer bounded failure over cascading failure
-- keep secondary side effects separate from primary request success paths
-- external dependency calls must define timeout behavior
-- safe degraded read responses may be allowed where clearly defined
-- admin failures should not automatically break user product APIs
+```yaml
+jackpotchain:
+  rpc:
+    url: ${JACKPOTCHAIN_RPC_URL:http://localhost:8332}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+```
 
-### 14.3 Reliability
-- transaction boundaries must be explicit
-- idempotency must be considered for mutation-like actions
-- read retry and write retry must be separated conceptually
-- duplicate execution risk must be identified
-- no unsafe assumptions about node success may leak into user-visible success
+설정 파일:
 
-### 14.4 Performance
-- dashboard summary target: P95 <= 500ms under normal local/staging baseline
-- detail and list summary APIs target: P95 <= 700ms
-- mutation orchestration target: P95 <= 1000ms excluding external chain confirmation uncertainty
-- hot paths must avoid oversized payloads
-- projection and caching should be used where justified
-
-These are initial working assumptions and should be revised after real measurement.
+- `application.yml`
+- `application-local.yml`
+- `application-prod.yml`
+- `application-test.yaml`
 
 ---
 
-## 15. Observability Requirements
+## 10. Checklist
 
-Important backend boundaries that must be observable:
-- controller entry
-- service orchestration
-- node/RPC adapter boundary
-- DB boundary
-- Redis boundary
-- MQ producer/consumer boundary
-
-Metrics to plan for:
-- request latency
-- error rate
-- node/RPC failures
-- cache hit/miss
-- queue backlog
-- lottery entry count
-- claim count
-- reward reflection count
-- recent anomaly count
-
-Logging rules:
-- structured logs preferred
-- preserve trace/correlation identifiers where possible
-- do not log sensitive data carelessly
-
----
-
-## 16. Security Rules
-
-- never store private keys
-- validate all client input
-- minimize trust boundaries
-- expose only necessary information
-- admin/ops APIs must remain clearly separated from user-facing APIs
-- do not expose internal node details beyond what the product actually needs
-
----
-
-## 17. Review Checklist
-
-- Does the backend keep node truth separate from service projections?
-- Are controllers/services/adapters clearly separated?
-- Are list endpoints pagination-ready?
-- Are cache and projection opportunities identified?
-- Are write-like actions reviewed for idempotency and duplicate handling?
-- Are timeout/retry/fallback assumptions explicit?
-- Are errors safe and structured?
-- Are observability points identified?
-- Are APIs frontend-friendly without leaking node-internal complexity?
-
----
-
-## 18. Done Criteria
-
-This backend phase is complete only if:
-- service boundaries are defined clearly
-- API families for Dashboard / Lottery / Wallet / Mining exist
-- node integration boundary is isolated
-- projection and cache seams are prepared
-- validation and error strategies are defined
-- observability points are identified
-- no canonical blockchain truth is incorrectly moved into the service layer
+- [ ] 서버 노드와 채굴 클라이언트 경계가 명확하다
+- [ ] `blockchain/rpc` 패키지가 존재한다
+- [ ] 핵심 RPC 조회/제출 로직에 단위 테스트가 있다
+- [ ] 테스트를 먼저 쓰고 실패를 확인했다
+- [ ] 제출 성공 시에만 `INFO` 로그가 있다
+- [ ] RPC/인프라 실패는 `ERROR` 로그다
+- [ ] request entry / query `log.info()`가 없다
+- [ ] 결과 문서가 작성되었다

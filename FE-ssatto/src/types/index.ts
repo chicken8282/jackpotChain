@@ -17,16 +17,18 @@ export interface LottoEntry {
 
 export interface Activity {
   id: string;
-  type: "지갑 생성" | "지갑 등록" | "교환" | "로또 참여" | "보상 수령" | "채굴";
+  type: "지갑 생성" | "교환" | "로또 참여" | "보상 수령" | "채굴" | "전송";
   description: string;
   amount?: string;
   jackAmount?: number;
   potAmount?: number;
+  txId?: string | null;
   createdAt: string;
 }
 
 export interface MinedBlock {
   id: string;
+  blockId: number;
   height: number;
   hash: string;
   reward: number;
