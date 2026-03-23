@@ -94,7 +94,8 @@ export function usePollingQuery<TData>({
       abortControllerRef.current?.abort();
       inFlightRef.current = false;
     };
-  }, [enabled, execute, intervalMs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- execute is from useEffectEvent (stable, must not be a dep)
+  }, [enabled, intervalMs]);
 
   return {
     data,

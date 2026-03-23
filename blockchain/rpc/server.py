@@ -252,7 +252,7 @@ class RPCServer:
         return {
             'chain': 'jackpotchain',
             'blocks': self.blockchain.get_height(),
-            'bestblockhash': self.blockchain.get_tip_hash().hex(),
+            'bestblockhash': self.blockchain.get_tip_hash()[::-1].hex(),
             'difficulty': self.blockchain.get_difficulty(),
             'mediantime': 0,
             'verificationprogress': 1.0,
@@ -261,7 +261,7 @@ class RPCServer:
 
     def _getblock(self, blockhash: str, verbosity: int = 1) -> Any:
         """블록 조회"""
-        block_hash = bytes.fromhex(blockhash)
+        block_hash = bytes.fromhex(blockhash)[::-1]
         block = self.blockchain.get_block(block_hash)
 
         if block is None:
@@ -271,19 +271,72 @@ class RPCServer:
             return block.serialize().hex()
 
         index = self.blockchain.get_block_index(block_hash)
-        return {
+        height = index.height if index else 0
+
+        # 코인베이스 TX에서 보상/수수료/채굴자 주소 추출
+        reward_jack = 0
+        fee_reward_jack = 0
+        miner_address = None
+        if block.transactions:
+            coinbase_tx = block.transactions[0]
+            for out in coinbase_tx.outputs:
+                reward_jack += out.jack_value
+            from ..constants import BLOCK_REWARD
+            base_reward = BLOCK_REWARD
+            fee_reward_jack = max(0, reward_jack - base_reward)
+            # 채굴자 주소: 코인베이스 첫 출력
+            if coinbase_tx.outputs:
+                from ..script.standard import get_address_from_script_pubkey
+                miner_address = get_address_from_script_pubkey(coinbase_tx.outputs[0].script_pubkey)
+
+        result = {
             'hash': block.get_hash_hex(),
             'confirmations': self.blockchain.get_confirmations(block_hash),
-            'height': index.height if index else 0,
+            'height': height,
             'version': block.header.version,
+            'versionHex': f'0x{block.header.version:08x}',
             'merkleroot': block.header.merkle_root.hex(),
             'time': block.header.timestamp,
             'nonce': block.header.nonce,
             'difficulty': block.header.difficulty_target,
+            'difficultyDisplay': hex(block.header.difficulty_target),
             'nTx': len(block.transactions),
-            'previousblockhash': block.header.prev_block_hash.hex(),
-            'tx': [tx.get_txid().hex() for tx in block.transactions] if verbosity > 1 else [],
+            'previousblockhash': block.header.prev_block_hash[::-1].hex(),
+            'rewardJack': reward_jack,
+            'feeRewardJack': fee_reward_jack,
+            'minerAddress': miner_address,
+            'isMainChain': self.blockchain.is_in_main_chain(block_hash),
         }
+
+        if verbosity > 1:
+            tx_list = []
+            for tx in block.transactions:
+                inputs = []
+                for inp in tx.inputs:
+                    inputs.append({
+                        'txid': inp.prev_tx_id[::-1].hex() if inp.prev_tx_id else '0' * 64,
+                        'vout': inp.output_index,
+                    })
+                outputs = []
+                for idx, out in enumerate(tx.outputs):
+                    from ..script.standard import get_address_from_script_pubkey
+                    addr = get_address_from_script_pubkey(out.script_pubkey)
+                    outputs.append({
+                        'n': idx,
+                        'jack_value': out.jack_value,
+                        'assets': {k: v for k, v in out.assets.items()} if hasattr(out, 'assets') and out.assets else {},
+                        'script_pubkey_hex': out.script_pubkey.hex(),
+                        'address': addr,
+                    })
+                tx_list.append({
+                    'txid': tx.get_txid().hex(),
+                    'version': tx.version,
+                    'inputs': inputs,
+                    'outputs': outputs,
+                })
+            result['tx'] = tx_list
+
+        return result
 
     def _getblockhash(self, height: int) -> str:
         """높이로 블록 해시 조회"""
@@ -298,7 +351,7 @@ class RPCServer:
 
     def _getbestblockhash(self) -> str:
         """최신 블록 해시"""
-        return self.blockchain.get_tip_hash().hex()
+        return self.blockchain.get_tip_hash()[::-1].hex()
 
     def _getrecentblocks(self, count: int = 10) -> list:
         """최근 N개 블록 요약"""
