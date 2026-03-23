@@ -10,3 +10,12 @@ tmp/
 .claire/
 .claude/
 .env.local.example
+
+# Python 캐시 폴더 무시
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest 캐시 무시 (사진에 같이 보이네요)
+.pytest_cache/
+**/__pycache__/*

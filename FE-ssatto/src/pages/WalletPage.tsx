@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import PageLayout from "../components/layout/PageLayout";
 import type { WalletThemeId } from "../components/wallet/walletThemes";
 import {
@@ -8,21 +8,35 @@ import {
   restoreLegacyWalletPayloadFromBackup,
   type LegacyWalletRecord,
 } from "../services/legacyWalletMigrationService";
-import { migrateLegacyWallets, secureWallet, unlockWalletPrivateKey } from "../services/walletSecurityService";
+import {
+  migrateLegacyWallets,
+  secureWallet,
+  unlockWalletPrivateKey,
+} from "../services/walletSecurityService";
 import { restoreWalletSession } from "../services/walletSessionService";
-import { toWalletAuthErrorMessage, toWalletWriteErrorMessage } from "../services/walletErrorMapper";
+import {
+  toWalletAuthErrorMessage,
+  toWalletWriteErrorMessage,
+} from "../services/walletErrorMapper";
 import { registerWalletWithRollback } from "../services/walletRegistrationFlowService";
 import { submitExchangeWrite } from "../services/writeFlowService";
 import { useWalletActivities } from "../hooks/useWalletActivities";
 import { useWalletSummaries } from "../hooks/useWalletSummaries";
-import { useWalletSessionStore, WALLET_IDLE_LOCK_MS } from "../stores/useWalletSessionStore";
+import {
+  useWalletSessionStore,
+  WALLET_IDLE_LOCK_MS,
+} from "../stores/useWalletSessionStore";
 import { useWalletStore } from "../stores/useWalletStore";
 
 const ActivityList = lazy(() => import("../components/wallet/ActivityList"));
 const WalletCreate = lazy(() => import("../components/wallet/WalletCreate"));
 const WalletInfo = lazy(() => import("../components/wallet/WalletInfo"));
-const WalletMigrationModal = lazy(() => import("../components/wallet/WalletMigrationModal"));
-const WalletUnlockModal = lazy(() => import("../components/wallet/WalletUnlockModal"));
+const WalletMigrationModal = lazy(
+  () => import("../components/wallet/WalletMigrationModal")
+);
+const WalletUnlockModal = lazy(
+  () => import("../components/wallet/WalletUnlockModal")
+);
 
 interface WalletViewModel {
   walletId: string;
@@ -56,13 +70,21 @@ export default function WalletPage() {
   const setActiveAddress = useWalletStore((state) => state.setActiveAddress);
 
   const accessSessions = useWalletSessionStore((state) => state.accessSessions);
-  const unlockedWallets = useWalletSessionStore((state) => state.unlockedWallets);
-  const setAccessSession = useWalletSessionStore((state) => state.setAccessSession);
-  const clearAccessSession = useWalletSessionStore((state) => state.clearAccessSession);
+  const unlockedWallets = useWalletSessionStore(
+    (state) => state.unlockedWallets
+  );
+  const setAccessSession = useWalletSessionStore(
+    (state) => state.setAccessSession
+  );
+  const clearAccessSession = useWalletSessionStore(
+    (state) => state.clearAccessSession
+  );
   const unlockWallet = useWalletSessionStore((state) => state.unlockWallet);
   const lockWallet = useWalletSessionStore((state) => state.lockWallet);
   const touchSession = useWalletSessionStore((state) => state.touchSession);
-  const lockExpiredWallets = useWalletSessionStore((state) => state.lockExpiredWallets);
+  const lockExpiredWallets = useWalletSessionStore(
+    (state) => state.lockExpiredWallets
+  );
 
   const [activeWalletIndex, setActiveWalletIndex] = useState(0);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -81,7 +103,8 @@ export default function WalletPage() {
     setLegacyWallets(extractLegacyWallets(window.localStorage));
   }, []);
 
-  const { walletSummaries, refetch: refetchWalletSummaries } = useWalletSummaries(wallets);
+  const { walletSummaries, refetch: refetchWalletSummaries } =
+    useWalletSummaries(wallets);
 
   useEffect(() => {
     if (!activeAddress) {
@@ -89,17 +112,26 @@ export default function WalletPage() {
       return;
     }
 
-    const nextIndex = wallets.findIndex((wallet) => wallet.address === activeAddress);
+    const nextIndex = wallets.findIndex(
+      (wallet) => wallet.address === activeAddress
+    );
     if (nextIndex >= 0) {
       setActiveWalletIndex(nextIndex);
     }
   }, [activeAddress, wallets]);
 
   useEffect(() => {
-    const activityEvents: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "mousemove", "touchstart"];
+    const activityEvents: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "keydown",
+      "mousemove",
+      "touchstart",
+    ];
     const handleActivity = () => touchSession();
 
-    activityEvents.forEach((eventName) => window.addEventListener(eventName, handleActivity));
+    activityEvents.forEach((eventName) =>
+      window.addEventListener(eventName, handleActivity)
+    );
     const intervalId = window.setInterval(() => {
       const didLock = lockExpiredWallets(WALLET_IDLE_LOCK_MS);
       if (didLock) {
@@ -108,58 +140,78 @@ export default function WalletPage() {
     }, 30000);
 
     return () => {
-      activityEvents.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
+      activityEvents.forEach((eventName) =>
+        window.removeEventListener(eventName, handleActivity)
+      );
       window.clearInterval(intervalId);
     };
   }, [lockExpiredWallets, touchSession]);
 
   const activeWallet = wallets[activeWalletIndex];
-  const activeUnlockedPrivateKey = activeWallet ? unlockedWallets[activeWallet.walletId]?.privateKey : undefined;
-  const activeAccessSession = activeWallet ? accessSessions[activeWallet.walletId] : undefined;
+  const activeUnlockedPrivateKey = activeWallet
+    ? unlockedWallets[activeWallet.walletId]?.privateKey
+    : undefined;
+  const activeAccessSession = activeWallet
+    ? accessSessions[activeWallet.walletId]
+    : undefined;
   const { activities: currentActivities } = useWalletActivities(
     activeWallet?.address,
-    activeAccessSession?.accessToken,
+    activeAccessSession?.accessToken
   );
 
+  // refs so the effect can read the latest values without being a reactive dep
+  const activeWalletRef = useRef(activeWallet);
+  activeWalletRef.current = activeWallet;
+  const activeAccessSessionRef = useRef(activeAccessSession);
+  activeAccessSessionRef.current = activeAccessSession;
+
   useEffect(() => {
-    if (!activeWallet) {
+    const wallet = activeWalletRef.current;
+    if (!wallet) {
       return;
     }
 
-    setActiveAddress(activeWallet.address);
+    const currentToken = activeAccessSessionRef.current?.accessToken ?? null;
+    const currentExpiry =
+      activeAccessSessionRef.current?.accessTokenExpiresAt ?? null;
+
+    setActiveAddress(wallet.address);
     setIsAuthenticating(true);
     setAuthError(null);
     void restoreWalletSession({
-      wallet: activeWallet,
-      currentAccessToken: activeAccessSession?.accessToken ?? null,
-      currentAccessTokenExpiresAt: activeAccessSession?.accessTokenExpiresAt ?? null,
+      wallet,
+      currentAccessToken: currentToken,
+      currentAccessTokenExpiresAt: currentExpiry,
       unlockedPrivateKey: activeUnlockedPrivateKey,
     })
       .then((response) => {
         if (!response) {
-          clearAccessSession(activeWallet.walletId);
+          clearAccessSession(wallet.walletId);
           return;
         }
 
-        setAccessSession(activeWallet.walletId, response.accessToken, response.accessTokenExpiresAt);
-        const nextRefreshSessionHandle = response.refreshSessionHandle || activeWallet.refreshSessionHandle;
-        if (nextRefreshSessionHandle !== activeWallet.refreshSessionHandle) {
+        setAccessSession(
+          wallet.walletId,
+          response.accessToken,
+          response.accessTokenExpiresAt
+        );
+        const nextRefreshSessionHandle =
+          response.refreshSessionHandle || wallet.refreshSessionHandle;
+        if (nextRefreshSessionHandle !== wallet.refreshSessionHandle) {
           upsertWallet({
-            ...activeWallet,
+            ...wallet,
             refreshSessionHandle: nextRefreshSessionHandle,
           });
         }
       })
       .catch((error) => {
-        clearAccessSession(activeWallet.walletId);
+        clearAccessSession(wallet.walletId);
         setAuthError(toWalletAuthErrorMessage(error));
       })
       .finally(() => setIsAuthenticating(false));
   }, [
-    activeAccessSession?.accessToken,
-    activeAccessSession?.accessTokenExpiresAt,
+    activeWallet?.walletId,
     activeUnlockedPrivateKey,
-    activeWallet,
     clearAccessSession,
     setAccessSession,
     setActiveAddress,
@@ -169,7 +221,9 @@ export default function WalletPage() {
   const allWallets = useMemo<WalletViewModel[]>(
     () =>
       wallets.map((wallet) => {
-        const summary = walletSummaries.find((item) => item.address === wallet.address);
+        const summary = walletSummaries.find(
+          (item) => item.address === wallet.address
+        );
         return {
           walletId: wallet.walletId,
           keystoreId: wallet.keystoreId,
@@ -180,16 +234,18 @@ export default function WalletPage() {
           potBalance: Math.floor((summary?.potBalance ?? 0) / 100_000_000),
         };
       }),
-    [walletSummaries, wallets],
+    [walletSummaries, wallets]
   );
 
-  const isCurrentWalletLocked = activeWallet ? !unlockedWallets[activeWallet.walletId] : false;
+  const isCurrentWalletLocked = activeWallet
+    ? !unlockedWallets[activeWallet.walletId]
+    : false;
 
   const persistWallet = async (
     walletNickname: string,
     type: "create" | "restore",
     payload?: WalletPersistPayload,
-    color: WalletThemeId = "gray",
+    color: WalletThemeId = "gray"
   ) => {
     const address = payload?.address;
     const privateKey = payload?.privateKey;
@@ -202,7 +258,9 @@ export default function WalletPage() {
     setWriteStatus(null);
 
     try {
-      const existingWallet = wallets.find((wallet) => wallet.address === address);
+      const existingWallet = wallets.find(
+        (wallet) => wallet.address === address
+      );
       const result = await registerWalletWithRollback({
         walletNickname,
         type,
@@ -219,10 +277,15 @@ export default function WalletPage() {
         ...result.securedWallet.metadata,
         refreshSessionHandle: existingWallet?.refreshSessionHandle ?? null,
       });
-      unlockWallet(result.securedWallet.metadata.walletId, result.securedWallet.privateKey);
+      unlockWallet(
+        result.securedWallet.metadata.walletId,
+        result.securedWallet.privateKey
+      );
 
       if (result.status === "duplicate_restore") {
-        setWriteStatus("이미 등록된 지갑입니다. 기존 지갑 정보를 그대로 사용합니다.");
+        setWriteStatus(
+          "이미 등록된 지갑입니다. 기존 지갑 정보를 그대로 사용합니다."
+        );
         setAuthError(null);
         return;
       }
@@ -232,7 +295,7 @@ export default function WalletPage() {
         setWriteStatus(
           result.response?.onboardingRewardGranted
             ? "지갑이 등록되었고 1 POT이 지급되었습니다. 바로 로또에 참여할 수 있습니다."
-            : "지갑이 등록되었습니다. 잔액 반영 상태를 확인해주세요.",
+            : "지갑이 등록되었습니다. 잔액 반영 상태를 확인해주세요."
         );
       } else {
         setWriteStatus("기존 지갑이 등록되었습니다.");
@@ -250,24 +313,34 @@ export default function WalletPage() {
   const handleCreateWallet = (
     walletNickname?: string,
     color?: WalletThemeId,
-    payload?: WalletPersistPayload,
+    payload?: WalletPersistPayload
   ) => {
-    void persistWallet(walletNickname ?? "내 지갑", "create", payload, color ?? "gray");
+    void persistWallet(
+      walletNickname ?? "내 지갑",
+      "create",
+      payload,
+      color ?? "gray"
+    );
   };
 
   const handleRestoreWallet = (
     walletNickname?: string,
     color?: WalletThemeId,
-    payload?: WalletPersistPayload,
+    payload?: WalletPersistPayload
   ) => {
-    void persistWallet(walletNickname ?? "기존 지갑", "restore", payload, color ?? "gray");
+    void persistWallet(
+      walletNickname ?? "기존 지갑",
+      "restore",
+      payload,
+      color ?? "gray"
+    );
   };
 
   const handleAddWallet = (
     walletNickname: string,
     type: "create" | "restore",
     payload?: WalletPersistPayload,
-    color: WalletThemeId = "gray",
+    color: WalletThemeId = "gray"
   ) => {
     void persistWallet(walletNickname, type, payload, color);
   };
@@ -288,15 +361,22 @@ export default function WalletPage() {
     }
 
     backupLegacyWalletPayload(window.localStorage);
-    const migratedWallets = await migrateLegacyWallets(legacyWallets, password, wallets);
+    const migratedWallets = await migrateLegacyWallets(
+      legacyWallets,
+      password,
+      wallets
+    );
     const mergedWallets = [...wallets];
 
     migratedWallets.forEach((wallet) => {
-      const index = mergedWallets.findIndex((item) => item.address === wallet.metadata.address);
+      const index = mergedWallets.findIndex(
+        (item) => item.address === wallet.metadata.address
+      );
       if (index >= 0) {
         mergedWallets[index] = {
           ...wallet.metadata,
-          refreshSessionHandle: mergedWallets[index]?.refreshSessionHandle ?? null,
+          refreshSessionHandle:
+            mergedWallets[index]?.refreshSessionHandle ?? null,
         };
       } else {
         mergedWallets.push(wallet.metadata);
@@ -327,7 +407,9 @@ export default function WalletPage() {
       accessToken: activeAccessSession.accessToken,
     });
     setWriteStatus(
-      `${(response.burnedJack / 100_000_000).toLocaleString("ko-KR")} JACK 교환 트랜잭션을 제출했습니다.`,
+      `${(response.burnedJack / 100_000_000).toLocaleString(
+        "ko-KR"
+      )} JACK 교환 트랜잭션을 제출했습니다.`
     );
   };
 
@@ -355,14 +437,21 @@ export default function WalletPage() {
       ) : null}
 
       {wallets.length === 0 && legacyWallets.length === 0 ? (
-        <Suspense fallback={<WalletSectionFallback label="지갑 생성 화면을 불러오는 중입니다." />}>
-          <WalletCreate onCreate={handleCreateWallet} onRestore={handleRestoreWallet} />
+        <Suspense
+          fallback={
+            <WalletSectionFallback label="지갑 생성 화면을 불러오는 중입니다." />
+          }
+        >
+          <WalletCreate
+            onCreate={handleCreateWallet}
+            onRestore={handleRestoreWallet}
+          />
         </Suspense>
       ) : wallets.length === 0 ? (
         <div className="mx-auto flex min-h-[320px] w-full max-w-3xl items-center justify-center px-6 text-center">
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] px-8 py-10 text-text-secondary">
-            기존 지갑을 암호화 keystore로 업그레이드하는 중입니다. 비밀번호를 입력하면 지갑 메타데이터와
-            잠금 해제 흐름이 새 구조로 전환됩니다.
+            기존 지갑을 암호화 keystore로 업그레이드하는 중입니다. 비밀번호를
+            입력하면 지갑 메타데이터와 잠금 해제 흐름이 새 구조로 전환됩니다.
           </div>
         </div>
       ) : (
@@ -371,7 +460,10 @@ export default function WalletPage() {
             <div className="mb-4 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-text-secondary">
               {isCurrentWalletLocked ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>현재 지갑은 잠금 상태입니다. 로또 참여나 교환 서명 전에는 비밀번호로 잠금 해제가 필요합니다.</span>
+                  <span>
+                    현재 지갑은 잠금 상태입니다. 로또 참여나 교환 서명 전에는
+                    비밀번호로 잠금 해제가 필요합니다.
+                  </span>
                   <button
                     type="button"
                     onClick={() => setShowUnlockModal(true)}
@@ -382,7 +474,10 @@ export default function WalletPage() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>현재 지갑은 메모리에서 잠금 해제된 상태입니다. 서명 가능한 상태이며 5분 동안 활동이 없으면 자동으로 잠깁니다.</span>
+                  <span>
+                    현재 지갑은 메모리에서 잠금 해제된 상태입니다. 서명 가능한
+                    상태이며 5분 동안 활동이 없으면 자동으로 잠깁니다.
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
@@ -424,7 +519,11 @@ export default function WalletPage() {
               현재 활성 지갑이 인증된 상태입니다.
             </div>
           ) : null}
-          <Suspense fallback={<WalletSectionFallback label="지갑 정보를 불러오는 중입니다." />}>
+          <Suspense
+            fallback={
+              <WalletSectionFallback label="지갑 정보를 불러오는 중입니다." />
+            }
+          >
             <WalletInfo
               wallets={allWallets}
               activeIndex={activeWalletIndex}
@@ -434,7 +533,11 @@ export default function WalletPage() {
             />
           </Suspense>
           <div className="mt-6">
-            <Suspense fallback={<WalletSectionFallback label="활동 기록을 불러오는 중입니다." />}>
+            <Suspense
+              fallback={
+                <WalletSectionFallback label="활동 기록을 불러오는 중입니다." />
+              }
+            >
               <ActivityList activities={currentActivities} />
             </Suspense>
           </div>
