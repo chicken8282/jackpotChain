@@ -97,6 +97,13 @@ public interface JackpotChainRpcClient {
     int getMempoolTransactionCount();
 
     /**
+     * 노드 mempool의 트랜잭션 상세 목록을 조회한다.
+     *
+     * @return txId → {fee, size, time} 맵
+     */
+    java.util.Map<String, MempoolTransactionEntry> getRawMempool();
+
+    /**
      * 로또 결과를 조회한다.
      *
      * @param commitHash 커밋 트랜잭션 해시
