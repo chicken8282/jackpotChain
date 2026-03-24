@@ -60,7 +60,7 @@ class MiningControllerTest {
                 ))
             ));
 
-        mockMvc.perform(get("/api/v1/mining/blocks")
+        mockMvc.perform(get("/v1/mining/blocks")
                 .param("address", "JackpotAddress01")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())

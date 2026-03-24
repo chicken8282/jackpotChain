@@ -16,7 +16,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/mining")
+@RequestMapping("/v1/mining")
 public class MiningController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

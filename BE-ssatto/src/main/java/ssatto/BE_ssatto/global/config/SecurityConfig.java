@@ -60,25 +60,25 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/v3/api-docs/**",
                     "/actuator/health",
-                    "/api/v1/auth/challenge",
-                    "/api/v1/auth/verify",
-                    "/api/v1/auth/refresh",
-                    "/api/v1/auth/logout",
-                    "/api/v1/blockchain/**",
-                    "/api/v1/learning/**",   // [학습 프론트엔드 v2] 추가
-                    "/api/v1/wallet",
-                    "/api/v1/wallet/"
+                    "/v1/auth/challenge",
+                    "/v1/auth/verify",
+                    "/v1/auth/refresh",
+                    "/v1/auth/logout",
+                    "/v1/blockchain/**",
+                    "/v1/learning/**",   // [학습 프론트엔드 v2] 추가
+                    "/v1/wallet",
+                    "/v1/wallet/"
                 ).permitAll()
                 .requestMatchers(
-                    "/api/v1/wallet/*/activities",
-                    "/api/v1/wallet/*/utxos",
-                    "/api/v1/lotto",
-                    "/api/v1/lotto/entries",
-                    "/api/v1/lotto/entries/*/result",
-                    "/api/v1/lotto/commit",
-                    "/api/v1/mining/blocks",
-                    "/api/v1/exchange/info",
-                    "/api/v1/exchange/jack-to-pot"
+                    "/v1/wallet/*/activities",
+                    "/v1/wallet/*/utxos",
+                    "/v1/lotto",
+                    "/v1/lotto/entries",
+                    "/v1/lotto/entries/*/result",
+                    "/v1/lotto/commit",
+                    "/v1/mining/blocks",
+                    "/v1/exchange/info",
+                    "/v1/exchange/jack-to-pot"
                 ).authenticated()
                 .anyRequest().permitAll()
             )
@@ -103,7 +103,7 @@ public class SecurityConfig {
         configuration.setMaxAge(authCorsProperties.getMaxAgeSeconds());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration);
+        source.registerCorsConfiguration("/v1/**", configuration);
         source.registerCorsConfiguration("/v3/api-docs/**", configuration);
         return source;
     }

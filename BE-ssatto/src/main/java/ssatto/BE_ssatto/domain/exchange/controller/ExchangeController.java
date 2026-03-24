@@ -21,7 +21,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/exchange")
+@RequestMapping("/v1/exchange")
 public class ExchangeController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

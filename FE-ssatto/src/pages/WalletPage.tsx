@@ -93,6 +93,15 @@ export default function WalletPage() {
   const [legacyWallets, setLegacyWallets] = useState<LegacyWalletRecord[]>([]);
   const [writeStatus, setWriteStatus] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
+  const writeStatusTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (writeStatusTimerRef.current !== null) {
+        window.clearTimeout(writeStatusTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -103,8 +112,7 @@ export default function WalletPage() {
     setLegacyWallets(extractLegacyWallets(window.localStorage));
   }, []);
 
-  const { walletSummaries, refetch: refetchWalletSummaries } =
-    useWalletSummaries(wallets);
+  const { walletSummaries } = useWalletSummaries(wallets);
 
   useEffect(() => {
     if (!activeAddress) {
@@ -300,13 +308,22 @@ export default function WalletPage() {
         return;
       }
 
-      await refetchWalletSummaries();
+      // refetchWalletSummaries() is intentionally not called here.
+      // upsertWallet() above triggers a re-render; useWalletSummaries then
+      // immediately refetches with the correct addresses via its queryKey effect.
+      // Calling refetch() before the re-render would use a stale closure (addresses=[]).
+      if (writeStatusTimerRef.current !== null) {
+        window.clearTimeout(writeStatusTimerRef.current);
+      }
       if (type === "create") {
-        setWriteStatus(
-          result.response?.onboardingRewardGranted
-            ? "지갑이 등록되었고 1 POT이 지급되었습니다. 바로 로또에 참여할 수 있습니다."
-            : "지갑이 등록되었습니다. 잔액 반영 상태를 확인해주세요."
-        );
+        const msg = result.response?.onboardingRewardGranted
+          ? "1 POT 생성 중입니다. 잔액이 곧 반영됩니다."
+          : "지갑이 등록되었습니다.";
+        setWriteStatus(msg);
+        writeStatusTimerRef.current = window.setTimeout(() => {
+          setWriteStatus(null);
+          writeStatusTimerRef.current = null;
+        }, 30_000);
       } else {
         setWriteStatus("기존 지갑이 등록되었습니다.");
       }

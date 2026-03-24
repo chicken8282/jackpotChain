@@ -26,7 +26,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/lotto")
+@RequestMapping("/v1/lotto")
 public class LottoController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

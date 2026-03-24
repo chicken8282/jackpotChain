@@ -24,7 +24,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/wallet")
+@RequestMapping("/v1/wallet")
 public class WalletController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

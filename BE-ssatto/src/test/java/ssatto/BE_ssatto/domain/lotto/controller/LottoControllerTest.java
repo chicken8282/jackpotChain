@@ -62,7 +62,7 @@ class LottoControllerTest {
                 List.of(new LottoPrizeTierResponse(1, 6, 10_000_000_000_000L))
             ));
 
-        mockMvc.perform(get("/api/v1/lotto")
+        mockMvc.perform(get("/v1/lotto")
                 .param("address", "JackpotAddress01")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
@@ -76,7 +76,7 @@ class LottoControllerTest {
     @Test
     @DisplayName("로또 참여 API는 인증 지갑 주소를 서비스에 전달한다")
     void commitReturnsSuccess() throws Exception {
-        mockMvc.perform(post("/api/v1/lotto/commit")
+        mockMvc.perform(post("/v1/lotto/commit")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -108,7 +108,7 @@ class LottoControllerTest {
                 2_000_000_000_000L
             ));
 
-        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/result")
+        mockMvc.perform(get("/v1/lotto/entries/commit-001/result")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))
@@ -136,7 +136,7 @@ class LottoControllerTest {
                 ))
             ));
 
-        mockMvc.perform(get("/api/v1/lotto/entries")
+        mockMvc.perform(get("/v1/lotto/entries")
                 .param("address", "JackpotAddress01")
                 .param("status", "WINNING")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
@@ -159,7 +159,7 @@ class LottoControllerTest {
                 java.time.LocalDateTime.of(2026, 3, 21, 1, 0)
             ));
 
-        mockMvc.perform(post("/api/v1/lotto/claim")
+        mockMvc.perform(post("/v1/lotto/claim")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -190,7 +190,7 @@ class LottoControllerTest {
                 List.of(new LottoClaimPoolUtxoResponse("pool-utxo-001", 0, 2_500_000_000_000L, 18))
             ));
 
-        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/claim-context")
+        mockMvc.perform(get("/v1/lotto/entries/commit-001/claim-context")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))

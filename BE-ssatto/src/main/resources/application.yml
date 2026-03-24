@@ -37,7 +37,7 @@ auth:
     allowed-headers: Authorization,Content-Type,Accept
     max-age-seconds: 3600
   refresh-cookie:
-    path: /api/v1/auth
+    path: /v1/auth
     max-age-seconds: 1209600
     secure: false
     same-site: Lax

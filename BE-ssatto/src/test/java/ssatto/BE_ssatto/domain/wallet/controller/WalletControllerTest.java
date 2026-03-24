@@ -63,7 +63,7 @@ class WalletControllerTest {
                 100_000_000L
             ));
 
-        mockMvc.perform(post("/api/v1/wallet")
+        mockMvc.perform(post("/v1/wallet")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -89,7 +89,7 @@ class WalletControllerTest {
                 new WalletSummaryResponse("JackpotAddress01", "내 지갑", "BLUE", 12_500_000_000L, 300_000_000L, LocalDateTime.of(2026, 3, 20, 9, 0))
             )));
 
-        mockMvc.perform(get("/api/v1/wallet").param("addresses", "JackpotAddress01"))
+        mockMvc.perform(get("/v1/wallet").param("addresses", "JackpotAddress01"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))
             .andExpect(jsonPath("$.message").value("지갑 목록 조회가 완료되었습니다."))
@@ -114,7 +114,7 @@ class WalletControllerTest {
                 ))
             ));
 
-        mockMvc.perform(get("/api/v1/wallet/JackpotAddress01/activities")
+        mockMvc.perform(get("/v1/wallet/JackpotAddress01/activities")
                 .param("lastActivityId", "15")
                 .param("size", "20")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
@@ -143,7 +143,7 @@ class WalletControllerTest {
                 )
             )));
 
-        mockMvc.perform(get("/api/v1/wallet/JackpotAddress01/utxos")
+        mockMvc.perform(get("/v1/wallet/JackpotAddress01/utxos")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))

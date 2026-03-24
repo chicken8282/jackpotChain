@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 @Import(SecurityConfig.class)
 @TestPropertySource(properties = {
-    "auth.refresh-cookie.path=/api/v1/auth",
+    "auth.refresh-cookie.path=/v1/auth",
     "auth.refresh-cookie.max-age-seconds=1209600",
     "auth.refresh-cookie.secure=true",
     "auth.refresh-cookie.same-site=None"
@@ -69,7 +69,7 @@ class AuthControllerTest {
                 LocalDateTime.of(2026, 3, 20, 10, 5)
             ));
 
-        mockMvc.perform(post("/api/v1/auth/challenge")
+        mockMvc.perform(post("/v1/auth/challenge")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -94,7 +94,7 @@ class AuthControllerTest {
                 "refresh-token-001"
             ));
 
-        mockMvc.perform(post("/api/v1/auth/verify")
+        mockMvc.perform(post("/v1/auth/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -111,7 +111,7 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.data.refreshSessionHandle").value("session-handle-001"))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
                 containsString("ssatto_refresh_session-handle-001=refresh-token-001"),
-                containsString("Path=/api/v1/auth"),
+                containsString("Path=/v1/auth"),
                 containsString("HttpOnly"),
                 containsString("Secure"),
                 containsString("SameSite=None"),
@@ -131,7 +131,7 @@ class AuthControllerTest {
                 "refresh-token-002"
             ));
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post("/v1/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .cookie(new Cookie("ssatto_refresh_session-handle-001", "refresh-token-001"))
                 .content("""
@@ -145,7 +145,7 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.data.accessToken").value("access-token-002"))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
                 containsString("ssatto_refresh_session-handle-001=refresh-token-002"),
-                containsString("Path=/api/v1/auth"),
+                containsString("Path=/v1/auth"),
                 containsString("HttpOnly"),
                 containsString("Secure"),
                 containsString("SameSite=None"),
@@ -156,7 +156,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("logout API가 성공 응답과 refresh cookie 삭제를 반환한다")
     void logoutReturnsSuccess() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/logout")
+        mockMvc.perform(post("/v1/auth/logout")
                 .contentType(MediaType.APPLICATION_JSON)
                 .cookie(new Cookie("ssatto_refresh_session-handle-001", "refresh-token-001"))
                 .content("""
@@ -169,7 +169,7 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.message").value("로그아웃이 완료되었습니다."))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
                 containsString("ssatto_refresh_session-handle-001="),
-                containsString("Path=/api/v1/auth"),
+                containsString("Path=/v1/auth"),
                 containsString("HttpOnly"),
                 containsString("Secure"),
                 containsString("SameSite=None"),
