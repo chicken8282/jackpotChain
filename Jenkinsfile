@@ -6,22 +6,21 @@ pipeline {
     }
 
     environment {
-        DOCKERHUB_REPO   = "jooyoonjang"
-        DOCKER_IMAGE_BE  = "jackpotchain-be"
-        DOCKER_IMAGE_FE  = "jackpotchain-fe"
-        DOCKER_IMAGE_NODE= "jackpotchain-node"
+        DOCKERHUB_REPO    = "jooyoonjang"
+        DOCKER_IMAGE_BE   = "jackpotchain-be"
+        DOCKER_IMAGE_FE   = "jackpotchain-fe"
+        DOCKER_IMAGE_NODE = "jackpotchain-node"
 
-        MAIN_EC2         = "ubuntu@15.165.75.53"
-        REMOTE_REPO_DIR  = "~/deploy-repo"
-        REMOTE_APP_DIR   = "~/app"
+        MAIN_EC2        = "ubuntu@15.165.75.53"
+        REMOTE_REPO_DIR = "~/deploy-repo"
+        REMOTE_APP_DIR  = "~/app"
 
-        IMAGE_TAG        = "${env.BUILD_NUMBER}"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Jenkins Job의 SCM 설정(Repository URL + gitlab-https-auth)을 사용
                 checkout scm
             }
         }
@@ -32,7 +31,7 @@ pipeline {
                     def detectedBranch = ""
 
                     if (env.gitlabBranch) {
-                        detectedBranch = env.gitlabBranch
+                        detectedBranch = env.gitlabBranch.tokenize('/').last()
                     } else if (env.BRANCH_NAME) {
                         detectedBranch = env.BRANCH_NAME
                     } else if (env.GIT_BRANCH) {
@@ -85,7 +84,7 @@ pipeline {
                 sh """
                 docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG} ./BE-ssatto
                 docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG} ./FE-ssatto
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./jackpotchain
+                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./blockchain
 
                 docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
                 docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
