@@ -140,21 +140,24 @@ function EdgeLine({ edge, nodes, delay = 0, dashed = false }: { edge: Edge; node
 
 /* ── 데이터 파티클 ── */
 function DataParticle({ particle, delay = 0 }: { particle: Particle; delay?: number }) {
-  const size = particle.type === "block" ? 6 : 4;
+  const isBlock = particle.type === "block";
+
   return (
-    <motion.circle
-      cx={particle.fromX} cy={particle.fromY}
-      r={size}
-      fill={particle.color}
-      opacity={0.9}
-      initial={{ cx: particle.fromX, cy: particle.fromY, opacity: 0 }}
+    <motion.g
+      initial={{ opacity: 0 }}
       animate={{
-        cx: [particle.fromX, particle.toX],
-        cy: [particle.fromY, particle.toY],
+        translateX: [particle.fromX, particle.toX],
+        translateY: [particle.fromY, particle.toY],
         opacity: [0, 1, 1, 0],
       }}
       transition={{ delay, duration: 1.2, ease: "easeInOut" }}
-    />
+    >
+      {isBlock ? (
+        <rect x={-5} y={-5} width={10} height={10} rx={2} fill={particle.color} />
+      ) : (
+        <circle r={4} fill={particle.color} />
+      )}
+    </motion.g>
   );
 }
 
@@ -180,6 +183,85 @@ export default function NetworkDemo() {
 
   const showMe = phase !== "idle";
   const showDiscoverEdges = phase !== "idle" && phase !== "join";
+
+  // BFS flood 전파 유틸
+  const floodPropagate = useCallback((
+    senderId: string,
+    color: string,
+    type: "block" | "tx",
+    edges: Edge[],
+    nodesPool: Node[],
+  ) => {
+    const visited = new Set<string>([senderId]);
+    // BFS 큐: [nodeId, hopDelay]
+    const queue: [string, number][] = [[senderId, 0]];
+
+    while (queue.length > 0) {
+      const [currentId, hopDelay] = queue.shift()!;
+      const currentNode = nodesPool.find((n) => n.id === currentId)!;
+
+      const connectedEdges = edges.filter(
+        (e) => e.from === currentId || e.to === currentId,
+      );
+
+      connectedEdges.forEach((edge, i) => {
+        const neighborId = edge.from === currentId ? edge.to : edge.from;
+        if (visited.has(neighborId)) return;
+        visited.add(neighborId);
+
+        const neighbor = nodesPool.find((n) => n.id === neighborId);
+        if (!neighbor) return;
+
+        const delay = hopDelay + i * 150;
+        setTimeout(() => {
+          const id = `flood-${particleIdRef.current++}`;
+          setParticles((prev) => [...prev, {
+            id,
+            fromX: currentNode.x, fromY: currentNode.y,
+            toX: neighbor.x, toY: neighbor.y,
+            color, type,
+          }]);
+          setTimeout(() => setParticles((prev) => prev.filter((p) => p.id !== id)), 1500);
+        }, delay);
+
+        queue.push([neighborId, delay + 800]);
+      });
+    }
+  }, []);
+
+  // 배경 활동: 기존 피어들의 블록/TX 전파
+  useEffect(() => {
+    const getEdges = () => showDiscoverEdges ? [...EXISTING_EDGES, ...DISCOVER_EDGES] : EXISTING_EDGES;
+    const getNodes = () => showDiscoverEdges ? allNodesWithMe : allNodes;
+
+    const emitBackground = () => {
+      const candidates = [...SEED_NODES, ...PEER_NODES];
+      const sender = candidates[Math.floor(Math.random() * candidates.length)];
+      const isBlock = Math.random() < 0.35;
+      const color = isBlock ? "#22c55e" : "#f59e0b";
+      const type: "block" | "tx" = isBlock ? "block" : "tx";
+
+      floodPropagate(sender.id, color, type, getEdges(), getNodes());
+    };
+
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const delay = 2500 + Math.random() * 2500;
+      timer = setTimeout(() => {
+        emitBackground();
+        schedule();
+      }, delay);
+    };
+    const initial = setTimeout(() => {
+      emitBackground();
+      schedule();
+    }, 1000);
+
+    return () => {
+      clearTimeout(initial);
+      clearTimeout(timer);
+    };
+  }, [phase, showDiscoverEdges, floodPropagate]);
 
   // 동기화 파티클
   useEffect(() => {
@@ -212,41 +294,12 @@ export default function NetworkDemo() {
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
-  // 채굴/TX 전파 파티클
+  // 채굴/TX 전파 파티클 (BFS flood)
   const emitPropagation = useCallback((type: "block" | "tx") => {
     const color = type === "block" ? "#22c55e" : "#f59e0b";
-    const me = MY_NODE;
-
-    DISCOVER_EDGES.forEach((edge, i) => {
-      const other = allNodesWithMe.find((n) => n.id === (edge.from === "me" ? edge.to : edge.from))!;
-      setTimeout(() => {
-        const id = `prop-${particleIdRef.current++}`;
-        setParticles((prev) => [...prev, {
-          id, fromX: me.x, fromY: me.y,
-          toX: other.x, toY: other.y,
-          color, type,
-        }]);
-        setTimeout(() => setParticles((prev) => prev.filter((p) => p.id !== id)), 1500);
-
-        // 2차 전파: 시드 → 다른 피어
-        if (other.type === "seed") {
-          const secondaryEdges = EXISTING_EDGES.filter((e) => (e.from === other.id || e.to === other.id) && e.from !== "me" && e.to !== "me");
-          secondaryEdges.forEach((se, j) => {
-            const target = allNodes.find((n) => n.id === (se.from === other.id ? se.to : se.from))!;
-            setTimeout(() => {
-              const id2 = `prop2-${particleIdRef.current++}`;
-              setParticles((prev) => [...prev, {
-                id: id2, fromX: other.x, fromY: other.y,
-                toX: target.x, toY: target.y,
-                color, type,
-              }]);
-              setTimeout(() => setParticles((prev) => prev.filter((p) => p.id !== id2)), 1500);
-            }, 600 + j * 300);
-          });
-        }
-      }, i * 400);
-    });
-  }, []);
+    const allEdges = [...EXISTING_EDGES, ...DISCOVER_EDGES];
+    floodPropagate("me", color, type, allEdges, allNodesWithMe);
+  }, [floodPropagate]);
 
   const handleMining = useCallback(() => {
     setPhase("mining");
@@ -362,7 +415,7 @@ export default function NetworkDemo() {
       </div>
 
       {/* 범례 */}
-      <div className="flex gap-6 text-[10px] text-white/30">
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-[10px] text-white/30 justify-center">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" /> 시드 노드
         </span>
@@ -371,6 +424,12 @@ export default function NetworkDemo() {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-green-500/80 inline-block" /> 내 노드
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-green-500/80 inline-block" /> 블록
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-amber-500/80 inline-block" /> TX
         </span>
       </div>
     </div>
