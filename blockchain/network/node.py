@@ -6,7 +6,6 @@ Step 8.3: 노드 로직
 
 import asyncio
 import time
-<<<<<<< HEAD:blockchain/network/node.py
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass
@@ -17,11 +16,6 @@ def _log(tag: str, msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}][{tag}] {msg}")
 
-=======
-from typing import Dict, List, Optional, Callable
-from dataclasses import dataclass
-
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 from .protocol import (
     MessageType, MessageHeader,
     VersionMessage, InvMessage, InvItem, InvType,
@@ -147,11 +141,7 @@ class Node:
         if self._sync_peer is not None:
             # 타임아웃 경과 시 좀비 동기화 상태 자동 해제
             if self._sync_start_time > 0 and time.time() - self._sync_start_time > self._sync_timeout:
-<<<<<<< HEAD:blockchain/network/node.py
                 _log('SYNC', f'동기화 타임아웃 감지, 상태 초기화 (높이: {self.height})')
-=======
-                print(f"[SYNC] 동기화 타임아웃 감지, 상태 초기화 (높이: {self.height})")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
                 self._sync_peer = None
                 self._pending_blocks.clear()
                 self._requesting.clear()
@@ -180,11 +170,7 @@ class Node:
         if self.config.is_seed_node:
             self._rendezvous_server = RendezvousServer(port=self.config.rendezvous_port)
             await self._rendezvous_server.start(self.config.host)
-<<<<<<< HEAD:blockchain/network/node.py
             _log('Rendezvous', f'랑데부 서버 시작 - 포트 {self.config.rendezvous_port}')
-=======
-            print(f"[Rendezvous] 랑데부 서버 시작 - 포트 {self.config.rendezvous_port}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
         # 서버 먼저 시작 (수동 포트포워딩 감지에 필요)
         self._server = await asyncio.start_server(
@@ -198,25 +184,15 @@ class Node:
             nat_result = await self.nat_manager.setup_port_mapping()
             if nat_result.success:
                 if nat_result.protocol == NATProtocol.MANUAL:
-<<<<<<< HEAD:blockchain/network/node.py
                     _log('NAT', f'수동 포트포워딩 감지 - 인바운드 가능 ({nat_result.external_ip}:{nat_result.external_port})')
                 else:
                     _log('NAT', f'포트 매핑 성공: {nat_result.external_ip}:{nat_result.external_port} ({nat_result.protocol.value})')
-=======
-                    print(f"[NAT] 수동 포트포워딩 감지 - 인바운드 가능 ({nat_result.external_ip}:{nat_result.external_port})")
-                else:
-                    print(f"[NAT] 포트 매핑 성공: {nat_result.external_ip}:{nat_result.external_port} ({nat_result.protocol.value})")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
                 # 홀펀치 클라이언트 참조 저장
                 if nat_result.protocol == NATProtocol.HOLEPUNCH and self.nat_manager.holepunch_client:
                     self._holepunch_client = self.nat_manager.holepunch_client
                     self._holepunch_client._on_punch_success = self._on_holepunch_inbound
             else:
-<<<<<<< HEAD:blockchain/network/node.py
                 _log('NAT', '포트 매핑 실패 - 아웃바운드 전용 모드')
-=======
-                print(f"[NAT] 포트 매핑 실패 - 아웃바운드 전용 모드")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
         # 피어 발견 초기화
         initial_peers = self.discovery.initialize()
@@ -245,11 +221,7 @@ class Node:
                     stale = len(self._requesting)
                     self._requesting.clear()
                     self._sync_start_time = time.time()
-<<<<<<< HEAD:blockchain/network/node.py
                     _log('SYNC', f'watchdog: stale {stale}개 정리, 재요청 (대기: {len(self._pending_blocks)}개)')
-=======
-                    print(f"[SYNC] watchdog: stale {stale}개 정리, 재요청 (대기: {len(self._pending_blocks)}개)")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
                     await self._request_next_block()
 
     async def stop(self):
@@ -313,17 +285,10 @@ class Node:
                             self._handle_peer(address, hp_result.reader, hp_result.writer)
                         )
                         await self._send_version(address)
-<<<<<<< HEAD:blockchain/network/node.py
                         _log('HolePunch', f'피어 연결 성공: {address.ip}:{address.port}')
                         return True
 
             _log('PEER', f'연결 실패: {address.ip}:{address.port} - {e}')
-=======
-                        print(f"[HolePunch] 피어 연결 성공: {address.ip}:{address.port}")
-                        return True
-
-            print(f"[PEER] 연결 실패: {address.ip}:{address.port} - {e}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
             self.peer_manager.update_peer_state(address, PeerState.DISCONNECTED)
             return False
 
@@ -349,11 +314,7 @@ class Node:
         asyncio.create_task(
             self._handle_peer(address, result.reader, result.writer)
         )
-<<<<<<< HEAD:blockchain/network/node.py
         _log('HolePunch', f'인바운드 연결 수신: {result.peer_ip}:{result.peer_port}')
-=======
-        print(f"[HolePunch] 인바운드 연결 수신: {result.peer_ip}:{result.peer_port}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
     async def _handle_inbound(self, reader, writer):
         """인바운드 연결 처리"""
@@ -445,11 +406,7 @@ class Node:
     async def _handle_version(self, address: PeerAddress, payload: bytes):
         """VERSION 메시지 처리"""
         version_msg = VersionMessage.deserialize(payload)
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'VERSION 수신: height={version_msg.start_height} from {address.ip}:{address.port}')
-=======
-        print(f"[SYNC] VERSION 수신: height={version_msg.start_height} from {address.ip}:{address.port}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
         self.peer_manager.update_peer_version(address, version_msg)
         self.peer_manager.update_peer_height(address, version_msg.start_height)
         peer = self.peer_manager.get_peer(address)
@@ -500,17 +457,10 @@ class Node:
         """동기화 필요 여부 확인 및 시작"""
         peer = self.peer_manager.get_peer(address)
         if peer and peer.start_height > self.height:
-<<<<<<< HEAD:blockchain/network/node.py
             _log('SYNC', f'IBD 시작: 로컬={self.height}, 피어={peer.start_height}, 주소={address.ip}:{address.port}')
             await self._request_blocks(address)
         else:
             _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer.start_height if peer else "N/A"}')
-=======
-            print(f"[SYNC] IBD 시작: 로컬={self.height}, 피어={peer.start_height}, 주소={address.ip}:{address.port}")
-            await self._request_blocks(address)
-        else:
-            print(f"[SYNC] 동기화 불필요: 로컬={self.height}, 피어={peer.start_height if peer else 'N/A'}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
     async def _handle_ping(self, address: PeerAddress, payload: bytes):
         """PING 처리"""
@@ -523,11 +473,7 @@ class Node:
         # [SYNC-LOG] INV 수신
         block_count = sum(1 for i in inv_msg.items if i.inv_type == InvType.BLOCK)
         tx_count = sum(1 for i in inv_msg.items if i.inv_type == InvType.TX)
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'INV 수신: 블록 {block_count}개, TX {tx_count}개 from {address.ip}:{address.port}')
-=======
-        print(f"[SYNC] INV 수신: 블록 {block_count}개, TX {tx_count}개 from {address.ip}:{address.port}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
         # TX는 바로 요청 (MAX_INV_SIZE 제한, 5.7)
         tx_to_fetch = []
@@ -552,11 +498,7 @@ class Node:
         if block_hashes:
             # 대기열 크기 제한
             if len(block_hashes) > MAX_PENDING_BLOCKS:
-<<<<<<< HEAD:blockchain/network/node.py
                 _log('SYNC', f'대기열 크기 제한: {len(block_hashes)} -> {MAX_PENDING_BLOCKS}')
-=======
-                print(f"[SYNC] 대기열 크기 제한: {len(block_hashes)} -> {MAX_PENDING_BLOCKS}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
                 block_hashes = block_hashes[:MAX_PENDING_BLOCKS]
 
             # 이전 피어 요청 잔여물 초기화 (5.4)
@@ -565,11 +507,7 @@ class Node:
             self._sync_peer = address
             self._sync_start_time = time.time()  # 세션 타임아웃 추적 (5.6)
             self._last_inv_count = block_count
-<<<<<<< HEAD:blockchain/network/node.py
             _log('SYNC', f'블록 {len(block_hashes)}개 대기열에 추가, 순차 다운로드 시작')
-=======
-            print(f"[SYNC] 블록 {len(block_hashes)}개 대기열에 추가, 순차 다운로드 시작")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
             await self._request_next_block()
 
     async def _request_next_block(self):
@@ -579,11 +517,7 @@ class Node:
 
         # 세션 타임아웃 체크 (5.6)
         if time.time() - self._sync_start_time > self._sync_timeout:
-<<<<<<< HEAD:blockchain/network/node.py
             _log('SYNC', f'세션 타임아웃 ({self._sync_timeout}s). 동기화 중단.')
-=======
-            print(f"[SYNC] 세션 타임아웃 ({self._sync_timeout}s). 동기화 중단.")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
             self._sync_peer = None
             self._pending_blocks.clear()
             self._requesting.clear()
@@ -613,11 +547,7 @@ class Node:
         # 여러 블록 한번에 요청
         items = [InvItem(InvType.BLOCK, h) for h in to_request]
         getdata = GetDataMessage(items=items)
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'GETDATA 요청: {len(items)}개 블록 (대기: {len(self._pending_blocks)}개)')
-=======
-        print(f"[SYNC] GETDATA 요청: {len(items)}개 블록 (대기: {len(self._pending_blocks)}개)")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
         await self._send_message(self._sync_peer, MessageType.GETDATA, getdata.serialize())
 
     async def _handle_getdata(self, address: PeerAddress, payload: bytes):
@@ -658,20 +588,12 @@ class Node:
                     # 가장 오래된 항목 제거
                     oldest_key = next(iter(self._block_buffer))
                     del self._block_buffer[oldest_key]
-<<<<<<< HEAD:blockchain/network/node.py
                     _log('BUFFER', f'크기 제한 초과, 오래된 블록 제거: {oldest_key.hex()[:16]}...')
-=======
-                    print(f"[BUFFER] 크기 제한 초과, 오래된 블록 제거: {oldest_key.hex()[:16]}...")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
                 self._block_buffer[block_hash] = block
             else:
                 # 동기화 목록에 없는 블록 - GETBLOCKS 요청
-<<<<<<< HEAD:blockchain/network/node.py
                 _log('SYNC', f'이전 블록 없음, GETBLOCKS 요청 (prev={prev_hash.hex()[:16]}...)')
-=======
-                print(f"[SYNC] 이전 블록 없음, GETBLOCKS 요청 (prev={prev_hash.hex()[:16]}...)")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
                 await self._request_blocks(address)
             return
 
@@ -712,17 +634,10 @@ class Node:
             await self._request_next_block()
         elif self._last_inv_count >= 500 and self._sync_peer:
             # 이전 INV가 최대치(500)였으면 피어에 더 많은 블록이 있을 수 있음
-<<<<<<< HEAD:blockchain/network/node.py
             _log('SYNC', f'배치 완료 (높이: {self.height}), 추가 블록 요청...')
             await self._request_blocks(self._sync_peer)
         else:
             _log('SYNC', f'동기화 완료! 현재 높이: {self.height}')
-=======
-            print(f"[SYNC] 배치 완료 (높이: {self.height}), 추가 블록 요청...")
-            await self._request_blocks(self._sync_peer)
-        else:
-            print(f"[SYNC] 동기화 완료! 현재 높이: {self.height}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
             self._sync_peer = None
             self._block_buffer.clear()
             self._requesting.clear()  # 요청 잔여물 초기화 (5.5)
@@ -786,37 +701,21 @@ class Node:
         msg = GetBlocksMessage.deserialize(payload)
 
         # [SYNC-LOG] GETBLOCKS 수신
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'GETBLOCKS 수신 from {address.ip}:{address.port}, locator 크기: {len(msg.block_locator)}')
 
         # 분기점 찾기
         fork_height, _ = self.blockchain.find_fork_point(msg.block_locator)
         _log('SYNC', f'분기점: height={fork_height}')
-=======
-        print(f"[SYNC] GETBLOCKS 수신 from {address.ip}:{address.port}, locator 크기: {len(msg.block_locator)}")
-
-        # 분기점 찾기
-        fork_height, _ = self.blockchain.find_fork_point(msg.block_locator)
-        print(f"[SYNC] 분기점: height={fork_height}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
         # INV 전송
         hashes = self.blockchain.get_chain_hashes(fork_height + 1, 500)
         items = [InvItem(InvType.BLOCK, h) for h in hashes]
         if items:
-<<<<<<< HEAD:blockchain/network/node.py
             _log('SYNC', f'INV 응답: {len(items)}개 블록 해시 전송')
             inv = InvMessage(items)
             await self._send_message(address, MessageType.INV, inv.serialize())
         else:
             _log('SYNC', 'INV 응답: 전송할 블록 없음')
-=======
-            print(f"[SYNC] INV 응답: {len(items)}개 블록 해시 전송")
-            inv = InvMessage(items)
-            await self._send_message(address, MessageType.INV, inv.serialize())
-        else:
-            print(f"[SYNC] INV 응답: 전송할 블록 없음")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
     async def _handle_getheaders(self, address: PeerAddress, payload: bytes):
         """GETHEADERS 처리 - 블록 헤더 목록 반환"""
@@ -937,21 +836,13 @@ class Node:
         # Block locator 생성: 최근 블록들의 해시
         locator = self.blockchain.get_block_locator()
         # [SYNC-LOG] GETBLOCKS 요청
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'GETBLOCKS 요청: locator 크기={len(locator)}, 현재 높이={self.blockchain.get_height()}')
-=======
-        print(f"[SYNC] GETBLOCKS 요청: locator 크기={len(locator)}, 현재 높이={self.blockchain.get_height()}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
         msg = GetBlocksMessage(block_locator=locator)
         await self._send_message(address, MessageType.GETBLOCKS, msg.serialize())
 
     async def _send_version(self, address: PeerAddress):
         """VERSION 전송"""
-<<<<<<< HEAD:blockchain/network/node.py
         _log('SYNC', f'VERSION 전송: height={self.height} to {address.ip}:{address.port}')
-=======
-        print(f"[SYNC] VERSION 전송: height={self.height} to {address.ip}:{address.port}")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
         version_msg = VersionMessage(
             timestamp=int(time.time()),
             nonce=self._nonce,
@@ -1084,11 +975,7 @@ class Node:
                 relayed += 1
 
         if relayed > 0:
-<<<<<<< HEAD:blockchain/network/node.py
             _log('RELAY', f'블록 {block.get_hash().hex()[:16]}... → {relayed}개 피어')
-=======
-            print(f"[RELAY] 블록 {block.get_hash().hex()[:16]}... → {relayed}개 피어")
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/network/node.py
 
     async def _relay_tx(self, tx: Transaction, exclude: PeerAddress = None):
         """TX 재전파 (수신한 피어 제외)"""

@@ -47,7 +47,6 @@ a = Analysis(
         'asyncio',
         'json',
         'hashlib',
-<<<<<<< HEAD:blockchain/jackpotchain.spec
         'ctypes',
         'ctypes.wintypes',
         'cryptography',
@@ -55,8 +54,6 @@ a = Analysis(
         'cryptography.hazmat.primitives',
         'cryptography.hazmat.primitives.ciphers',
         'cryptography.hazmat.primitives.kdf',
-=======
->>>>>>> 7b8af1f91e1ad2c6d172f26400e54829793b37f2:blockchain/jackpotchain/jackpotchain.spec
     ] + textual_hiddenimports + rich_hiddenimports + aiohttp_hiddenimports + ecdsa_hiddenimports,
     hookspath=[],
     hooksconfig={},
