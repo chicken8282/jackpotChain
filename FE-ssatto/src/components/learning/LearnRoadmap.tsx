@@ -11,7 +11,7 @@ const STAGES = [
   { stage: 2, title: "디지털 소유권", subtitle: "지갑과 열쇠", modules: [
     { id: "2.1", title: "나만의 열쇠 만들기" }, { id: "2.2", title: "디지털 서명 체험" }] },
   { stage: 3, title: "가치 흐름의 이해", subtitle: "UTXO와 잔돈", modules: [
-    { id: "3.1", title: "디지털 지폐의 여행" }, { id: "3.2", title: "트랜잭션 만들어보기" }] },
+    { id: "3.1", title: "디지털 지폐의 여행" }, { id: "3.2", title: "트랜잭션 만들어보기" }, { id: "3.3", title: "블록 확정까지의 여정" }] },
   { stage: 4, title: "생태계의 유지", subtitle: "채굴과 보상", modules: [
     { id: "4.1", title: "행운의 숫자 찾기 (채굴)" }, { id: "4.2", title: "JACK & POT 이코노미" }] },
   { stage: 5, title: "최종 실행", subtitle: "로또 참여와 공정성", modules: [
@@ -62,6 +62,26 @@ export default function LearnRoadmap() {
             </motion.div>
           );
         })}
+
+        {/* 최종 정리 */}
+        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }} className="relative pl-14">
+          <div className="absolute left-3 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-accent-gold/30 bg-accent-gold/10 text-accent-gold text-xs font-bold">
+            ★
+          </div>
+          <GlassCard elevation={1} className="p-5">
+            <div className="mb-3 flex items-center gap-3">
+              <h3 className="font-display text-lg font-bold text-white">최종 정리</h3>
+              <span className="text-xs text-white/40">네트워크 전체 흐름</span>
+            </div>
+            <button onClick={() => navigate("/learn/network")}
+              className="flex w-full items-center gap-3 rounded-xl border border-accent-gold/10 bg-accent-gold/[0.03] px-4 py-2.5 text-left text-sm text-accent-gold transition-all hover:border-accent-gold/30 hover:bg-accent-gold/[0.06]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-gold/15 text-accent-gold text-[10px]">
+                ★
+              </span>
+              <span className="font-medium">블록체인 네트워크의 모든 것</span>
+            </button>
+          </GlassCard>
+        </motion.div>
       </div>
     </section>
   );

@@ -7,7 +7,7 @@ import { useLearningStore } from "../../stores/useLearningStore";
 const STAGES = [
   { stage: 1, title: "신뢰", modules: ["1.1", "1.2", "1.3"] },
   { stage: 2, title: "소유권", modules: ["2.1", "2.2"] },
-  { stage: 3, title: "흐름", modules: ["3.1", "3.2"] },
+  { stage: 3, title: "흐름", modules: ["3.1", "3.2", "3.3"] },
   { stage: 4, title: "생태계", modules: ["4.1", "4.2"] },
   { stage: 5, title: "실행", modules: ["5.1", "5.2"] },
 ];

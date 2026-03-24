@@ -11,6 +11,7 @@ const MiningPage = lazy(() => import("./pages/MiningPage"));
 const LearnLandingPage = lazy(() => import("./pages/LearnLandingPage"));
 const LearnModulePage = lazy(() => import("./pages/LearnModulePage"));
 const LearnReportPage = lazy(() => import("./pages/LearnReportPage"));
+const LearnNetworkPage = lazy(() => import("./pages/LearnNetworkPage"));
 // [학습 프론트엔드 v2] 추가 끝
 
 const pageTransition = {
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/learn" element={<LearnLandingPage />} />
               <Route path="/learn/:stage/:module" element={<LearnModulePage />} />
               <Route path="/learn/report" element={<LearnReportPage />} />
+              <Route path="/learn/network" element={<LearnNetworkPage />} />
               {/* [학습 프론트엔드 v2] 추가 끝 */}
             </Routes>
           </motion.div>
