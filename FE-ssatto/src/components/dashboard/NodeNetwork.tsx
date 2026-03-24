@@ -20,7 +20,7 @@ export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }
   const [activeNode, setActiveNode] = useState<string | null>(null);
 
   const nodes = useMemo<NodeDef[]>(() => {
-    const count = Math.min(activeNodes, 8);
+    const count = Math.min(activeNodes, 10);
     const cx = 210;
     const cy = 148;
     const rx = 95;
@@ -40,13 +40,17 @@ export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }
   }, [activeNodes]);
 
   const links = useMemo<Array<[string, string]>>(() => {
-    const count = Math.min(activeNodes, 8);
+    const count = Math.min(activeNodes, 10);
     const result: Array<[string, string]> = [];
     for (let i = 0; i < count; i++) {
       result.push(["center", `n${i + 1}`]);
     }
     for (let i = 0; i < count - 1; i++) {
       result.push([`n${i + 1}`, `n${i + 2}`]);
+    }
+    // 첫 번째 노드와 마지막 노드를 연결해 링을 닫는다
+    if (count > 1) {
+      result.push([`n${count}`, `n1`]);
     }
     return result;
   }, [activeNodes]);

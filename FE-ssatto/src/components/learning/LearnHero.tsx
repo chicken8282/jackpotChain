@@ -29,9 +29,7 @@ export default function LearnHero() {
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/60">
-          AI 역량검사처럼 단계별 미션을 수행하며 블록체인을 마스터하세요.
-          <br />
-          Concept → Interaction → Verify, 3단계로 확실히 배웁니다.
+          직접 설계하고, 즉시 증명하는 블록체인
         </p>
         <div className="mt-8 flex justify-center gap-3">
           <GlassButton onClick={() => navigate("/learn/1/1.1")} className="px-8 py-3.5 text-base">

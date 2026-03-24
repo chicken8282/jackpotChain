@@ -2,6 +2,9 @@ import { lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
+import PageLayout from "./components/layout/PageLayout";
+// [챗봇] 전역 챗봇 컴포넌트 — chatbotConfig.ts에서 ON/OFF 제어
+import ChatBot from "./components/chatbot/ChatBot";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LottoPage = lazy(() => import("./pages/LottoPage"));
@@ -11,6 +14,7 @@ const MiningPage = lazy(() => import("./pages/MiningPage"));
 const LearnLandingPage = lazy(() => import("./pages/LearnLandingPage"));
 const LearnModulePage = lazy(() => import("./pages/LearnModulePage"));
 const LearnReportPage = lazy(() => import("./pages/LearnReportPage"));
+const LearnNetworkPage = lazy(() => import("./pages/LearnNetworkPage"));
 // [학습 프론트엔드 v2] 추가 끝
 
 const pageTransition = {
@@ -51,11 +55,25 @@ export default function App() {
               <Route path="/learn" element={<LearnLandingPage />} />
               <Route path="/learn/:stage/:module" element={<LearnModulePage />} />
               <Route path="/learn/report" element={<LearnReportPage />} />
+              <Route path="/learn/network" element={<LearnNetworkPage />} />
               {/* [학습 프론트엔드 v2] 추가 끝 */}
+              <Route
+                path="*"
+                element={
+                  <PageLayout>
+                    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
+                      <p className="font-display text-6xl font-black text-white">404</p>
+                      <p className="text-lg font-bold text-text-secondary">존재하지 않는 페이지입니다.</p>
+                    </div>
+                  </PageLayout>
+                }
+              />
             </Routes>
           </motion.div>
         </AnimatePresence>
       </Suspense>
+      {/* [챗봇] 모든 페이지에서 우측 하단에 플로팅 표시 */}
+      <ChatBot />
     </div>
   );
 }

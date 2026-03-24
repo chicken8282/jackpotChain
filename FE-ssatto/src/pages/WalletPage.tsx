@@ -10,7 +10,6 @@ import {
 } from "../services/legacyWalletMigrationService";
 import {
   migrateLegacyWallets,
-  secureWallet,
   unlockWalletPrivateKey,
 } from "../services/walletSecurityService";
 import { restoreWalletSession } from "../services/walletSessionService";
@@ -86,10 +85,19 @@ export default function WalletPage() {
     (state) => state.lockExpiredWallets
   );
 
-  const [activeWalletIndex, setActiveWalletIndex] = useState(0);
+  // Initialize to the index of activeAddress to avoid a two-render cycle
+  // (useState(0) → render → setActiveWalletIndex(correct) → re-render) which
+  // causes the session-restore effect to fire twice with different walletIds,
+  // producing the 401→400 double-refresh cascade.
+  const [activeWalletIndex, setActiveWalletIndex] = useState(() => {
+    if (!activeAddress) return 0;
+    const idx = wallets.findIndex((w) => w.address === activeAddress);
+    return idx >= 0 ? idx : 0;
+  });
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockModalSessionExpired, setUnlockModalSessionExpired] = useState(false);
   const [legacyWallets, setLegacyWallets] = useState<LegacyWalletRecord[]>([]);
   const [writeStatus, setWriteStatus] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -112,7 +120,7 @@ export default function WalletPage() {
     setLegacyWallets(extractLegacyWallets(window.localStorage));
   }, []);
 
-  const { walletSummaries } = useWalletSummaries(wallets);
+  const { walletSummaries, refetch: refetchWalletSummaries } = useWalletSummaries(wallets);
 
   useEffect(() => {
     if (!activeAddress) {
@@ -143,7 +151,8 @@ export default function WalletPage() {
     const intervalId = window.setInterval(() => {
       const didLock = lockExpiredWallets(WALLET_IDLE_LOCK_MS);
       if (didLock) {
-        setAuthError("장시간 사용이 없어 지갑 잠금이 해제되었습니다.");
+        setUnlockModalSessionExpired(false);
+        setShowUnlockModal(true);
       }
     }, 30000);
 
@@ -197,7 +206,8 @@ export default function WalletPage() {
         if (cancelled) return;
         if (!response) {
           clearAccessSession(wallet.walletId);
-          setAuthError("세션이 만료되었습니다. 비밀번호로 잠금을 해제하여 다시 인증해 주세요.");
+          setUnlockModalSessionExpired(true);
+          setShowUnlockModal(true);
           return;
         }
 
@@ -438,6 +448,9 @@ export default function WalletPage() {
         "ko-KR"
       )} JACK 교환 트랜잭션을 제출했습니다.`
     );
+    // Immediately refetch wallet balances so the new balance is visible
+    // without waiting for the next 10s polling interval.
+    void refetchWalletSummaries();
   };
 
   return (
@@ -457,7 +470,11 @@ export default function WalletPage() {
             isOpen={showUnlockModal && !!activeWallet}
             walletName={activeWallet?.nickname ?? "지갑"}
             walletAddress={activeWallet?.address ?? ""}
-            onClose={() => setShowUnlockModal(false)}
+            sessionExpired={unlockModalSessionExpired}
+            onClose={() => {
+              setShowUnlockModal(false);
+              setUnlockModalSessionExpired(false);
+            }}
             onUnlock={handleUnlockWallet}
           />
         </Suspense>
@@ -493,7 +510,10 @@ export default function WalletPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setShowUnlockModal(true)}
+                    onClick={() => {
+                      setUnlockModalSessionExpired(false);
+                      setShowUnlockModal(true);
+                    }}
                     className="rounded-[14px] border border-accent-gold/40 bg-accent-gold/10 px-4 py-2 font-bold text-accent-gold transition-colors hover:bg-accent-gold/20"
                   >
                     잠금 해제

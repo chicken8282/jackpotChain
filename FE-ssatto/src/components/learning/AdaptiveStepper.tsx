@@ -5,12 +5,15 @@ import { motion } from "motion/react";
 import { useLearningStore } from "../../stores/useLearningStore";
 
 const STAGES = [
-  { stage: 1, title: "신뢰", modules: ["1.1", "1.2", "1.3"] },
-  { stage: 2, title: "소유권", modules: ["2.1", "2.2"] },
-  { stage: 3, title: "흐름", modules: ["3.1", "3.2"] },
-  { stage: 4, title: "생태계", modules: ["4.1", "4.2"] },
-  { stage: 5, title: "실행", modules: ["5.1", "5.2"] },
+  { stage: 1, title: "신뢰", modules: ["1.1", "1.2", "1.3"], difficulty: 1 },
+  { stage: 2, title: "소유권", modules: ["2.1", "2.2"], difficulty: 2 },
+  { stage: 3, title: "흐름", modules: ["3.1", "3.2", "3.3"], difficulty: 3 },
+  { stage: 4, title: "생태계", modules: ["4.1", "4.2"], difficulty: 4 },
+  { stage: 5, title: "실행", modules: ["5.1", "5.2"], difficulty: 5 },
 ];
+
+const ALL_MODULES = STAGES.flatMap((s) => s.modules);
+const TOTAL = ALL_MODULES.length; // 11
 
 export default function AdaptiveStepper() {
   const navigate = useNavigate();
@@ -18,7 +21,30 @@ export default function AdaptiveStepper() {
   const currentModule = params.module;
   const isCompleted = useLearningStore((s) => s.isModuleCompleted);
 
+  const completed = ALL_MODULES.filter((m) => isCompleted(m)).length;
+  const percent = Math.round((completed / TOTAL) * 100);
+
   return (
+    <div className="space-y-3">
+      {/* 프로그레스 바 */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-5 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-white/50">
+            <span className="text-accent-gold font-bold">{completed}</span> / {TOTAL} 모듈 완료
+          </span>
+          <span className="text-xs font-bold text-accent-gold">{percent}%</span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-accent-gold/80 via-accent-gold to-yellow-400"
+            initial={{ width: 0 }}
+            animate={{ width: `${percent}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* 스테퍼 */}
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-4 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
       <div className="flex items-center gap-1">
         {STAGES.map((s, idx) => {
@@ -57,13 +83,15 @@ export default function AdaptiveStepper() {
                   {s.title}
                 </span>
 
-                {/* 모듈 도트 */}
-                <div className="flex gap-0.5">
+                {/* 챕터 진행도 동그라미 */}
+                <div className="flex items-center gap-1" title={`${s.modules.filter((m) => isCompleted(m)).length}/${s.modules.length} 완료`}>
                   {s.modules.map((m) => (
                     <div
                       key={m}
-                      className={`h-1 w-1 rounded-full ${
-                        isCompleted(m) ? "bg-green-400" : m === currentModule ? "bg-blue-400" : "bg-white/10"
+                      className={`h-2 w-2 rounded-full transition-colors ${
+                        isCompleted(m)
+                          ? "bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]"
+                          : "bg-white/15"
                       }`}
                     />
                   ))}
@@ -78,6 +106,7 @@ export default function AdaptiveStepper() {
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

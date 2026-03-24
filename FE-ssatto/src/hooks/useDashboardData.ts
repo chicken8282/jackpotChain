@@ -1,8 +1,5 @@
 import { useRef } from "react";
-import {
-  confirmedBlocks as fallbackBlocks,
-  type DashboardBlockDetail,
-} from "../components/dashboard/dashboardMockData";
+import type { DashboardBlockDetail } from "../components/dashboard/dashboardMockData";
 import { getJson } from "../lib/api";
 import {
   getMissingBlockHeights,
@@ -33,8 +30,8 @@ export function useDashboardData(limit = 5): DashboardDataState {
     enabled: true,
     intervalMs: 10_000,
     initialData: {
-      blocks: fallbackBlocks,
-      currentHeight: fallbackBlocks[0]?.height ?? 0,
+      blocks: [] as DashboardBlockDetail[],
+      currentHeight: 0,
       activeNodes: 0,
     },
     errorFallback: "dashboard-load-failed",

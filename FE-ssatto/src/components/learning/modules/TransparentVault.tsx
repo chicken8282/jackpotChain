@@ -12,10 +12,13 @@ export default function TransparentVault() {
   ]);
   const [synced, setSynced] = useState([true, true, true, true]);
   const [counter, setCounter] = useState(2);
+  const [newRecord, setNewRecord] = useState("");
 
   const addRecord = () => {
-    const newRec = { id: counter, text: `TX #${String(counter).padStart(4, "0")} : ${Math.floor(Math.random() * 100)} JACK 전송` };
+    if (!newRecord.trim()) return;
+    const newRec = { id: counter, text: `TX #${String(counter).padStart(4, "0")} : ${newRecord.trim()}` };
     setCounter((c) => c + 1);
+    setNewRecord("");
     setSynced([false, false, false, false]);
     setRecords((prev) => [...prev, newRec]);
     [300, 600, 900, 1200].forEach((ms, i) => {
@@ -60,14 +63,24 @@ export default function TransparentVault() {
         ))}
       </div>
 
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={addRecord}
-        className={`${glass} px-6 py-3 text-accent-gold font-semibold cursor-pointer`}
-      >
-        + 기록 추가 (모든 노드 동기화)
-      </motion.button>
+      <div className="flex w-full max-w-xl gap-2">
+        <input
+          value={newRecord}
+          onChange={(e) => setNewRecord(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addRecord()}
+          placeholder="새로운 거래 기록을 입력하세요..."
+          className="flex-1 rounded-2xl border border-white/[0.10] bg-white/[0.05] px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-accent-gold/40 transition-colors"
+        />
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={addRecord}
+          className={`${glass} shrink-0 px-6 py-3 text-accent-gold font-semibold cursor-pointer`}
+        >
+          기록 추가
+        </motion.button>
+      </div>
+      <p className="text-white/30 text-xs">입력한 기록이 4개 노드에 동시에 공유됩니다</p>
     </div>
   );
 }

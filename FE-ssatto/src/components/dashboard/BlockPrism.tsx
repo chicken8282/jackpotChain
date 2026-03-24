@@ -13,9 +13,14 @@ function getStatusLabel(block: DashboardBlockDetail) {
   return block.status === "confirmed" ? "확정" : "후보";
 }
 
-function getSingleHexDigit(hash: string) {
-  const matches = hash.match(/[0-9a-f]/gi);
-  return matches?.at(-1)?.toLowerCase() ?? "0";
+function getHashDisplayDigit(hash: string) {
+  const hex = hash.replace(/^0x/i, "").toLowerCase().replace(/[^0-9a-f]/g, "");
+  // 마지막 6자리 앞의 한 자리를 표시한다 (마지막6자리0을 제외한 그 앞 한자리)
+  return hex.at(-7) ?? hex.at(-1) ?? "0";
+}
+
+function truncateMinerLabel(label: string) {
+  return label.length > 6 ? `${label.slice(0, 6)}...` : label;
 }
 
 function getPalette(block: DashboardBlockDetail) {
@@ -116,7 +121,7 @@ export default function BlockPrism({
                 <p
                   className={`mt-1 whitespace-nowrap font-bold leading-none tracking-[-0.04em] ${size.footerValue} ${palette.metric}`}
                 >
-                  {block.minerLabel}
+                  {truncateMinerLabel(block.minerLabel)}
                 </p>
               </div>
 
@@ -125,7 +130,7 @@ export default function BlockPrism({
                   해시
                 </p>
                 <p className={`mt-1 whitespace-nowrap font-mono font-bold leading-none ${size.footerValue} text-[#F86965]`}>
-                  {getSingleHexDigit(block.hash)}
+                  {getHashDisplayDigit(block.hash)}
                 </p>
               </div>
             </div>
