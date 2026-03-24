@@ -9,7 +9,8 @@ import { mapLottoResult, type LottoHistoryDetail } from "../services/readModelAd
 import { useWalletSessionStore } from "../stores/useWalletSessionStore";
 import { useWalletStore } from "../stores/useWalletStore";
 import { submitExchangeWrite, submitLottoClaimWrite, submitLottoCommitWrite } from "../services/writeFlowService";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { LottoHistoryEntry } from "../services/readModelAdapters";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -66,9 +67,19 @@ export default function LottoPage() {
   const activePrivateKey = activeWallet ? unlockedWallets[activeWallet.walletId]?.privateKey : undefined;
   const { overview } = useLottoOverview(activeAddress, activeAccessToken);
   const { entries } = useLottoEntries(activeAddress, activeAccessToken);
+  const [pendingEntries, setPendingEntries] = useState<LottoHistoryEntry[]>([]);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWalletRequiredModal, setShowWalletRequiredModal] = useState(false);
+
+  // pending 항목과 실제 entries 합치기 — 실제 entries에 있으면 pending 제거
+  const mergedEntries = useMemo(() => {
+    const confirmedHashes = new Set(entries.map((e) => e.numbers.join("")));
+    const activePending = pendingEntries.filter(
+      (p) => !confirmedHashes.has(p.numbers.join("")),
+    );
+    return [...activePending, ...entries];
+  }, [entries, pendingEntries]);
 
   const handleLoadResult = async (commitHash: string): Promise<LottoHistoryDetail> => {
     if (!activeAccessToken) {
@@ -130,6 +141,28 @@ export default function LottoPage() {
         accessToken: ready.activeAccessToken,
         chosenNumbers,
       });
+      // 대기중 항목 추가
+      const now = new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Seoul",
+      }).format(new Date());
+      setPendingEntries((prev) => [
+        {
+          id: `pending-${Date.now()}`,
+          commitHash: "",
+          numbers: chosenNumbers.map((n) => n.toString(16)),
+          date: now,
+          statusLabel: "PENDING",
+          matchCount: null,
+          claimable: false,
+          claimed: false,
+        },
+        ...prev,
+      ]);
       setActionStatus("로또 참여 트랜잭션을 제출했습니다. 약 10분 뒤 결과를 확인해 주세요.");
     } finally {
       setIsSubmitting(false);
@@ -187,7 +220,7 @@ export default function LottoPage() {
         potBalance={Math.floor((overview?.potBalance ?? 0) / 100_000_000)}
         onExchangeJackToPot={handleExchangeJackToPot}
         onCommit={handleCommit}
-        entries={entries}
+        entries={mergedEntries}
         onClaim={handleClaim}
         onLoadResult={handleLoadResult}
       />
