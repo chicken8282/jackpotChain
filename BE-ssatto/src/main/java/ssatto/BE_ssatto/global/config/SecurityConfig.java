@@ -75,7 +75,9 @@ public class SecurityConfig {
                     "/v1/lotto",
                     "/v1/lotto/entries",
                     "/v1/lotto/entries/*/result",
+                    "/v1/lotto/entries/*/claim-context",
                     "/v1/lotto/commit",
+                    "/v1/lotto/claim",
                     "/v1/mining/blocks",
                     "/v1/exchange/info",
                     "/v1/exchange/jack-to-pot"
