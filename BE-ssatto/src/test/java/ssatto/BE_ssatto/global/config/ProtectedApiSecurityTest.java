@@ -63,7 +63,7 @@ class ProtectedApiSecurityTest {
     @Test
     @DisplayName("보호 API는 토큰 없이 호출하면 401을 반환한다")
     void protectedApiReturnsUnauthorizedWhenTokenMissing() throws Exception {
-        mockMvc.perform(get("/api/v1/lotto").param("address", "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
+        mockMvc.perform(get("/v1/lotto").param("address", "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value(401));
     }
@@ -71,7 +71,7 @@ class ProtectedApiSecurityTest {
     @Test
     @DisplayName("채굴 블록 보호 API는 토큰 없이 호출하면 401을 반환한다")
     void miningProtectedApiReturnsUnauthorizedWhenTokenMissing() throws Exception {
-        mockMvc.perform(get("/api/v1/mining/blocks").param("address", "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
+        mockMvc.perform(get("/v1/mining/blocks").param("address", "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value(401));
     }
@@ -79,7 +79,7 @@ class ProtectedApiSecurityTest {
     @Test
     @DisplayName("로또 결과 보호 API는 토큰 없이 호출하면 401을 반환한다")
     void lottoResultProtectedApiReturnsUnauthorizedWhenTokenMissing() throws Exception {
-        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/result"))
+        mockMvc.perform(get("/v1/lotto/entries/commit-001/result"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code").value(401));
     }
@@ -97,7 +97,7 @@ class ProtectedApiSecurityTest {
         given(lottoService.getOverview(authenticatedAddress, requestedAddress))
             .willThrow(new AuthForbiddenException());
 
-        mockMvc.perform(get("/api/v1/lotto")
+        mockMvc.perform(get("/v1/lotto")
                 .param("address", requestedAddress)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
             .andExpect(status().isForbidden())
@@ -107,7 +107,7 @@ class ProtectedApiSecurityTest {
     @Test
     @DisplayName("허용된 origin의 preflight 요청은 credentials 허용 헤더를 반환한다")
     void preflightReturnsCorsHeadersForAllowedOrigin() throws Exception {
-        mockMvc.perform(options("/api/v1/auth/refresh")
+        mockMvc.perform(options("/v1/auth/refresh")
                 .header(HttpHeaders.ORIGIN, "http://localhost:3000")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type"))
@@ -119,7 +119,7 @@ class ProtectedApiSecurityTest {
     @Test
     @DisplayName("허용되지 않은 origin의 preflight 요청은 거부된다")
     void preflightRejectsBlockedOrigin() throws Exception {
-        mockMvc.perform(options("/api/v1/auth/refresh")
+        mockMvc.perform(options("/v1/auth/refresh")
                 .header(HttpHeaders.ORIGIN, "https://blocked.example.com")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type"))

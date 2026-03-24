@@ -1,196 +1,509 @@
 # JackpotChain 전체 시스템 구조 & 통신 방식
 
-> 작성일: 2026-03-24
-> 대상: 프로젝트 전체 흐름 파악 + 성능 테스트 사전 이해
+> 작성일: 2026-03-24 (코드 기반 재작성)
+> 기준: FE-ssatto, BE-ssatto, blockchain/, docker-compose.local.yml 실제 코드
 
 ---
 
-## 1. 프로젝트 한 줄 요약
+## 1. 로컬 Docker 포트 맵 (docker-compose.local.yml 기준)
 
-**블록체인 기반 로또 이벤트 서비스** — 자체 PoW 블록체인(JackpotChain)에서
-UTXO 기반 트랜잭션으로 로또 Commit/Claim을 처리하고,
-Spring Boot 백엔드가 상태를 집계하여 React SPA에 제공한다.
+```
+호스트 포트   컨테이너 포트   서비스
+──────────────────────────────────────────────────
+13000         80            Frontend (nginx → React SPA)
+8080          8080          Backend (Spring Boot)
+9776          9776          JackpotChain Node RPC (내부망만, 절대 외부 노출 금지)
+9777          9777          JackpotChain Node P2P (TUI 채굴자 접속용)
+15432         5432          PostgreSQL
+16379         6379          Redis
+5672          5672          RabbitMQ AMQP
+15672         15672         RabbitMQ Management UI
+```
+
+> 운영 환경: BE는 8080/8081(Blue/Green), FE는 Nginx 뒤, Node RPC는 절대 외부 비노출
 
 ---
 
-## 2. 컴포넌트 전체 지도
+## 2. 전체 컴포넌트 구조도
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        사용자 브라우저                         │
-│  React SPA (Vite + TypeScript)                              │
-│  - 개인키: IndexedDB 암호화 저장, 절대 서버 전송 안 함         │
-│  - 서명: 브라우저에서 직접 수행                                │
-└───────────────────┬─────────────────────────────────────────┘
-                    │ HTTPS  /api/*
-                    ▼
-┌───────────────────────────────────────────┐
-│           Host Nginx (Reverse Proxy)       │
-│  - TLS 종료 (ssatto777.site)               │
-│  - /api → Spring Boot Backend              │
-│  - /    → Frontend SPA                    │
-│  - Blue/Green upstream 스위치 (무중단 배포)│
-└──────────┬────────────────────────────────┘
-           │ HTTP (내부 네트워크)
-           ▼
-┌───────────────────────────────────────────┐
-│         Spring Boot Backend               │
-│  - REST API 제공                           │
-│  - JWT + HttpOnly Cookie refresh token    │
-│  - PostgreSQL: 읽기 모델(블록/TX/지갑/로또│
-│  - Redis: challenge TTL, session cache    │
-│  - RabbitMQ: Outbox 패턴 (배포 시 활성화) │
-└──────────┬────────────────────────────────┘
-           │ JSON-RPC  HTTP  8332 (내부 전용)
-           ▼
-┌───────────────────────────────────────────┐
-│         JackpotChain Node (Python asyncio)│
-│  - PoW 합의, UTXO 모델                    │
-│  - RPC: getblockcount, getlottoinfo 등    │
-│  - 새 블록 수신 시 → Webhook (POST /internal/new-block) │
-│  - P2P: 포트 8333 (TUI 채굴 노드 접속)   │
-└──────────┬────────────────────────────────┘
-           │ P2P 8333
-           ▼
-┌───────────────────────────────────────────┐
-│         TUI Mining Node (Python Textual)  │
-│  - 채굴 수행, 블록 전파                   │
-└───────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    사용자 브라우저                             │
+│   React SPA (Vite + TypeScript)                              │
+│   - 개인키: IndexedDB 암호화 저장 (서버 전송 절대 없음)       │
+│   - TX 서명: 브라우저에서 secp256k1 서명 후 hex로 BE에 전달   │
+│   - 지갑 메타데이터: localStorage persist (탭간 공유)        │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ HTTPS  /api/v1/*
+                            ▼
+┌──────────────────────────────────────────┐
+│         Host Nginx (Reverse Proxy)        │
+│  ssatto777.site → prod (Blue/Green)       │
+│  dev.ssatto777.site → dev                │
+└──────────────┬───────────────────────────┘
+               │ HTTP (내부)
+               ▼
+┌──────────────────────────────────────────┐
+│         Spring Boot Backend (8080)        │
+│  - REST API /api/v1/*                    │
+│  - JWT access token + HttpOnly cookie    │
+│  - PostgreSQL: 읽기 모델 (Block/TX/Lotto)│
+│  - Redis: challenge TTL (5분), 세션 캐시 │
+│  - BlockchainSyncScheduler: 5초마다 RPC  │
+│    폴링으로 블록 동기화 (Webhook 없음!)  │
+└──────────────┬───────────────────────────┘
+               │ JSON-RPC HTTP  포트 9776 (Docker 내부망)
+               ▼
+┌──────────────────────────────────────────┐
+│   JackpotChain Node (Python asyncio)      │
+│   - PoW 합의, UTXO 모델                  │
+│   - RPC 서버: 포트 9776 (내부망 전용)    │
+│   - P2P 서버: 포트 9777 (TUI 채굴자 접속)│
+│   - Mempool: 미확정 TX 보관              │
+│   - 온보딩 보상: 서버 지갑으로 교환 TX  │
+└──────────────┬───────────────────────────┘
+               │ P2P 9777
+               ▼
+┌──────────────────────────────────────────┐
+│   TUI Mining Node (Python Textual)        │
+│   - 로컬 PC에서 채굴 수행                │
+│   - 블록 생성 후 Node에 P2P 전파         │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. 핵심 통신 방식 요약
+## 3. 블록 동기화 방식 — Webhook 없음, 스케줄러 폴링
 
-### 3.1 FE ↔ BE: REST API + JWT
-
-| 구분 | 방식 | 비고 |
-|------|------|------|
-| 인증 | JWT Bearer (access) + HttpOnly Cookie (refresh) | 401 시 자동 refresh |
-| 데이터 조회 | GET REST API | React Query + usePollingQuery |
-| TX 제출 | POST REST API (서명된 raw tx hex 포함) | 브라우저에서 직접 서명 |
-| Polling | `usePollingQuery` | 탭 비활성화 시 pause, AbortController |
-
-**인증 흐름 (challenge-response)**
-```
-FE                          BE                        Redis
- │── POST /auth/challenge ──▶│── SET challengeId TTL5m ▶│
- │◀── {challengeId, nonce} ──│
- │ (브라우저에서 개인키로 서명)
- │── POST /auth/verify ──────▶│── GET challengeId ───────▶│
- │                            │◀── challenge data ─────────│
- │                            │  서명 검증 (secp256k1)
- │◀── {accessToken} + cookie──│
-```
-
-### 3.2 BE ↔ JackpotChain Node: JSON-RPC + Webhook
-
-| 방향 | 방식 | 예시 |
-|------|------|------|
-| BE → Node | JSON-RPC over HTTP (포트 8332) | getblockcount, sendrawtransaction |
-| Node → BE | Webhook POST (포트 18080) | POST /internal/new-block |
-
-**블록 인덱싱 흐름**
-```
-TUI Miner ─── P2P 8333 ──▶ Node ──▶ Webhook POST /internal/new-block
-                                         │
-                                         ▼
-                                   BE: 블록 파싱 → PostgreSQL 저장
-                                   (Block, Transaction, WalletActivity, LottoEntry 업데이트)
-```
-
-### 3.3 로또 Commit-Reveal 흐름
+> 이전 설계에서 Webhook(`POST /internal/new-block`)이 언급되었으나
+> **현재 구현된 방식은 BE의 백그라운드 스케줄러가 주기적으로 RPC 폴링**하는 방식이다.
 
 ```
-FE                     BE                     Node
- │                      │                      │
- │ POST /lotto/commit   │                      │
- │──────────────────────▶│                      │
- │ (signed version=3 TX) │                      │
- │                      │── sendrawtransaction ▶│
- │                      │                      │ TX → mempool
- │                      │                      │ Commit 블록 N에 포함
- │                      │                      │ N+18 블록 생성 시
- │                      │◀── Webhook new-block ─│
- │                      │  결과 결정 (N+3,6,9,12,15,18 블록해시)
- │                      │  읽기 모델 업데이트
- │ GET /lotto/entries/{hash}/result
- │──────────────────────▶│
- │◀── 결과 digit 0~15 ───│
+BlockchainSyncScheduler (@Scheduled fixedDelay=5000ms)
+    │  매 5초마다 실행 (이전 실행 완료 후 5초)
+    ▼
+BlockchainReadModelSyncService.syncToTip()
+    │
+    ├── rpcClient.getBlockCount()          ← 현재 체인 높이 확인
+    ├── (로컬 DB 높이와 비교)
+    └── (누락 블록이 있으면)
+        ├── rpcClient.getBlockHash(height)
+        ├── rpcClient.getIndexedBlock(hash)
+        ├── Block 엔티티 저장
+        ├── Transaction 엔티티 저장
+        ├── WalletActivity 기록
+        ├── LottoEntry 상태 업데이트 (DRAWING → WINNING/LOSING/EXPIRED)
+        └── JackpotPool 잔액 갱신
+```
+
+**설계 의도**: API 요청 스레드에서 블록 동기화하면 수백 블록 처리 시 응답 지연 발생
+→ 스케줄러가 독립 스레드에서 담당, API는 읽기 모델(PostgreSQL)만 조회
+
+---
+
+## 4. 인증 흐름 — 비밀번호 없는 지갑 기반 인증
+
+### 왜 일반 로그인이 없는가?
+
+비밀번호나 서버 계정 없음. **지갑 개인키 소유 증명**이 곧 인증이다.
+서버가 메시지를 주면, 클라이언트가 개인키로 서명해서 돌려보내면,
+서버가 공개키로 서명을 검증하고 토큰을 발급한다.
+
+### 인증 흐름 (challenge-response)
+
+```
+FE                        BE                          Redis / DB
+ │                         │
+ │ POST /auth/challenge     │
+ │  { address }             │
+ │──────────────────────────▶│
+ │                         │── walletRepository.findByAddress() ← 등록된 지갑인지 확인
+ │                         │── Redis SET challengeId {
+ │                         │     address, nonce, message, expiresAt, used=false
+ │                         │   } TTL 5분
+ │◀────────────────────────│
+ │  { challengeId, nonce,  │
+ │    message }             │
+ │                         │
+ │  [브라우저에서 개인키로 secp256k1 서명]
+ │  signature = sign(message, privateKey)
+ │                         │
+ │ POST /auth/verify        │
+ │  { challengeId, address, │
+ │    publicKey, signature} │
+ │──────────────────────────▶│
+ │                         │── Redis GET challengeId
+ │                         │   (없거나 used=true → 401)
+ │                         │── challenge.used → true (단일 사용)
+ │                         │── deriveAddress(publicKey) == address 검증
+ │                         │── verifySignature(message, signature, publicKey) 검증
+ │                         │── JWT accessToken 생성 (subject=address)
+ │                         │── refreshToken 생성 → SHA-256 해시만 DB 저장
+ │                         │── sessionHandle(UUID) 생성
+ │◀────────────────────────│
+ │  accessToken (body)     │  refreshToken (HttpOnly cookie)
+ │  sessionHandle (body)   │
+```
+
+**핵심 보안 포인트**
+- `deriveAddress(publicKey)` → 서버가 공개키에서 주소를 직접 도출해서 요청 address와 일치하는지 확인 → 주소 위조 불가
+- challenge는 단일 사용 + TTL 5분 → Replay Attack 방지
+- refreshToken 원문은 클라이언트 Cookie에만, DB에는 SHA-256 해시만 저장
+
+---
+
+## 5. 지갑 상태 유지 — 다른 탭/페이지 이동 후에도 로그인 유지
+
+### 두 개의 Store 역할 분리
+
+```
+useWalletStore (Zustand persist → localStorage)
+  - 탭 닫아도, 페이지 새로고침해도 유지
+  - 저장 내용: address, nickname, walletColor, keystoreId, refreshSessionHandle
+  ↑ 브라우저의 localStorage에 JSON으로 저장 (암호화 안 됨 → 비민감 메타데이터만)
+
+useWalletSessionStore (Zustand, persist 없음 → 메모리만)
+  - 탭 닫거나 새로고침 → 즉시 소멸
+  - 저장 내용: privateKey (복호화 후), accessToken
+  - 유휴 5분 자동 잠금 (WALLET_IDLE_LOCK_MS = 5분)
+  ↑ 절대 persist 하지 않음 → 가장 민감한 정보
+```
+
+### 다른 탭으로 이동해도 지갑 유지되는 이유
+
+```
+같은 브라우저 → localStorage 공유
+    ↓
+useWalletStore에서 wallets, activeAddress 즉시 복원
+    ↓
+페이지 마운트 시 restoreWalletSession() 실행
+    ↓ (3단계 복구 순서)
+    1) memory:   메모리에 accessToken이 있고 만료 전이면 → 그대로 사용
+    2) refresh:  refreshSessionHandle로 POST /auth/refresh 호출
+                 → refreshToken cookie 자동 전송 (HttpOnly)
+                 → 새 accessToken 발급 (토큰 로테이션)
+                 → 사용자는 아무것도 안 해도 자동 로그인 상태
+    3) challenge: refresh도 실패하면 (cookie 만료/탈취 폐기)
+                  → 잠금 해제된 개인키가 있으면 자동 challenge-sign-verify
+                  → 없으면 → 잠금 해제 모달 표시 (비밀번호 재입력)
+```
+
+**실제 결과**: 같은 브라우저라면 탭 전환/다른 페이지 이동 → localStorage의 `refreshSessionHandle` + HttpOnly cookie → 자동 토큰 갱신 → 사용자는 재인증 필요 없음
+
+---
+
+## 6. 지갑 생성 & 1 POT 온보딩 보상
+
+### 지갑 생성 (type: "create")
+
+```
+FE                              BE                         Node (Python)
+ │                               │
+ │ [브라우저에서 키페어 생성]      │
+ │  generateKeyPair()            │
+ │  privateKey → AES-GCM 암호화  │
+ │  → IndexedDB 저장              │
+ │                               │
+ │ POST /v1/wallet               │
+ │  { address, nickname,         │
+ │    grantOnboardingReward:true }│
+ │────────────────────────────────▶│
+ │                               │── Wallet 엔티티 DB 저장
+ │                               │── wallet.isOnboardingRewardGranted() == false
+ │                               │
+ │                               │── jackpotChainRpcClient
+ │                               │    .grantOnboardingPotReward(address)
+ │                               │────────────────────────▶│
+ │                               │    JSON-RPC:             │
+ │                               │    grantonboardingreward │
+ │                               │    (recipient_address)   │
+ │                               │                         │── 서버 운영자 지갑의 JACK UTXO 선택
+ │                               │                         │   (로컬: bootstrap 10,000 JACK UTXO)
+ │                               │                         │── 교환 TX 생성:
+ │                               │                         │   100 JACK in
+ │                               │                         │   → 80 JACK → 잭팟 풀
+ │                               │                         │   → 1 POT   → recipient
+ │                               │                         │   → 19 JACK → 소각(burn)
+ │                               │                         │   + fee_jack 사용
+ │                               │                         │── TX를 mempool에 추가
+ │                               │                         │── 다음 블록에 포함됨
+ │                               │◀───────────────────────│
+ │                               │   { txId, potAmount }   │
+ │                               │── wallet.markOnboardingRewardGranted(txId)
+ │◀───────────────────────────────│
+ │  { address, onboardingRewardGranted:true, txId }
+```
+
+**1 POT의 출처**: 서버 노드의 운영자 지갑 JACK → 교환 TX로 POT 발행
+- 로컬 개발: `--bootstrap-onboarding-reward` 플래그로 합성 10,000 JACK UTXO 주입
+- 운영: 실제 채굴로 얻은 JACK 사용 (채굴 보상 → 운영자가 교환용으로 보유)
+
+### 기존 지갑 등록 (type: "restore")
+
+```
+FE                              BE
+ │ [기존 privateKey 입력]         │
+ │  privateKey → 주소 도출        │
+ │  → 암호화 → IndexedDB 저장     │
+ │                               │
+ │ POST /v1/wallet               │
+ │  { address, grantOnboardingReward:false }
+ │────────────────────────────────▶│
+ │                               │── 주소가 이미 존재하면 → 409 (duplicate_restore)
+ │                               │   FE에서 정상 처리 (이미 등록된 지갑으로 간주)
+ │                               │── 신규이면 Wallet DB 저장
+ │                               │   (온보딩 보상 없음)
+ │◀───────────────────────────────│
+```
+
+---
+
+## 7. JACK → POT 교환 흐름
+
+### 흐름
+
+```
+FE                              BE                         Node
+ │ [지갑 잠금 해제 필요]          │
+ │  getWalletUtxos(address)      │
+ │────────────────────────────────▶│── listUnspent(address) RPC ──▶│
+ │◀────────────────────────────────│◀────────────────────────────── │
+ │  utxos[]                      │
+ │                               │
+ │  buildExchangeTransaction() [브라우저에서]
+ │  ┌────────────────────────────────┐
+ │  │ version = 2                    │
+ │  │ inputs:                        │
+ │  │   JACK UTXOs (≥ 100 JACK)      │
+ │  │ outputs:                       │
+ │  │   [0] 1 POT → 사용자 주소      │
+ │  │   [1] 80 JACK → JACKPOT_POOL  │
+ │  │   [2] OP_RETURN EXCHANGE:burned│
+ │  │   [3] JACK 거스름돈 (선택)     │
+ │  │ scriptSig: secp256k1 서명      │
+ │  └────────────────────────────────┘
+ │  signedTxHex = serialized hex   │
+ │                               │
+ │ POST /v1/exchange/jack-to-pot  │
+ │  { fromAddress, jackAmount,    │
+ │    signedTxHex }               │
+ │────────────────────────────────▶│
+ │                               │── ExchangeService.exchange()
+ │                               │── sendRawTransaction(signedTxHex) ──▶│
+ │                               │                                       │ TX → mempool
+ │                               │◀──────────────────────────────────── │
+ │                               │   txId                               │
+ │◀───────────────────────────────│
+ │  { txId, burnedJack, receivedPot }
+```
+
+**교환 비율 (EXCHANGE_RATE_JACK = 100)**:
+- 100 JACK → 1 POT
+- 100 JACK 중: 80 JACK → 잭팟 풀, 19 JACK → 소각, 1 JACK → TX 수수료
+
+---
+
+## 8. 로또 Commit 흐름
+
+### Commit-Reveal 원리
+
+온체인에서 미래 블록 해시를 결과 시드로 사용 → **커밋 시점에 결과를 아무도 예측 불가**
+
+```
+Commit 블록: N
+결과 블록: N+3, N+6, N+9, N+12, N+15, N+18
+  → 각 블록 해시의 마지막 hex digit (0~F = 0~15)
+  → 6개 digit = 로또 결과
+
+Claim 가능 구간: N+18 ~ N+68
+Claim 만료: N+68 이후 → EXPIRED 상태
+```
+
+### Commit TX 흐름
+
+```
+FE                              BE                         Node
+ │                               │
+ │ getWalletUtxos(address)       │
+ │────────────────────────────────▶│── listUnspent(address) ──▶│
+ │◀────────────────────────────────│                           │
  │
- │ GET /lotto/entries/{hash}/claim-context
- │──────────────────────▶│── listunspent (RPC) ▶│
- │◀── UTXO 정보 ─────────│
- │ (브라우저에서 version=5 TX 서명)
- │ POST /lotto/claim (signed TX)
- │──────────────────────▶│── sendrawtransaction ▶│
+ │ buildLottoCommitTransaction() [브라우저에서]
+ │ ┌──────────────────────────────────────────┐
+ │ │ version = 3                              │
+ │ │ inputs:                                  │
+ │ │   POT UTXO (≥ 1 POT 필요)               │
+ │ │   JACK UTXO (수수료용, 선택)             │
+ │ │ outputs:                                 │
+ │ │   [0] OP_RETURN "LOTTO" + 6개 숫자(0~15)│
+ │ │   [1] POT 거스름돈 → 사용자 (선택)       │
+ │ │   [2] JACK 거스름돈 → 사용자 (선택)      │
+ │ │ scriptSig: secp256k1 서명                │
+ │ └──────────────────────────────────────────┘
+ │
+ │ POST /v1/lotto/commit         │
+ │  { fromAddress, chosenNumbers,│
+ │    signedTxHex }              │
+ │────────────────────────────────▶│
+ │                               │── LottoService.commit()
+ │                               │── sendRawTransaction(signedTxHex) ──▶│
+ │                               │                                       │ TX → mempool
+ │                               │                                       │ 다음 블록에 포함
+ │                               │◀────────────────────────────────── ──│
+ │                               │   txId (commitHash)                   │
+ │◀───────────────────────────────│
+ │  (commitHash = 이 TX의 txId)  │
+ │                               │
+ │ ... N+18 블록이 채굴될 때 ...  │
+ │                               │── BlockchainSyncScheduler (5초마다)
+ │                               │   syncToTip() → LottoEntry 상태 업데이트
+ │                               │   DRAWING → WINNING / LOSING / EXPIRED
+ │
+ │ GET /v1/lotto/entries?address  │ (polling 10초마다)
+ │────────────────────────────────▶│
+ │◀────────────────────────────────│
+ │  [{ status: "DRAWING"|"WINNING"|"LOSING"|"EXPIRED", ... }]
 ```
 
 ---
 
-## 4. TX 버전 구조 (UTXO 모델)
+## 9. 로또 Claim 흐름
 
-| version | 종류 | 서명자 |
-|---------|------|--------|
-| 1 | 일반 전송 | FE 브라우저 |
-| 2 | JACK → POT 교환 | BE (서버 지갑) |
-| 3 | 로또 커밋 | FE 브라우저 |
-| 5 | 로또 클레임 | FE 브라우저 |
+```
+FE                              BE                         Node
+ │  (당첨 확인 후 Claim 시작)     │
+ │                               │
+ │ GET /v1/lotto/entries/{hash}/claim-context
+ │────────────────────────────────▶│
+ │                               │── LottoService.getClaimContext()
+ │                               │── listPoolUnspent() RPC ──────▶│
+ │                               │◀──────────────────────────── ──│
+ │                               │   잭팟 풀 UTXO 목록             │
+ │◀───────────────────────────────│
+ │  { claimable:true, rewardJack, │
+ │    rewardPot, poolUtxos[] }    │
+ │
+ │ getWalletUtxos(address)       │── listUnspent(address) RPC ──▶│
+ │◀────────────────────────────────│◀─────────────────────────── ─│
+ │
+ │ buildLottoClaimTransaction() [브라우저에서]
+ │ ┌──────────────────────────────────────────────────────┐
+ │ │ version = 5                                          │
+ │ │ inputs:                                              │
+ │ │   [fee UTXOs] 내 JACK UTXO (수수료)                  │
+ │ │   [pool UTXOs] 잭팟 풀 UTXO (보상 금액만큼 선택)     │
+ │ │ outputs:                                             │
+ │ │   [0] rewardJack + rewardPot → 사용자 주소           │
+ │ │   [1] 풀 거스름돈 → JACKPOT_POOL 마커 (선택)         │
+ │ │   [2] OP_RETURN "CLAIM" + commitHash                 │
+ │ │ scriptSig: 수수료 UTXO에만 서명 (풀 UTXO는 무서명)   │
+ │ └──────────────────────────────────────────────────────┘
+ │
+ │ POST /v1/lotto/claim          │
+ │  { fromAddress, commitHash,   │
+ │    signedTxHex }              │
+ │────────────────────────────────▶│
+ │                               │── LottoService.claim()
+ │                               │── sendRawTransaction(signedTxHex) ──▶│
+ │                               │                                       │ TX → mempool → 블록
+ │◀───────────────────────────────│
+ │  { claimTxId, matchCount,     │
+ │    rewardJack, claimedAt }    │
+```
 
-> FE의 `txBuilder.ts`가 raw tx를 직렬화하고, BE는 그것을 그대로 Node에 relay한다.
+**Claim이 복잡한 이유**: 잭팟 풀 UTXO는 서버가 관리하지만, 브라우저가 직접 소비해야 함.
+`claimContext`로 BE가 풀 UTXO를 FE에 전달 → FE가 TX를 조립해서 서명 → BE가 relay
 
 ---
 
-## 5. 읽기 모델 동기화 전략
+## 10. RPC 통신 구조 (BE ↔ Node)
 
-JackpotChain Node는 블록을 확정하면 BE에 Webhook을 보낸다.
-BE는 이 Webhook으로 **PostgreSQL 읽기 모델**을 갱신한다:
+BE → Node 방향만 존재 (Node → BE 방향 없음, 스케줄러가 대신)
 
 ```
-Webhook → BlockchainReadModelSyncService
-             ├── Block 저장/업데이트
-             ├── Transaction 저장
-             ├── WalletActivity 추가 (활동 로그)
-             ├── LottoEntry 상태 업데이트 (COMMITTED → DECIDED)
-             └── JackpotPool 잔액 갱신
-```
+JackpotChainHttpRpcClient
+    restClient.post()
+    ├── URL: http://jackpotchain-node:9776  (Docker 내부망)
+    ├── Content-Type: application/json
+    └── Body:
+        {
+          "jsonrpc": "2.0",
+          "method": "getblockcount",
+          "params": [],
+          "id": 1
+        }
 
-> 스케줄러(`BlockchainSyncScheduler`)가 주기적으로 누락 블록도 보완한다.
+구현된 RPC 메서드 목록:
+  getblockcount         → 현재 블록 높이
+  getblockchaininfo     → 체인 요약 (높이, 난이도, best hash, 피어 수 등)
+  getbalances(addr)     → JACK / POT 잔액
+  listunspent(addr)     → 특정 주소 UTXO 목록
+  listpoolunspent       → 잭팟 풀 UTXO 목록
+  getblockhash(height)  → 블록 해시
+  getblock(hash)        → 블록 상세
+  getindexedblock(hash) → 블록 상세 (인덱싱용 추가 필드 포함)
+  getlottoinfo          → 로또 개요
+  getjackpotpool        → 잭팟 풀 상태
+  getpeerinfo           → 피어 목록
+  getmempoolcount       → mempool TX 수
+  getrawmempool         → mempool TX 상세
+  checklottoresult(hash)→ 로또 결과 조회
+  getexchangeinfo       → 교환 비율 정보
+  grantonboardingreward(addr) → 온보딩 1 POT 지급
+  sendrawtransaction(hex) → 서명된 TX relay
+```
 
 ---
 
-## 6. 보안 원칙 (공부 포인트)
+## 11. TX 버전 구조 (UTXO 모델)
 
-| 원칙 | 구현 | 왜? |
-|------|------|-----|
-| 개인키 서버 전송 금지 | IndexedDB 암호화 + 브라우저 서명 | 서버 침해 시 자산 보호 |
+| version | 종류 | 서명자 | 주요 출력 |
+|---------|------|--------|----------|
+| 1 | 일반 전송 | FE 브라우저 | P2PKH |
+| 2 | JACK→POT 교환 | FE 브라우저 | POT출력 + 풀입금 + OP_RETURN |
+| 3 | 로또 커밋 | FE 브라우저 | OP_RETURN(LOTTO+숫자) |
+| 5 | 로또 클레임 | FE 브라우저 | 보상 + OP_RETURN(CLAIM+hash) |
+
+> FE `txBuilder.ts` → raw bytes 직렬화 → secp256k1 서명 → hex 문자열 → BE에 전달 → Node relay
+
+---
+
+## 12. FE HTTP 통신 레이어
+
+```
+Axios 인스턴스 (lib/api.ts)
+    baseURL: /api  (Nginx가 /api/* → BE 8080으로 라우팅)
+
+request interceptor:
+    Authorization: Bearer {accessToken} 자동 주입 (메모리에서)
+
+response interceptor:
+    401 → POST /auth/refresh (refreshSessionHandle + HttpOnly cookie)
+         → 새 accessToken 발급 → 원 요청 재시도
+    403 → 다른 지갑 접근 차단 처리
+```
+
+---
+
+## 13. 보안 원칙 요약
+
+| 원칙 | 구현 | 이유 |
+|------|------|------|
+| 개인키 서버 전송 금지 | IndexedDB AES-GCM 암호화 저장, 브라우저 서명 | 서버 침해 시 자산 보호 |
 | Refresh token 해시 저장 | SHA-256 해시만 DB 저장 | 원문 유출 방지 |
-| Challenge TTL | Redis 5분 만료 | Replay Attack 방지 |
-| RPC 포트 외부 차단 | 내부 네트워크만 8332 | 직접 RPC 호출 차단 |
-| CORS Allowlist | wildcard + credentials 조합 금지 | 교차 출처 공격 방지 |
+| Challenge 단일 사용 + TTL | Redis 5분, used 플래그 | Replay Attack 방지 |
+| 공개키 → 주소 재도출 검증 | verifyChallenge에서 deriveAddress 비교 | 주소 위조 방지 |
+| RPC 포트 외부 차단 | Docker 내부망 전용 9776 | 직접 RPC 호출 차단 |
+| JWT subject == walletAddress | 모든 보호 API에서 강제 검증 | 타인 자산 접근 차단 |
+| 유휴 자동 잠금 | WALLET_IDLE_LOCK_MS = 5분 | 방치된 세션 보호 |
 
 ---
 
-## 7. 기술 스택 한눈에
-
-| 레이어 | 기술 |
-|--------|------|
-| FE | React 18, TypeScript, Vite, Zustand, React Query, Axios |
-| BE | Spring Boot 3.x, Java 17, JPA/Hibernate, Flyway |
-| DB | PostgreSQL (읽기 모델), Redis (캐시/TTL), RabbitMQ (Outbox) |
-| 블록체인 | Python 3.12, asyncio, PoW, UTXO |
-| 인프라 | Docker Compose, Nginx, Jenkins, EC2 |
-| 모니터링 | Prometheus, Grafana, Loki, Promtail, cAdvisor |
-
----
-
-## 8. 학습 로드맵
-
-각 파트별 상세 학습 파일:
+## 14. 파트별 상세 학습
 
 | 파일 | 내용 |
 |------|------|
-| [be.md](./be.md) | Spring Boot 구조, JWT, Redis, RabbitMQ Outbox |
-| [fe.md](./fe.md) | React Query, Polling, 브라우저 암호화, TX 빌더 |
+| [be.md](./be.md) | Spring Boot 구조, JWT, Redis, HikariCP |
+| [fe.md](./fe.md) | React Query, Polling, IndexedDB, TX 빌더 |
 | [blockchain.md](./blockchain.md) | PoW, UTXO, Commit-Reveal, JSON-RPC |
-| [performance-test.md](./performance-test.md) | nGrinder/JMeter, HikariCP 튜닝, Cache-Aside, Outbox |
+| [performance-test.md](./performance-test.md) | nGrinder, Cache-Aside, Outbox, N+1 |

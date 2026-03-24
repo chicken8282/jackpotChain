@@ -30,7 +30,7 @@ import java.time.Duration;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/v1/auth")
 public class AuthController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

@@ -16,7 +16,7 @@ public class AuthRefreshCookieProperties {
 
     private static final Set<String> ALLOWED_SAME_SITE_VALUES = Set.of("Lax", "Strict", "None");
 
-    private String path = "/api/v1/auth";
+    private String path = "/v1/auth";
     private long maxAgeSeconds = 14L * 24 * 60 * 60;
     private boolean secure = false;
     private String sameSite = "Lax";

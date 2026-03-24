@@ -49,7 +49,7 @@ class ExchangeControllerTest {
         given(exchangeService.getExchangeInfo("JackpotAddress01", "JackpotAddress01"))
             .willReturn(new ExchangeInfoResponse(12_500_000_000L, 300_000_000L));
 
-        mockMvc.perform(get("/api/v1/exchange/info")
+        mockMvc.perform(get("/v1/exchange/info")
                 .param("address", "JackpotAddress01")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
             .andExpect(status().isOk())
@@ -66,7 +66,7 @@ class ExchangeControllerTest {
         given(exchangeService.exchangeJackToPot(eq("JackpotAddress01"), any()))
             .willReturn(new ExchangeResponse("tx-001", 10_000_000_000L, 100_000_000L, 100));
 
-        mockMvc.perform(post("/api/v1/exchange/jack-to-pot")
+        mockMvc.perform(post("/v1/exchange/jack-to-pot")
                 .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""

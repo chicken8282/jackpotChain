@@ -12,7 +12,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/learning")
+@RequestMapping("/v1/learning")
 public class LearningController {
 
     private static final int OK = HttpStatus.OK.value();

@@ -71,7 +71,7 @@ class BlockchainControllerTest {
                 List.of(1, 2)
             ));
 
-        mockMvc.perform(get("/api/v1/blockchain/dashboard")
+        mockMvc.perform(get("/v1/blockchain/dashboard")
                 .queryParam("limit", "3")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
@@ -87,7 +87,7 @@ class BlockchainControllerTest {
      */
     @Test
     void getDashboardRejectsInvalidLimit() throws Exception {
-        mockMvc.perform(get("/api/v1/blockchain/dashboard")
+        mockMvc.perform(get("/v1/blockchain/dashboard")
                 .queryParam("limit", "51")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isBadRequest())
@@ -119,7 +119,7 @@ class BlockchainControllerTest {
                 90_000_000L
             ));
 
-        mockMvc.perform(get("/api/v1/blockchain/blocks/11")
+        mockMvc.perform(get("/v1/blockchain/blocks/11")
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(200))

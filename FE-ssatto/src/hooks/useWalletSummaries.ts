@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { getWallets, type WalletSummary } from "../services/walletService";
 import type { WalletMetadata } from "../stores/useWalletStore";
 import { usePollingQuery } from "./usePollingQuery";
@@ -28,6 +28,15 @@ export function useWalletSummaries(
       return response.wallets;
     },
   });
+
+  // When addresses change (wallet added/removed), trigger an immediate refetch
+  // so the new wallet is included without waiting for the next interval tick.
+  // refetch is intentionally omitted from deps — it wraps a stable useEffectEvent.
+  useEffect(() => {
+    if (addresses.length === 0) return;
+    void refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryKey]);
 
   if (!enabled) {
     return {

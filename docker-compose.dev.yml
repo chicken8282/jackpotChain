@@ -92,10 +92,11 @@ services:
       NODE_MINE: "false"
       NODE_MAX_INBOUND: "128"
       NODE_MAX_OUTBOUND: "16"
-    expose:
-      - "9776"
-      - "9777"
-      - "9778"
+    ports:
+      - "127.0.0.1:8876:9776"
+      - "8877:9777/tcp"
+      - "8877:9777/udp"
+      - "8878:9778"
     volumes:
       - node-dev-data:/data
       - node-dev-wallets:/wallets

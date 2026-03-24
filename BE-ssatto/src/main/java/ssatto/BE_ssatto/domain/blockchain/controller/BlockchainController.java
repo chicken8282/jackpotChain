@@ -26,7 +26,7 @@ import ssatto.BE_ssatto.global.response.ApiResponse;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/blockchain")
+@RequestMapping("/v1/blockchain")
 public class BlockchainController {
 
     private static final int SUCCESS_CODE = HttpStatus.OK.value();

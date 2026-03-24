@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 @Import(SecurityConfig.class)
 @TestPropertySource(properties = {
-    "auth.refresh-cookie.path=/api/v1/auth",
+    "auth.refresh-cookie.path=/v1/auth",
     "auth.refresh-cookie.max-age-seconds=1209600",
     "auth.refresh-cookie.secure=false",
     "auth.refresh-cookie.same-site=Lax"
@@ -66,7 +66,7 @@ class AuthControllerLocalCookiePolicyTest {
                 "refresh-token-001"
             ));
 
-        mockMvc.perform(post("/api/v1/auth/verify")
+        mockMvc.perform(post("/v1/auth/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -78,7 +78,7 @@ class AuthControllerLocalCookiePolicyTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
-                containsString("Path=/api/v1/auth"),
+                containsString("Path=/v1/auth"),
                 containsString("HttpOnly"),
                 containsString("SameSite=Lax"),
                 not(containsString("Secure"))
