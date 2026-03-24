@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: jackpotchain-backend
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Seoul
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+
+jwt:
+  access-expiration: 900000
+  refresh-expiration: 1209600000
+  expiration: 900000
+
+auth:
+  challenge-ttl-seconds: 300
+  cors:
+    allowed-origins:
+    allowed-methods: GET,POST,OPTIONS
+    allowed-headers: Authorization,Content-Type,Accept
+    max-age-seconds: 3600
+  refresh-cookie:
+    path: /v1/auth
+    max-age-seconds: 1209600
+    secure: false
+    same-site: Lax
+
+jackpotchain:
+  rpc:
+    url: ${JACKPOTCHAIN_RPC_URL:http://localhost:8332}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    ssatto.BE_ssatto: INFO

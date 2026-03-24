@@ -1,0 +1,209 @@
+export type DashboardBlockStatus = "confirmed" | "candidate";
+
+export interface DashboardBlockDetail {
+  id: string;
+  height: number;
+  hash: string;
+  reward: number;
+  feeReward: number;
+  jackpotContribution: number;
+  status: DashboardBlockStatus;
+  txCount: number;
+  confirmations: number;
+  version: string;
+  previousHash: string;
+  merkleRoot?: string;
+  nonce: number;
+  difficulty: string;
+  minedAt: string;
+  miningElapsed: string;
+  isMainChain: boolean;
+  isMine?: boolean;
+  minerLabel: string;
+  coinbaseAddress?: string;
+}
+
+export const confirmedBlocks: DashboardBlockDetail[] = [
+  {
+    id: "0x8A24F1",
+    height: 924,
+    hash: "0x8A24F1B17C84D2E0A6429E71C4F9185B2D8A4152",
+    reward: 50,
+    feeReward: 4.1,
+    jackpotContribution: 18,
+    status: "confirmed",
+    txCount: 182,
+    confirmations: 31,
+    version: "0x20000000",
+    previousHash: "0x7B1168FC8D451A2D7F44C1AA77E90910D6ACC809",
+    nonce: 183402,
+    difficulty: "7.42T",
+    minedAt: "2026-03-14 14:48 KST",
+    miningElapsed: "12.1초",
+    isMainChain: true,
+    minerLabel: "Validator-03",
+  },
+  {
+    id: "0x8A251C",
+    height: 925,
+    hash: "0x8A251C6DF008C1E7A4F9C0B8D118A6CD34782AAF",
+    reward: 50,
+    feeReward: 4.4,
+    jackpotContribution: 20,
+    status: "confirmed",
+    txCount: 196,
+    confirmations: 27,
+    version: "0x20000000",
+    previousHash: "0x8A24F1B17C84D2E0A6429E71C4F9185B2D8A4152",
+    nonce: 191020,
+    difficulty: "7.42T",
+    minedAt: "2026-03-14 14:59 KST",
+    miningElapsed: "11.9초",
+    isMainChain: true,
+    minerLabel: "Validator-07",
+  },
+  {
+    id: "0x8A267D",
+    height: 926,
+    hash: "0x8A267D3B8A917F4C6D204B81CF483A0E9FB40CD2",
+    reward: 50,
+    feeReward: 5.2,
+    jackpotContribution: 24,
+    status: "confirmed",
+    txCount: 210,
+    confirmations: 20,
+    version: "0x20000000",
+    previousHash: "0x8A251C6DF008C1E7A4F9C0B8D118A6CD34782AAF",
+    nonce: 228319,
+    difficulty: "7.44T",
+    minedAt: "2026-03-14 15:11 KST",
+    miningElapsed: "12.7초",
+    isMainChain: true,
+    isMine: true,
+    minerLabel: "My Wallet",
+  },
+  {
+    id: "0x8A27E9",
+    height: 927,
+    hash: "0x8A27E9AA701C22974815AB4D9CF43D700B8856F1",
+    reward: 50,
+    feeReward: 4.7,
+    jackpotContribution: 21,
+    status: "confirmed",
+    txCount: 188,
+    confirmations: 14,
+    version: "0x20000000",
+    previousHash: "0x8A267D3B8A917F4C6D204B81CF483A0E9FB40CD2",
+    nonce: 247901,
+    difficulty: "7.46T",
+    minedAt: "2026-03-14 15:24 KST",
+    miningElapsed: "12.2초",
+    isMainChain: true,
+    minerLabel: "Validator-11",
+  },
+  {
+    id: "0x8A2840",
+    height: 928,
+    hash: "0x8A28409FD70EAD4C7001D83AFC11C2E90A51BDA2",
+    reward: 50,
+    feeReward: 5.6,
+    jackpotContribution: 26,
+    status: "confirmed",
+    txCount: 224,
+    confirmations: 7,
+    version: "0x20000000",
+    previousHash: "0x8A27E9AA701C22974815AB4D9CF43D700B8856F1",
+    nonce: 272414,
+    difficulty: "7.46T",
+    minedAt: "2026-03-14 15:37 KST",
+    miningElapsed: "12.8초",
+    isMainChain: true,
+    minerLabel: "Validator-02",
+  },
+];
+
+export const candidateBlocks: DashboardBlockDetail[] = [
+  {
+    id: "0xC029A8",
+    height: 929,
+    hash: "0xC029A8D191A6CC0E2716B8B2C9E718523A0FF201",
+    reward: 50,
+    feeReward: 3.9,
+    jackpotContribution: 17,
+    status: "candidate",
+    txCount: 134,
+    confirmations: 0,
+    version: "0x20000000",
+    previousHash: "0x8A28409FD70EAD4C7001D83AFC11C2E90A51BDA2",
+    nonce: 0,
+    difficulty: "7.48T",
+    minedAt: "예상 2026-03-14 15:49 KST",
+    miningElapsed: "대기 중",
+    isMainChain: true,
+    minerLabel: "Pending Queue",
+  },
+  {
+    id: "0xC02AF2",
+    height: 930,
+    hash: "0xC02AF26E7CC09116A8E441D26707A0D6E9F10113",
+    reward: 50,
+    feeReward: 3.6,
+    jackpotContribution: 16,
+    status: "candidate",
+    txCount: 122,
+    confirmations: 0,
+    version: "0x20000000",
+    previousHash: "0xC029A8D191A6CC0E2716B8B2C9E718523A0FF201",
+    nonce: 0,
+    difficulty: "7.48T",
+    minedAt: "예상 2026-03-14 16:01 KST",
+    miningElapsed: "대기 중",
+    isMainChain: true,
+    minerLabel: "Pending Queue",
+  },
+  {
+    id: "0xC02B6C",
+    height: 931,
+    hash: "0xC02B6C48A1F9776B20C8DD19A164B0FF009181A7",
+    reward: 50,
+    feeReward: 3.2,
+    jackpotContribution: 14,
+    status: "candidate",
+    txCount: 110,
+    confirmations: 0,
+    version: "0x20000000",
+    previousHash: "0xC02AF26E7CC09116A8E441D26707A0D6E9F10113",
+    nonce: 0,
+    difficulty: "7.49T",
+    minedAt: "예상 2026-03-14 16:13 KST",
+    miningElapsed: "대기 중",
+    isMainChain: true,
+    minerLabel: "Pending Queue",
+  },
+  {
+    id: "0xC02C17",
+    height: 932,
+    hash: "0xC02C1782BA4C00817D5F8A91E2C03D7F0AE7F980",
+    reward: 50,
+    feeReward: 2.8,
+    jackpotContribution: 13,
+    status: "candidate",
+    txCount: 104,
+    confirmations: 0,
+    version: "0x20000000",
+    previousHash: "0xC02B6C48A1F9776B20C8DD19A164B0FF009181A7",
+    nonce: 0,
+    difficulty: "7.49T",
+    minedAt: "예상 2026-03-14 16:25 KST",
+    miningElapsed: "대기 중",
+    isMainChain: true,
+    minerLabel: "Pending Queue",
+  },
+];
+
+export const dashboardStats = {
+  currentHeight: 928,
+  checkpointHeight: 930,
+  jackpotPool: 1_241_500,
+  activeNodes: 7,
+};

@@ -1,0 +1,9 @@
+[
+  {
+    "privateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "publicKeyHex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+    "address": "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+    "loginMessage": "SSATTO Login\naddress=XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82\nchallengeId=challenge-001\nnonce=nonce-001\nissuedAt=2026-03-20T10:00:00\nexpiresAt=2026-03-20T10:05:00\npurpose=wallet-auth",
+    "signatureHex": "304402204787ca19d3d8c713eb3ae9b6fb6c7d943fb2e0b61f8eb9c3db78911b87a2c20102205e925f9aae2caa3025714c047faa8c8a3bbf7986a37b2814a49f36d1b695e38f"
+  }
+]

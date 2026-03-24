@@ -1,0 +1,163 @@
+package ssatto.BE_ssatto.global.exception;
+
+import jakarta.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
+import ssatto.BE_ssatto.global.response.ApiResponse;
+
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * 애플리케이션 전역의 REST 예외를 중앙에서 처리한다.
+ */
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    /**
+     * 스택 트레이스 없이 비즈니스 예외를 처리한다.
+     *
+     * @param exception 비즈니스 예외
+     * @return 공통 포맷으로 감싼 에러 응답
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(
+        BusinessException exception,
+        HttpServletRequest request
+    ) {
+        ErrorCode errorCode = exception.getErrorCode();
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.BUSINESS_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, errorCode.name(),
+            LoggingFields.STATUS, errorCode.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("business exception handled"));
+
+        return ResponseEntity
+            .status(errorCode.getHttpStatus())
+            .body(ApiResponse.error(errorCode.getHttpStatus().value(), exception.getMessage()));
+    }
+
+    /**
+     * 요청 본문 검증 실패를 처리한다.
+     *
+     * @param exception 검증 예외
+     * @return 공통 포맷으로 감싼 에러 응답
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(
+        MethodArgumentNotValidException exception,
+        HttpServletRequest request
+    ) {
+        String message = exception.getBindingResult().getFieldErrors().stream()
+            .map(FieldError::getDefaultMessage)
+            .collect(Collectors.joining(", "));
+
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.VALIDATION_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INVALID_REQUEST.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("validation exception handled: {}", message));
+
+        return ResponseEntity
+            .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
+            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(), message));
+    }
+
+    /**
+     * 쿼리 파라미터 제약 조건과 같은 본문 외 검증 실패를 처리한다.
+     *
+     * @param exception 제약 조건 위반 예외
+     * @return 공통 포맷으로 감싼 에러 응답
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
+        ConstraintViolationException exception,
+        HttpServletRequest request
+    ) {
+        String message = exception.getConstraintViolations().stream()
+            .map(violation -> violation.getMessage())
+            .collect(Collectors.joining(", "));
+
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.VALIDATION_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INVALID_REQUEST.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("constraint violation handled: {}", message));
+
+        return ResponseEntity
+            .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
+            .body(ApiResponse.error(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(), message));
+    }
+
+    /**
+     * 요청 본문 누락 또는 파싱 불가(Content-Type 없음, 빈 body 등)를 처리한다.
+     *
+     * @param exception HttpMessageNotReadableException
+     * @return 400 잘못된 요청 응답
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
+        HttpMessageNotReadableException exception,
+        HttpServletRequest request
+    ) {
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.VALIDATION_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INVALID_REQUEST.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("request body missing or not readable"));
+
+        return ResponseEntity
+            .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
+            .body(ApiResponse.error(
+                ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+                ErrorCode.COMMON_INVALID_REQUEST.getMessage()
+            ));
+    }
+
+    /**
+     * 예기치 않은 예외를 처리하고 전체 스택 트레이스를 기록한다.
+     *
+     * @param exception 예기치 않은 예외
+     * @return 공통 포맷으로 감싼 에러 응답
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception exception, HttpServletRequest request) {
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.UNHANDLED_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INTERNAL_SERVER_ERROR.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.error("unhandled exception occurred", exception));
+
+        return ResponseEntity
+            .status(ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus())
+            .body(ApiResponse.error(
+                ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus().value(),
+                ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getMessage()
+            ));
+    }
+}
