@@ -36,6 +36,7 @@ def main():
     # node 명령
     node_parser = subparsers.add_parser('node', help='Run a node')
     node_parser.add_argument('--port', type=int, default=9777, help='P2P port')
+    node_parser.add_argument('--rpc-host', default='127.0.0.1', help='RPC bind host')
     node_parser.add_argument('--rpc-port', type=int, default=9776, help='RPC port')
     node_parser.add_argument('--data-dir', default=None, help='Data directory (default: %%APPDATA%%/JackpotChain/data)')
     node_parser.add_argument('--wallet-file', default=None, help='Wallet file path (default: %%APPDATA%%/JackpotChain/wallets/default.json)')
@@ -47,7 +48,8 @@ def main():
     node_parser.add_argument('--seed-node', action='store_true', help='Run as seed node (enables rendezvous server)')
     node_parser.add_argument('--rendezvous-port', type=int, default=8334, help='Rendezvous server port (default: 8334)')
     node_parser.add_argument('--rendezvous-seed', action='append', help='Rendezvous seed (ip:port) for hole punching')
-    node_parser.add_argument('--rpc-host', default='127.0.0.1', help='RPC bind host (default: 127.0.0.1)')
+    # 로컬 온보딩 보상 부트스트랩 (Docker 로컬 개발 전용)
+    node_parser.add_argument('--bootstrap-onboarding-reward', action='store_true', default=False, help='Seed operator wallet with synthetic JACK for onboarding rewards (local dev only)')
 
     # wallet 명령
     wallet_parser = subparsers.add_parser('wallet', help='Wallet operations')
@@ -117,6 +119,17 @@ def run_node(args):
     # 지갑 파일 로드
     wallet = Wallet(wallet_file)
 
+    # 로컬 온보딩 보상 부트스트랩 (--bootstrap-onboarding-reward 플래그 시)
+    if args.bootstrap_onboarding_reward:
+        from jackpotchain.bootstrap.local_onboarding_reward import ensure_local_onboarding_reward_bootstrap
+        bootstrap_result = ensure_local_onboarding_reward_bootstrap(
+            blockchain=blockchain,
+            wallet=wallet,
+            enabled=True,
+        )
+        if bootstrap_result:
+            print(f"[Bootstrap] Onboarding reward funded: {bootstrap_result.jack_satoshi} JACK at {bootstrap_result.address} (created={bootstrap_result.created})")
+
     config = NodeConfig(
         port=args.port,
         is_seed_node=args.seed_node,
@@ -142,8 +155,8 @@ def run_node(args):
         node=node,
         data_dir=data_dir,
         wallet_dir=wallet_dir,
-        port=args.rpc_port,
-        host=args.rpc_host
+        host=args.rpc_host,
+        port=args.rpc_port
     )
 
     # 채굴 상태
@@ -299,7 +312,7 @@ def run_node(args):
         await node.start()
         await rpc.start()
 
-        print(f"Node running. RPC at http://127.0.0.1:{args.rpc_port}")
+        print(f"Node running. RPC at http://{args.rpc_host}:{args.rpc_port}")
 
         tasks = []
 
