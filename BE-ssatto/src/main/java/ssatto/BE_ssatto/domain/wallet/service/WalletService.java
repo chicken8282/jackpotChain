@@ -13,7 +13,6 @@ import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBalances;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainOnboardingReward;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainUnspentOutput;
-import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletRequest;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletActivityCursorResponse;
@@ -53,7 +52,6 @@ public class WalletService {
     private final WalletActivityRepository walletActivityRepository;
     private final JackpotChainRpcClient jackpotChainRpcClient;
     private final WalletAuthCrypto walletAuthCrypto;
-    private final BlockchainReadModelSyncService blockchainReadModelSyncService;
 
     /**
      * 지갑 메타데이터를 저장한다.
@@ -169,7 +167,6 @@ public class WalletService {
         validateAddress(address);
         validateWalletSubject(authenticatedWalletAddress, address);
         validatePageSize(size);
-        blockchainReadModelSyncService.syncToTip();
         walletRepository.findByAddress(address)
             .orElseThrow(WalletNotFoundException::new);
 
