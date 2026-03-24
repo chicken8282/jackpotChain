@@ -493,14 +493,15 @@ class RPCServer:
         if address:
             # 특정 주소의 UTXO
             utxos = self.blockchain.utxo_set.get_utxos_for_address(address)
+            current_height = self.blockchain.get_height()
             return [
                 {
-                    'txid': utxo.outpoint.txid.hex(),
-                    'vout': utxo.outpoint.index,
+                    'txid': utxo.tx_id.hex(),
+                    'vout': utxo.output_index,
                     'address': address,
                     'amount': utxo.output.jack_value / 100_000_000,
                     'assets': utxo.output.assets,
-                    'confirmations': self.blockchain.get_height() - utxo.block_height + 1
+                    'confirmations': max(0, current_height - utxo.block_height + 1),
                 }
                 for utxo in utxos
             ]
@@ -1092,14 +1093,18 @@ class RPCServer:
             raise Exception("Wallet not available")
 
         from ..asset.exchange import calculate_exchange, create_exchange_tx
-        from ..constants import COIN, EXCHANGE_RATE
-        from ..crypto.address import validate_address
+        from ..constants import COIN, EXCHANGE_RATE, MIN_TX_FEE
+        from ..crypto.address import validate_address, address_to_pubkey_hash
+        from ..script.standard import create_p2pkh_script_pubkey
+        from ..core.transaction import TxOutput
 
         if not validate_address(recipient_address):
             raise Exception(f"Invalid recipient address: {recipient_address}")
 
-        # 1 POT = 100 JACK
+        # 1 POT = 100 JACK + 수수료용 JACK (0.1 JACK = 10회 TX 분량)
         jack_satoshi = EXCHANGE_RATE * COIN
+        fee_jack = 10 * MIN_TX_FEE  # 0.1 JACK
+        total_needed = jack_satoshi + fee_jack
 
         # 교환 계산
         result = calculate_exchange(jack_satoshi)
@@ -1116,7 +1121,7 @@ class RPCServer:
             and not (self.mempool and self.mempool.is_utxo_spent(u.tx_id, u.output_index))
         ]
 
-        # 충분한 JACK 수집
+        # 충분한 JACK 수집 (교환 100 JACK + 수수료 0.1 JACK)
         selected = []
         total = 0
         for utxo in mature_utxos:
@@ -1130,13 +1135,13 @@ class RPCServer:
                 )
                 selected.append((inp, utxo))
                 total += utxo.output.jack_value
-                if total >= jack_satoshi:
+                if total >= total_needed:
                     break
 
-        if total < jack_satoshi:
+        if total < total_needed:
             raise Exception(
                 f"Insufficient JACK in operator wallet: "
-                f"{total / COIN} < {EXCHANGE_RATE} JACK required"
+                f"{total / COIN} < {total_needed / COIN} JACK required"
             )
 
         # 잔돈 주소는 운영자 지갑
@@ -1152,6 +1157,20 @@ class RPCServer:
 
         if error:
             raise Exception(error)
+
+        # 수수료용 JACK 출력을 recipient에게 추가 (잔돈 출력 앞에 삽입)
+        recipient_pubkey_hash = address_to_pubkey_hash(recipient_address)
+        fee_output = TxOutput(
+            jack_value=fee_jack,
+            script_pubkey=create_p2pkh_script_pubkey(recipient_pubkey_hash)
+        )
+        # 잔돈 출력이 마지막이므로 그 앞에 삽입
+        if tx.outputs and tx.outputs[-1].jack_value > 0:
+            # 마지막이 잔돈 출력 → 잔돈에서 fee_jack 차감
+            tx.outputs[-1].jack_value -= fee_jack
+            tx.outputs.insert(-1, fee_output)
+        else:
+            tx.outputs.append(fee_output)
 
         # 서명 (운영자 지갑 키로)
         from ..crypto.signature import sign
@@ -1182,6 +1201,7 @@ class RPCServer:
         return {
             'tx_id': tx.get_txid().hex(),
             'pot_amount': result.pot_amount / COIN,
+            'fee_jack': fee_jack / COIN,
         }
 
     # =========================================================================

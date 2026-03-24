@@ -630,25 +630,29 @@ export default function HexPicker({
                   key={entry.id}
                   type="button"
                   onClick={() => {
-                    void handleSelectHistory(entry);
+                    if (entry.statusLabel !== "PENDING") {
+                      void handleSelectHistory(entry);
+                    }
                   }}
-                  className="group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all hover:border-white/15 hover:bg-white/[0.04]"
+                  className={`group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all ${entry.statusLabel === "PENDING" ? "cursor-default opacity-70" : "hover:border-white/15 hover:bg-white/[0.04]"}`}
                 >
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-white">{entry.date}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          entry.statusLabel === "WINNING"
-                            ? "bg-accent-gold/20 text-accent-gold"
-                            : entry.statusLabel === "DRAWING"
-                              ? "bg-info/15 text-info"
-                              : entry.statusLabel === "EXPIRED"
-                                ? "bg-danger/15 text-danger"
-                              : "bg-white/10 text-text-tertiary"
+                          entry.statusLabel === "PENDING"
+                            ? "bg-accent-gold/15 text-accent-gold animate-pulse"
+                            : entry.statusLabel === "WINNING"
+                              ? "bg-accent-gold/20 text-accent-gold"
+                              : entry.statusLabel === "DRAWING"
+                                ? "bg-info/15 text-info"
+                                : entry.statusLabel === "EXPIRED"
+                                  ? "bg-danger/15 text-danger"
+                                  : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
+                        {entry.statusLabel === "PENDING" ? "대기중" : entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -673,11 +677,13 @@ export default function HexPicker({
                       </button>
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
-                      {historyLoadingCommitHash === entry.commitHash
-                        ? "결과 조회 중"
-                        : entry.matchCount == null
-                          ? "추첨 대기"
-                          : `${entry.matchCount}/6일치`}
+                      {entry.statusLabel === "PENDING"
+                        ? "블록 확정 대기"
+                        : historyLoadingCommitHash === entry.commitHash
+                          ? "결과 조회 중"
+                          : entry.matchCount == null
+                            ? "추첨 대기"
+                            : `${entry.matchCount}/6일치`}
                     </span>
                     <svg
                       className="h-4 w-4 text-text-tertiary transition-transform group-hover:translate-x-0.5"
