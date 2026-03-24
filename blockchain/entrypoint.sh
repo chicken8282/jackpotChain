@@ -40,6 +40,9 @@ if [ "${NODE_MINE_VALUE}" = "true" ]; then
 
   if [ -n "${NODE_MINING_ADDRESS_VALUE}" ]; then
     set -- "$@" --address "${NODE_MINING_ADDRESS_VALUE}"
+  elif [ -f "${WALLET_FILE}" ]; then
+    WALLET_ADDR=$(python -c "import json; w=json.load(open('${WALLET_FILE}')); print(w['addresses'][0]['address'])")
+    set -- "$@" --address "${WALLET_ADDR}"
   fi
 fi
 
