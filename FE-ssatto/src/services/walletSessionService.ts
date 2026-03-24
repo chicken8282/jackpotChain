@@ -2,6 +2,8 @@ import { refreshAuthSession, type AuthRefreshResponse } from "./authService";
 import { loginWithWallet } from "./walletAuthFlowService";
 import type { WalletMetadata } from "../stores/useWalletStore";
 
+const refreshInFlight = new Map<string, Promise<AuthRefreshResponse>>();
+
 interface RestoreWalletSessionInput {
   wallet: WalletMetadata;
   currentAccessToken: string | null;
@@ -38,11 +40,17 @@ export async function restoreWalletSession(
   }
 
   if (input.wallet.refreshSessionHandle) {
-    try {
-      const refreshResponse = await refreshAuthSession({
-        sessionHandle: input.wallet.refreshSessionHandle,
-      });
+    const handle = input.wallet.refreshSessionHandle;
 
+    if (!refreshInFlight.has(handle)) {
+      const promise = refreshAuthSession({ sessionHandle: handle }).finally(() => {
+        refreshInFlight.delete(handle);
+      });
+      refreshInFlight.set(handle, promise);
+    }
+
+    try {
+      const refreshResponse = await refreshInFlight.get(handle)!;
       return {
         mode: "refresh",
         ...refreshResponse,

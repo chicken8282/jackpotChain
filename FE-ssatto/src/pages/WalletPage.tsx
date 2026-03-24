@@ -166,6 +166,7 @@ export default function WalletPage() {
   activeAccessSessionRef.current = activeAccessSession;
 
   useEffect(() => {
+    let cancelled = false;
     const wallet = activeWalletRef.current;
     if (!wallet) {
       return;
@@ -185,8 +186,10 @@ export default function WalletPage() {
       unlockedPrivateKey: activeUnlockedPrivateKey,
     })
       .then((response) => {
+        if (cancelled) return;
         if (!response) {
           clearAccessSession(wallet.walletId);
+          setAuthError("세션이 만료되었습니다. 비밀번호로 잠금을 해제하여 다시 인증해 주세요.");
           return;
         }
 
@@ -205,10 +208,17 @@ export default function WalletPage() {
         }
       })
       .catch((error) => {
+        if (cancelled) return;
         clearAccessSession(wallet.walletId);
         setAuthError(toWalletAuthErrorMessage(error));
       })
-      .finally(() => setIsAuthenticating(false));
+      .finally(() => {
+        if (!cancelled) setIsAuthenticating(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeWallet?.walletId,
     activeUnlockedPrivateKey,

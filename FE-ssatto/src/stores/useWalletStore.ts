@@ -45,7 +45,7 @@ export const useWalletStore = create<WalletStoreState>()(
 
           return {
             wallets: nextWallets,
-            activeAddress: wallet.address,
+            activeAddress: existingIndex < 0 ? wallet.address : state.activeAddress,
           };
         }),
       replaceWallets: (wallets) =>

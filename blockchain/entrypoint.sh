@@ -43,6 +43,10 @@ if [ "${NODE_MINE_VALUE}" = "true" ]; then
   elif [ -f "${WALLET_FILE}" ]; then
     WALLET_ADDR=$(python -c "import json; w=json.load(open('${WALLET_FILE}')); print(w['addresses'][0]['address'])")
     set -- "$@" --address "${WALLET_ADDR}"
+  else
+    python -m jackpotchain.cli.main wallet create --wallet-file "${WALLET_FILE}"
+    WALLET_ADDR=$(python -c "import json; w=json.load(open('${WALLET_FILE}')); print(w['addresses'][0]['address'])")
+    set -- "$@" --address "${WALLET_ADDR}"
   fi
 fi
 
