@@ -5,6 +5,7 @@ interface UseLottoOverviewResult {
   overview: LottoOverview | null;
   isLoading: boolean;
   error: string | null;
+  refetch: () => Promise<void>;
 }
 
 export function useLottoOverview(
@@ -14,7 +15,7 @@ export function useLottoOverview(
 ): UseLottoOverviewResult {
   const enabled = Boolean(activeAddress);
 
-  const { data, isLoading, error } = usePollingQuery<LottoOverview | null>({
+  const { data, isLoading, error, refetch } = usePollingQuery<LottoOverview | null>({
     enabled,
     intervalMs,
     initialData: null,
@@ -32,5 +33,6 @@ export function useLottoOverview(
     overview: enabled ? data : null,
     isLoading,
     error,
+    refetch,
   };
 }

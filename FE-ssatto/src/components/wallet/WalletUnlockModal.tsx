@@ -6,6 +6,7 @@ interface WalletUnlockModalProps {
   isOpen: boolean;
   walletName: string;
   walletAddress: string;
+  sessionExpired?: boolean;
   onClose: () => void;
   onUnlock: (password: string) => Promise<void>;
 }
@@ -14,6 +15,7 @@ export default function WalletUnlockModal({
   isOpen,
   walletName,
   walletAddress,
+  sessionExpired = false,
   onClose,
   onUnlock,
 }: WalletUnlockModalProps) {
@@ -72,9 +74,15 @@ export default function WalletUnlockModal({
         >
           <div className="mb-6">
             <h3 className="font-display text-2xl font-bold text-white">지갑 잠금 해제</h3>
-            <p className="mt-1 text-sm text-text-secondary">
-              {walletName} 지갑으로 서명하려면 비밀번호가 필요합니다.
-            </p>
+            {sessionExpired ? (
+              <p className="mt-1 text-sm text-text-secondary">
+                세션이 만료되었습니다. 계속하려면 <span className="font-semibold text-white">{walletName}</span> 지갑의 비밀번호를 입력해주세요.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-text-secondary">
+                {walletName} 지갑으로 서명하려면 비밀번호가 필요합니다.
+              </p>
+            )}
             <p className="mt-2 break-all font-mono text-xs text-text-tertiary">{walletAddress}</p>
           </div>
 

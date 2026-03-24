@@ -37,6 +37,7 @@ import ssatto.BE_ssatto.global.logging.LoggingUtils;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 지갑 메타데이터 저장과 on-chain 잔액 조회를 조합하는 서비스다.
@@ -126,7 +127,10 @@ public class WalletService {
     public WalletListResponse getWallets(String addressesQuery) {
         List<String> addresses = parseAddresses(addressesQuery);
         List<WalletSummaryResponse> wallets = addresses.stream()
-            .map(this::loadWalletSummary)
+            .map(addr -> walletRepository.findByAddress(addr)
+                .map(this::loadWalletSummary)
+                .orElse(null))
+            .filter(Objects::nonNull)
             .toList();
 
         return new WalletListResponse(wallets);
@@ -204,10 +208,8 @@ public class WalletService {
         return new WalletUtxoListResponse(utxos);
     }
 
-    private WalletSummaryResponse loadWalletSummary(String address) {
-        Wallet wallet = walletRepository.findByAddress(address)
-            .orElseThrow(WalletNotFoundException::new);
-        JackpotChainBalances balances = jackpotChainRpcClient.getBalances(address);
+    private WalletSummaryResponse loadWalletSummary(Wallet wallet) {
+        JackpotChainBalances balances = jackpotChainRpcClient.getBalances(wallet.getAddress());
 
         return new WalletSummaryResponse(
             wallet.getAddress(),

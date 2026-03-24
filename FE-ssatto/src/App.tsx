@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
+import PageLayout from "./components/layout/PageLayout";
 // [챗봇] 전역 챗봇 컴포넌트 — chatbotConfig.ts에서 ON/OFF 제어
 import ChatBot from "./components/chatbot/ChatBot";
 
@@ -56,6 +57,17 @@ export default function App() {
               <Route path="/learn/report" element={<LearnReportPage />} />
               <Route path="/learn/network" element={<LearnNetworkPage />} />
               {/* [학습 프론트엔드 v2] 추가 끝 */}
+              <Route
+                path="*"
+                element={
+                  <PageLayout>
+                    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
+                      <p className="font-display text-6xl font-black text-white">404</p>
+                      <p className="text-lg font-bold text-text-secondary">존재하지 않는 페이지입니다.</p>
+                    </div>
+                  </PageLayout>
+                }
+              />
             </Routes>
           </motion.div>
         </AnimatePresence>

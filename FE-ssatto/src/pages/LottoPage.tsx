@@ -9,7 +9,7 @@ import { mapLottoResult, type LottoHistoryDetail } from "../services/readModelAd
 import { useWalletSessionStore } from "../stores/useWalletSessionStore";
 import { useWalletStore } from "../stores/useWalletStore";
 import { submitExchangeWrite, submitLottoClaimWrite, submitLottoCommitWrite } from "../services/writeFlowService";
-import { useMemo, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import type { LottoHistoryEntry } from "../services/readModelAdapters";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -65,12 +65,72 @@ export default function LottoPage() {
   const activeWallet = wallets.find((wallet) => wallet.address === activeAddress);
   const activeAccessToken = activeWallet ? accessSessions[activeWallet.walletId]?.accessToken : undefined;
   const activePrivateKey = activeWallet ? unlockedWallets[activeWallet.walletId]?.privateKey : undefined;
-  const { overview } = useLottoOverview(activeAddress, activeAccessToken);
+  const { overview, refetch: refetchLottoOverview } = useLottoOverview(activeAddress, activeAccessToken);
   const { entries } = useLottoEntries(activeAddress, activeAccessToken);
   const [pendingEntries, setPendingEntries] = useState<LottoHistoryEntry[]>([]);
+  // Optimistic POT balance offset in display units (1 = 1 POT).
+  // Decremented immediately after a successful commit; reset to 0 once the
+  // server-side polling reflects the new balance.
+  const [optimisticPotOffset, setOptimisticPotOffset] = useState(0);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWalletRequiredModal, setShowWalletRequiredModal] = useState(false);
+
+  // ── S2: reset optimistic offset whenever server potBalance changes ──────────
+  const prevOverviewPotRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (overview?.potBalance === undefined) return;
+    if (
+      prevOverviewPotRef.current !== undefined &&
+      overview.potBalance !== prevOverviewPotRef.current
+    ) {
+      setOptimisticPotOffset(0);
+    }
+    prevOverviewPotRef.current = overview.potBalance;
+  }, [overview?.potBalance]);
+
+  // ── S2: failure detection — runs on every entries poll cycle ────────────────
+  // Using a ref to read the latest pendingEntries without making it a reactive
+  // dep (which would cause an update loop with setPendingEntries inside).
+  const pendingEntriesRef = useRef(pendingEntries);
+  pendingEntriesRef.current = pendingEntries;
+
+  useEffect(() => {
+    const pending = pendingEntriesRef.current;
+    if (pending.length === 0) return;
+
+    const now = Date.now();
+    const LOTTO_COMMIT_TIMEOUT_MS = 60_000;
+    const confirmedNumbers = new Set(entries.map((e) => e.numbers.join("")));
+
+    const timedOutIds: string[] = [];
+    const confirmedIds: string[] = [];
+
+    for (const p of pending) {
+      const hexKey = p.numbers.join("");
+      if (confirmedNumbers.has(hexKey)) {
+        confirmedIds.push(p.id);
+      } else {
+        const ts = Number(p.id.replace("pending-", ""));
+        if (!Number.isNaN(ts) && now - ts > LOTTO_COMMIT_TIMEOUT_MS) {
+          timedOutIds.push(p.id);
+        }
+      }
+    }
+
+    const toRemove = new Set([...confirmedIds, ...timedOutIds]);
+    if (toRemove.size === 0) return;
+
+    setPendingEntries((prev) => prev.filter((p) => !toRemove.has(p.id)));
+
+    if (timedOutIds.length > 0) {
+      // Restore optimistic offset for each failed commit
+      setOptimisticPotOffset((prev) => Math.min(0, prev + timedOutIds.length));
+      setActionStatus("로또 추첨에 실패했습니다.");
+    }
+  // intentionally omitting pendingEntries: reading via ref to avoid update loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries]);
 
   // pending 항목과 실제 entries 합치기 — 실제 entries에 있으면 pending 제거
   const mergedEntries = useMemo(() => {
@@ -141,6 +201,10 @@ export default function LottoPage() {
         accessToken: ready.activeAccessToken,
         chosenNumbers,
       });
+
+      // S2: optimistic POT decrement — show -1 immediately before block confirm
+      setOptimisticPotOffset((prev) => prev - 1);
+
       // 대기중 항목 추가
       const now = new Intl.DateTimeFormat("ko-KR", {
         month: "2-digit",
@@ -164,6 +228,9 @@ export default function LottoPage() {
         ...prev,
       ]);
       setActionStatus("로또 참여 트랜잭션을 제출했습니다. 약 10분 뒤 결과를 확인해 주세요.");
+
+      // S1: immediate refetch so the server potBalance updates as fast as possible
+      void refetchLottoOverview();
     } finally {
       setIsSubmitting(false);
     }
@@ -185,6 +252,7 @@ export default function LottoPage() {
         commitHash: entry.commitHash,
       });
       setActionStatus("보상 수령 트랜잭션을 제출했습니다. 잠시 후 반영 여부를 확인해 주세요.");
+      void refetchLottoOverview();
     } finally {
       setIsSubmitting(false);
     }
@@ -217,7 +285,7 @@ export default function LottoPage() {
         hasWallet={wallets.length > 0}
         onRequireWallet={() => setShowWalletRequiredModal(true)}
         jackBalance={Math.floor((overview?.jackBalance ?? 0) / 100_000_000)}
-        potBalance={Math.floor((overview?.potBalance ?? 0) / 100_000_000)}
+        potBalance={Math.max(0, Math.floor((overview?.potBalance ?? 0) / 100_000_000) + optimisticPotOffset)}
         onExchangeJackToPot={handleExchangeJackToPot}
         onCommit={handleCommit}
         entries={mergedEntries}

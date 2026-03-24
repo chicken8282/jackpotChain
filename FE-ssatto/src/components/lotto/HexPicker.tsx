@@ -223,6 +223,7 @@ export default function HexPicker({
   const [selectedHistory, setSelectedHistory] = useState<LottoHistoryDetail | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [claimedEntryIds, setClaimedEntryIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
@@ -272,7 +273,6 @@ export default function HexPicker({
 
     const timeout = window.setTimeout(() => {
       setShowSuccessModal(false);
-      setTab("history");
     }, 2000);
 
     return () => window.clearTimeout(timeout);
@@ -417,6 +417,7 @@ export default function HexPicker({
     try {
       await onCommit(selected.map((value) => Number.parseInt(value, 16)));
       setShowSuccessModal(true);
+      setTab("history");
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "로또 참여 처리에 실패했습니다.");
     } finally {
@@ -432,6 +433,7 @@ export default function HexPicker({
     setIsSubmitting(true);
     try {
       await onClaim(entryId);
+      setClaimedEntryIds((prev) => new Set([...prev, entryId]));
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "수령 처리에 실패했습니다.");
     } finally {
@@ -654,6 +656,9 @@ export default function HexPicker({
                       >
                         {entry.statusLabel === "PENDING" ? "대기중" : entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
                       </span>
+                      {entry.statusLabel === "WINNING" && entry.rewardLabel ? (
+                        <span className="text-[10px] font-bold text-accent-gold">{entry.rewardLabel}</span>
+                      ) : null}
                     </div>
                     <div className="flex gap-1.5">
                       {entry.numbers.map((number, index) => (
@@ -664,7 +669,7 @@ export default function HexPicker({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {entry.claimable && onClaim ? (
+                    {entry.claimable && !claimedEntryIds.has(entry.id) && onClaim ? (
                       <button
                         type="button"
                         onClick={(e) => {
