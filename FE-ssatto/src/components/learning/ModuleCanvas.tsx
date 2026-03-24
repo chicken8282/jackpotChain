@@ -18,6 +18,7 @@ import KeyPairDemo from "./modules/KeyPairDemo";
 import SignatureDemo from "./modules/SignatureDemo";
 import UTXOFlow from "./modules/UTXOFlow";
 import TxBuilder from "./modules/TxBuilder";
+import PropagationFlow from "./modules/PropagationFlow";
 import MiningPuzzle from "./modules/MiningPuzzle";
 import TokenEconomy from "./modules/TokenEconomy";
 import LottoSimulation from "./modules/LottoSimulation";
@@ -27,16 +28,16 @@ import VerifyMission from "./verify/VerifyMission";
 
 const INTERACTION_MAP: Record<string, React.FC> = {
   "1.1": TransparentVault, "1.2": HashExperience, "1.3": ConsensusDemo,
-  "2.1": KeyPairDemo, "2.2": SignatureDemo, "3.1": UTXOFlow, "3.2": TxBuilder,
+  "2.1": KeyPairDemo, "2.2": SignatureDemo, "3.1": UTXOFlow, "3.2": TxBuilder, "3.3": PropagationFlow,
   "4.1": MiningPuzzle, "4.2": TokenEconomy, "5.1": LottoSimulation, "5.2": FairnessDemo,
 };
 
-const MODULE_ORDER = ["1.1","1.2","1.3","2.1","2.2","3.1","3.2","4.1","4.2","5.1","5.2"];
+const MODULE_ORDER = ["1.1","1.2","1.3","2.1","2.2","3.1","3.2","3.3","4.1","4.2","5.1","5.2"];
 
 const MODULE_TITLES: Record<string, string> = {
   "1.1": "투명한 유리 금고", "1.2": "디지털 봉인 (해시)", "1.3": "합의의 힘",
   "2.1": "나만의 열쇠 만들기", "2.2": "디지털 서명 체험",
-  "3.1": "디지털 지폐의 여행", "3.2": "트랜잭션 만들어보기",
+  "3.1": "디지털 지폐의 여행", "3.2": "트랜잭션 만들어보기", "3.3": "블록 확정까지의 여정",
   "4.1": "행운의 숫자 찾기", "4.2": "JACK & POT 이코노미",
   "5.1": "로또 참여 시뮬레이션", "5.2": "공정성 증명",
 };

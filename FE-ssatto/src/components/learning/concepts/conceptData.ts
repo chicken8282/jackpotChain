@@ -70,6 +70,15 @@ export const CONCEPT_DATA: Record<string, ConceptContent> = {
       { title: "수수료", desc: "입력 - 출력 차이가 채굴자 수수료가 됩니다" },
     ],
   },
+  "3.3": {
+    analogy: "비유: 우체통에서 배달까지",
+    description: "트랜잭션은 생성 직후 멤풀(대기실)에 들어갑니다. 채굴자가 멤풀에서 트랜잭션을 골라 블록에 담고, 유효한 nonce를 찾으면 블록이 네트워크에 전파되어 확정됩니다.",
+    points: [
+      { title: "멤풀 (Mempool)", desc: "미확정 트랜잭션이 대기하는 공간입니다" },
+      { title: "채굴자 선택", desc: "채굴자가 수수료 순으로 TX를 골라 블록에 담습니다" },
+      { title: "블록 확정", desc: "블록이 체인에 연결되면 TX가 확정(confirmed)됩니다" },
+    ],
+  },
   "4.1": {
     analogy: "비유: 자물쇠 암호 맞추기",
     description: "채굴은 해시값의 앞자리가 특정 개수의 0으로 시작하는 nonce를 찾는 것입니다. 이것이 작업 증명(PoW)을 통한 채굴입니다.",
