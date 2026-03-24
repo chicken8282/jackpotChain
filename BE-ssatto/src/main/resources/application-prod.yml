@@ -46,5 +46,3 @@ logging:
     root: INFO
     ssatto.BE_ssatto: INFO
     org.hibernate.SQL: WARN
-  pattern:
-    console: ""

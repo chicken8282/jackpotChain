@@ -16,7 +16,7 @@
         </encoder>
     </appender>
 
-    <springProfile name="local,test">
+    <springProfile name="local,dev,test">
         <root level="INFO">
             <appender-ref ref="STDOUT_PATTERN"/>
         </root>
