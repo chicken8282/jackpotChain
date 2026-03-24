@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
+// [챗봇] 전역 챗봇 컴포넌트 — chatbotConfig.ts에서 ON/OFF 제어
+import ChatBot from "./components/chatbot/ChatBot";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LottoPage = lazy(() => import("./pages/LottoPage"));
@@ -58,6 +60,8 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </Suspense>
+      {/* [챗봇] 모든 페이지에서 우측 하단에 플로팅 표시 */}
+      <ChatBot />
     </div>
   );
 }
