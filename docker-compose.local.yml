@@ -82,7 +82,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sf -X POST http://localhost:9776 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"id\":1}' || exit 1"
+          'curl -sf -X POST http://localhost:9776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
         ]
       interval: 15s
       timeout: 5s
@@ -120,7 +120,7 @@ services:
   frontend:
     build:
       context: ./FE-ssatto
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.local
       args:
         VITE_API_BASE_URL: /api
     container_name: jc-frontend-local
