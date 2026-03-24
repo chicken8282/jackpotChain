@@ -1,2 +1,2 @@
 INIT
-jackpotchain, lottto
+jackpotchain, lottto, pot
