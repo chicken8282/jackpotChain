@@ -20,7 +20,7 @@ services:
     networks:
       - local-net
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - postgres-local-data:/var/lib/postgresql/data
     healthcheck:
@@ -36,7 +36,7 @@ services:
     networks:
       - local-net
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis-local-data:/data
     healthcheck:
@@ -73,8 +73,8 @@ services:
     networks:
       - local-net
     ports:
-      - "8332:8332"
-      - "8333:8333"
+      - "9776:9776"
+      - "9777:9777"
     volumes:
       - node-local-data:/data
       - node-local-wallets:/wallets
@@ -82,7 +82,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sf -X POST http://localhost:8332 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"id\":1}' || exit 1"
+          "curl -sf -X POST http://localhost:9776 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"id\":1}' || exit 1"
         ]
       interval: 15s
       timeout: 5s
@@ -109,7 +109,7 @@ services:
       rabbitmq:
         condition: service_healthy
       jackpotchain-node:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
       interval: 10s
@@ -128,7 +128,7 @@ services:
     networks:
       - local-net
     ports:
-      - "3000:80"
+      - "13000:80"
     depends_on:
       backend:
         condition: service_healthy

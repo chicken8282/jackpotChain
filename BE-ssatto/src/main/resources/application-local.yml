@@ -42,7 +42,7 @@ jwt:
 
 auth:
   cors:
-    allowed-origins: ${AUTH_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+    allowed-origins: ${AUTH_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:13000,http://127.0.0.1:13000}
   refresh-cookie:
     secure: false
     same-site: Lax
@@ -52,3 +52,5 @@ logging:
     ssatto.BE_ssatto: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
+  pattern:
+    console: ""

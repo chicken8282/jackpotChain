@@ -71,8 +71,9 @@ class JackpotChainHttpRpcClientTest {
                     "payout_jack": 20000.0,
                     "payout_pot": 0.0,
                     "paid": true,
-                    "payout_block": 128,
-                    "status": "paid"
+                    "claimable_height": 128,
+                    "claimable": false,
+                    "status": "claimed"
                   }
                 }
                 """, MediaType.APPLICATION_JSON));
@@ -83,7 +84,82 @@ class JackpotChainHttpRpcClientTest {
         assertThat(result.resultNumbers()).containsExactly(10, 5, 15, 3, 9, 14);
         assertThat(result.matches()).isEqualTo(4);
         assertThat(result.payoutJack()).isEqualTo(20_000L * 100_000_000L);
-        assertThat(result.status()).isEqualTo("paid");
+        assertThat(result.claimableHeight()).isEqualTo(128L);
+        assertThat(result.claimable()).isFalse();
+        assertThat(result.status()).isEqualTo("claimed");
+    }
+
+    @Test
+    @DisplayName("인덱싱용 블록 상세를 조회한다")
+    void getIndexedBlockReturnsParsedBlock() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8332");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        JackpotChainHttpRpcClient client = JackpotChainHttpRpcClient.createForTest(builder.build());
+
+        server.expect(requestTo("http://localhost:8332/"))
+            .andExpect(content().json("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "getblock",
+                  "method": "getblock",
+                  "params": ["block-001", 2]
+                }
+                """, false))
+            .andRespond(withSuccess("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "getblock",
+                  "result": {
+                    "hash": "block-001",
+                    "confirmations": 3,
+                    "height": 42,
+                    "versionHex": "0x20000000",
+                    "time": 1710000000,
+                    "nonce": 11,
+                    "difficultyDisplay": "7.42T",
+                    "previousblockhash": "block-000",
+                    "rewardJack": 10000000000,
+                    "feeRewardJack": 10000000,
+                    "minerAddress": "JackpotAddress01",
+                    "isMainChain": true,
+                    "tx": [
+                      {
+                        "txid": "tx-001",
+                        "version": 3,
+                        "inputs": [
+                          {
+                            "txid": "input-001",
+                            "vout": 0
+                          }
+                        ],
+                        "outputs": [
+                          {
+                            "n": 0,
+                            "jack_value": 0,
+                            "assets": {
+                              "POT": 100000000
+                            },
+                            "script_pubkey_hex": "6a0b4c4f54544f0a010f03040e",
+                            "address": "JackpotAddress01"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        JackpotChainIndexedBlock block = client.getIndexedBlock("block-001");
+
+        assertThat(block.hash()).isEqualTo("block-001");
+        assertThat(block.height()).isEqualTo(42L);
+        assertThat(block.minerAddress()).isEqualTo("JackpotAddress01");
+        assertThat(block.transactions()).hasSize(1);
+        assertThat(block.transactions().getFirst().outputs()).singleElement().satisfies(output -> {
+            assertThat(output.index()).isEqualTo(0);
+            assertThat(output.assets()).containsEntry("POT", 100_000_000L);
+            assertThat(output.scriptPubKeyHex()).isEqualTo("6a0b4c4f54544f0a010f03040e");
+        });
     }
 
     @Test
@@ -111,6 +187,131 @@ class JackpotChainHttpRpcClientTest {
 
         assertThat(exchangeInfo.jackPerPot()).isEqualTo(100);
         assertThat(exchangeInfo.minJack()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("onboarding POT 지급 결과를 조회한다")
+    void grantOnboardingPotRewardReturnsParsedInfo() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8332");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        JackpotChainHttpRpcClient client = JackpotChainHttpRpcClient.createForTest(builder.build());
+
+        server.expect(requestTo("http://localhost:8332/"))
+            .andExpect(content().json("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "grantonboardingreward",
+                  "method": "grantonboardingreward",
+                  "params": ["JackpotAddress01"]
+                }
+                """, false))
+            .andRespond(withSuccess("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "grantonboardingreward",
+                  "result": {
+                    "success": true,
+                    "tx_id": "reward-tx-001",
+                    "recipient_address": "JackpotAddress01",
+                    "pot_amount": 1.0
+                  }
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        JackpotChainOnboardingReward reward = client.grantOnboardingPotReward("JackpotAddress01");
+
+        assertThat(reward.txId()).isEqualTo("reward-tx-001");
+        assertThat(reward.potSatoshi()).isEqualTo(100_000_000L);
+    }
+
+    @Test
+    @DisplayName("주소 기준 UTXO 목록을 조회한다")
+    void listUnspentReturnsParsedOutputs() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8332");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        JackpotChainHttpRpcClient client = JackpotChainHttpRpcClient.createForTest(builder.build());
+
+        server.expect(requestTo("http://localhost:8332/"))
+            .andExpect(content().json("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "listunspent",
+                  "method": "listunspent",
+                  "params": ["JackpotAddress01"]
+                }
+                """, false))
+            .andRespond(withSuccess("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "listunspent",
+                  "result": [
+                    {
+                      "txid": "tx-001",
+                      "vout": 1,
+                      "address": "JackpotAddress01",
+                      "amount": 1.25,
+                      "assets": {
+                        "POT": 200000000
+                      },
+                      "confirmations": 12,
+                      "is_coinbase": false
+                    }
+                  ]
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.listUnspent("JackpotAddress01"))
+            .singleElement()
+            .satisfies(utxo -> {
+                assertThat(utxo.txId()).isEqualTo("tx-001");
+                assertThat(utxo.vout()).isEqualTo(1);
+                assertThat(utxo.jackSatoshi()).isEqualTo(125_000_000L);
+                assertThat(utxo.assets()).containsEntry("POT", 200_000_000L);
+                assertThat(utxo.confirmations()).isEqualTo(12);
+                assertThat(utxo.coinbase()).isFalse();
+            });
+    }
+
+    @Test
+    @DisplayName("잭팟 풀 UTXO 목록을 조회한다")
+    void listPoolUnspentReturnsParsedOutputs() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8332");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        JackpotChainHttpRpcClient client = JackpotChainHttpRpcClient.createForTest(builder.build());
+
+        server.expect(requestTo("http://localhost:8332/"))
+            .andExpect(content().json("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "listpoolunspent",
+                  "method": "listpoolunspent",
+                  "params": []
+                }
+                """, false))
+            .andRespond(withSuccess("""
+                {
+                  "jsonrpc": "2.0",
+                  "id": "listpoolunspent",
+                  "result": [
+                    {
+                      "txid": "pool-utxo-001",
+                      "vout": 2,
+                      "amount": 1600.0,
+                      "jack_satoshi": 160000000000,
+                      "confirmations": 19
+                    }
+                  ]
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.listPoolUnspent())
+            .singleElement()
+            .satisfies(utxo -> {
+                assertThat(utxo.txId()).isEqualTo("pool-utxo-001");
+                assertThat(utxo.vout()).isEqualTo(2);
+                assertThat(utxo.jackSatoshi()).isEqualTo(160_000_000_000L);
+                assertThat(utxo.confirmations()).isEqualTo(19);
+            });
     }
 
     @Test

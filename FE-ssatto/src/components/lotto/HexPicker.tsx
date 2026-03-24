@@ -7,16 +7,19 @@ import AnimatedNumber from "../common/AnimatedNumber";
 import Card from "../common/Card";
 import InteractiveHoverButton from "../common/InteractiveHoverButton";
 import type { LottoHistoryDetail, LottoHistoryEntry } from "../../services/readModelAdapters";
+import { getLottoParticipationState } from "../../services/lottoParticipationGuard";
 
 interface HexPickerProps {
   disabled?: boolean;
   jackBalance: number;
   potBalance: number;
-  onExchangeJackToPot?: () => void;
-  onCommit?: (chosenNumbers: number[]) => void;
+  onExchangeJackToPot?: () => Promise<void> | void;
+  onCommit?: (chosenNumbers: number[]) => Promise<void> | void;
   entries?: LottoHistoryEntry[];
-  onClaim?: (entryId: string) => void;
+  onClaim?: (entryId: string) => Promise<void> | void;
   onLoadResult?: (commitHash: string) => Promise<LottoHistoryDetail>;
+  hasWallet?: boolean;
+  onRequireWallet?: () => void;
 }
 
 const slotThemes = [
@@ -211,6 +214,8 @@ export default function HexPicker({
   entries,
   onClaim,
   onLoadResult,
+  hasWallet = true,
+  onRequireWallet,
 }: HexPickerProps) {
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
@@ -219,6 +224,7 @@ export default function HexPicker({
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
   const [historyLoadingCommitHash, setHistoryLoadingCommitHash] = useState<string | null>(null);
   const randomizeSpinIntervalRef = useRef<number | null>(null);
@@ -345,13 +351,24 @@ export default function HexPicker({
     window.setTimeout(() => setNotice(null), 2000);
   };
 
-  const handleExchangeJackToPot = () => {
+  const handleExchangeJackToPot = async () => {
     if (jackBalance < 100) {
       showNotice("교환하려면 최소 100 JACK이 필요합니다.");
       return;
     }
 
-    onExchangeJackToPot?.();
+    if (!onExchangeJackToPot) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onExchangeJackToPot();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "교환 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const cycleSlot = (index: number, delta: number) => {
@@ -369,18 +386,57 @@ export default function HexPicker({
     triggerSlotPulse(index);
   };
 
-  const handleParticipate = () => {
-    if (disabled || randomizing) {
+  const handleParticipate = async () => {
+    const state = getLottoParticipationState({
+      hasWallet,
+      disabled,
+      randomizing,
+      isSubmitting,
+      potBalance,
+    });
+
+    if (state === "blocked") {
       return;
     }
 
-    if (potBalance < 1) {
+    if (state === "require-wallet") {
+      onRequireWallet?.();
+      return;
+    }
+
+    if (state === "insufficient-pot") {
       showNotice("로또 참여에는 최소 1 POT가 필요합니다.");
       return;
     }
 
-    onCommit?.(selected.map((value) => Number.parseInt(value, 16)));
-    setShowSuccessModal(true);
+    if (!onCommit) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onCommit(selected.map((value) => Number.parseInt(value, 16)));
+      setShowSuccessModal(true);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "로또 참여 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClaim = async (entryId: string) => {
+    if (!onClaim) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onClaim(entryId);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "수령 처리에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -443,8 +499,11 @@ export default function HexPicker({
                     </p>
                     <button
                       type="button"
-                      onClick={handleExchangeJackToPot}
+                      onClick={() => {
+                        void handleExchangeJackToPot();
+                      }}
                       title="JACK to POT"
+                      disabled={isSubmitting}
                       className="rounded-full border border-white/10 bg-white/5 p-3 text-text-secondary transition-colors hover:border-info/40 hover:bg-white/10 hover:text-info"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,8 +523,10 @@ export default function HexPicker({
                 <div className="absolute right-[18px] top-1/2 hidden -translate-y-1/2 xl:block">
                   <InteractiveHoverButton
                     type="button"
-                    onClick={handleParticipate}
-                    disabled={disabled || randomizing}
+                    onClick={() => {
+                      void handleParticipate();
+                    }}
+                    disabled={randomizing || isSubmitting}
                     text="로또 추첨"
                     hoverText="참여하기"
                   />
@@ -569,25 +630,29 @@ export default function HexPicker({
                   key={entry.id}
                   type="button"
                   onClick={() => {
-                    void handleSelectHistory(entry);
+                    if (entry.statusLabel !== "PENDING") {
+                      void handleSelectHistory(entry);
+                    }
                   }}
-                  className="group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all hover:border-white/15 hover:bg-white/[0.04]"
+                  className={`group relative flex w-full items-center justify-between rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-left transition-all ${entry.statusLabel === "PENDING" ? "cursor-default opacity-70" : "hover:border-white/15 hover:bg-white/[0.04]"}`}
                 >
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-white">{entry.date}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          entry.statusLabel === "WINNING"
-                            ? "bg-accent-gold/20 text-accent-gold"
-                            : entry.statusLabel === "DRAWING"
-                              ? "bg-info/15 text-info"
-                              : entry.statusLabel === "EXPIRED"
-                                ? "bg-danger/15 text-danger"
-                              : "bg-white/10 text-text-tertiary"
+                          entry.statusLabel === "PENDING"
+                            ? "bg-accent-gold/15 text-accent-gold animate-pulse"
+                            : entry.statusLabel === "WINNING"
+                              ? "bg-accent-gold/20 text-accent-gold"
+                              : entry.statusLabel === "DRAWING"
+                                ? "bg-info/15 text-info"
+                                : entry.statusLabel === "EXPIRED"
+                                  ? "bg-danger/15 text-danger"
+                                  : "bg-white/10 text-text-tertiary"
                         }`}
                       >
-                        {entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
+                        {entry.statusLabel === "PENDING" ? "대기중" : entry.statusLabel === "WINNING" ? "당첨" : entry.statusLabel === "DRAWING" ? "추첨중" : entry.statusLabel === "EXPIRED" ? "만료" : "미당첨"}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -604,7 +669,7 @@ export default function HexPicker({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onClaim(entry.id);
+                          void handleClaim(entry.id);
                         }}
                         className="rounded-full border border-accent-gold/35 bg-accent-gold/10 px-3 py-1 text-xs font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
                       >
@@ -612,11 +677,13 @@ export default function HexPicker({
                       </button>
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
-                      {historyLoadingCommitHash === entry.commitHash
-                        ? "결과 조회 중"
-                        : entry.matchCount == null
-                          ? "추첨 대기"
-                          : `${entry.matchCount}/6일치`}
+                      {entry.statusLabel === "PENDING"
+                        ? "블록 확정 대기"
+                        : historyLoadingCommitHash === entry.commitHash
+                          ? "결과 조회 중"
+                          : entry.matchCount == null
+                            ? "추첨 대기"
+                            : `${entry.matchCount}/6일치`}
                     </span>
                     <svg
                       className="h-4 w-4 text-text-tertiary transition-transform group-hover:translate-x-0.5"
@@ -636,7 +703,13 @@ export default function HexPicker({
 
       <SuccessModal open={showSuccessModal} />
       {selectedHistory ? (
-        <HistoryModal entry={selectedHistory} onClose={() => setSelectedHistory(null)} onClaim={onClaim} />
+        <HistoryModal
+          entry={selectedHistory}
+          onClose={() => setSelectedHistory(null)}
+          onClaim={(entryId) => {
+            void handleClaim(entryId);
+          }}
+        />
       ) : null}
     </>
   );

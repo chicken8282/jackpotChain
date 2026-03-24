@@ -1,14 +1,19 @@
 package ssatto.BE_ssatto.global.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 import ssatto.BE_ssatto.global.response.ApiResponse;
 
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -25,9 +30,20 @@ public class GlobalExceptionHandler {
      * @return 공통 포맷으로 감싼 에러 응답
      */
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(
+        BusinessException exception,
+        HttpServletRequest request
+    ) {
         ErrorCode errorCode = exception.getErrorCode();
-        log.warn("BUSINESS_EXCEPTION errorCode={} message={}", errorCode.name(), exception.getMessage());
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.BUSINESS_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, errorCode.name(),
+            LoggingFields.STATUS, errorCode.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("business exception handled"));
+
         return ResponseEntity
             .status(errorCode.getHttpStatus())
             .body(ApiResponse.error(errorCode.getHttpStatus().value(), exception.getMessage()));
@@ -40,15 +56,22 @@ public class GlobalExceptionHandler {
      * @return 공통 포맷으로 감싼 에러 응답
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException exception) {
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(
+        MethodArgumentNotValidException exception,
+        HttpServletRequest request
+    ) {
         String message = exception.getBindingResult().getFieldErrors().stream()
             .map(FieldError::getDefaultMessage)
             .collect(Collectors.joining(", "));
 
-        log.warn("BUSINESS_EXCEPTION errorCode={} message={}",
-            ErrorCode.COMMON_INVALID_REQUEST.name(),
-            message
-        );
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.VALIDATION_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INVALID_REQUEST.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("validation exception handled: {}", message));
 
         return ResponseEntity
             .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
@@ -63,16 +86,21 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
-        ConstraintViolationException exception
+        ConstraintViolationException exception,
+        HttpServletRequest request
     ) {
         String message = exception.getConstraintViolations().stream()
             .map(violation -> violation.getMessage())
             .collect(Collectors.joining(", "));
 
-        log.warn("BUSINESS_EXCEPTION errorCode={} message={}",
-            ErrorCode.COMMON_INVALID_REQUEST.name(),
-            message
-        );
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.VALIDATION_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INVALID_REQUEST.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.warn("constraint violation handled: {}", message));
 
         return ResponseEntity
             .status(ErrorCode.COMMON_INVALID_REQUEST.getHttpStatus())
@@ -86,12 +114,15 @@ public class GlobalExceptionHandler {
      * @return 공통 포맷으로 감싼 에러 응답
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
-        log.error("UNHANDLED_EXCEPTION errorCode={} message={}",
-            ErrorCode.COMMON_INTERNAL_SERVER_ERROR.name(),
-            exception.getMessage(),
-            exception
-        );
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception exception, HttpServletRequest request) {
+        LoggingUtils.withFields(Map.of(
+            LoggingFields.EVENT_TYPE, LoggingEventType.UNHANDLED_EXCEPTION.name(),
+            LoggingFields.ERROR_CODE, ErrorCode.COMMON_INTERNAL_SERVER_ERROR.name(),
+            LoggingFields.STATUS, ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus().value(),
+            LoggingFields.URI, request.getRequestURI(),
+            LoggingFields.METHOD, request.getMethod(),
+            LoggingFields.EXCEPTION, exception.getClass().getSimpleName()
+        ), () -> log.error("unhandled exception occurred", exception));
 
         return ResponseEntity
             .status(ErrorCode.COMMON_INTERNAL_SERVER_ERROR.getHttpStatus())

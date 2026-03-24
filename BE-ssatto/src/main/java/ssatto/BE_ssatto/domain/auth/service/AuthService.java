@@ -23,6 +23,10 @@ import ssatto.BE_ssatto.domain.auth.repository.AuthChallengeRepository;
 import ssatto.BE_ssatto.domain.auth.repository.AuthRefreshSessionRepository;
 import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.wallet.repository.WalletRepository;
+import ssatto.BE_ssatto.global.logging.BusinessEventLogger;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 import ssatto.BE_ssatto.global.util.JwtUtil;
 
 import java.time.LocalDateTime;
@@ -133,6 +137,16 @@ public class AuthService {
             now,
             null
         ));
+
+        BusinessEventLogger.info(
+            LoggingEventType.AUTH_TOKEN_ISSUED,
+            "wallet auth verified and tokens issued",
+            LoggingUtils.fields(
+                LoggingFields.WALLET_ADDRESS, request.address(),
+                LoggingFields.CHALLENGE_ID, request.challengeId(),
+                LoggingFields.SESSION_HANDLE, sessionHandle
+            )
+        );
 
         return new AuthVerifyResponse(
             accessToken,

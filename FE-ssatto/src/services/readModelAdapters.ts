@@ -8,7 +8,7 @@ export interface LottoHistoryEntry {
   commitHash: string;
   numbers: string[];
   date: string;
-  statusLabel: "DRAWING" | "WINNING" | "LOSING" | "EXPIRED";
+  statusLabel: "PENDING" | "DRAWING" | "WINNING" | "LOSING" | "EXPIRED";
   matchCount: number | null;
   rewardLabel?: string;
   claimable: boolean;

@@ -12,7 +12,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import ssatto.BE_ssatto.global.config.JwtAuthenticationEntryPoint;
 import ssatto.BE_ssatto.global.config.JwtAuthenticationFilter;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimResponse;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimContextResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoOverviewResponse;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimPoolUtxoResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoPrizeTierResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoResultResponse;
 import ssatto.BE_ssatto.domain.lotto.service.LottoService;
@@ -173,5 +175,29 @@ class LottoControllerTest {
             .andExpect(jsonPath("$.data.claimTxId").value("claim-tx-001"));
 
         verify(lottoService).claim(eq("JackpotAddress01"), any());
+    }
+
+    @Test
+    @DisplayName("클레임 컨텍스트 조회 API는 인증 지갑 주소를 서비스에 전달한다")
+    void getClaimContextReturnsSuccess() throws Exception {
+        given(lottoService.getClaimContext("JackpotAddress01", "commit-001"))
+            .willReturn(new LottoClaimContextResponse(
+                "commit-001",
+                4,
+                2_000_000_000_000L,
+                null,
+                true,
+                List.of(new LottoClaimPoolUtxoResponse("pool-utxo-001", 0, 2_500_000_000_000L, 18))
+            ));
+
+        mockMvc.perform(get("/api/v1/lotto/entries/commit-001/claim-context")
+                .principal(new UsernamePasswordAuthenticationToken("JackpotAddress01", null)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(200))
+            .andExpect(jsonPath("$.message").value("로또 클레임 컨텍스트 조회가 완료되었습니다."))
+            .andExpect(jsonPath("$.data.claimable").value(true))
+            .andExpect(jsonPath("$.data.poolUtxos[0].txId").value("pool-utxo-001"));
+
+        verify(lottoService).getClaimContext("JackpotAddress01", "commit-001");
     }
 }

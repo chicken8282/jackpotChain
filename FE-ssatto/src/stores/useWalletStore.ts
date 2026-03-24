@@ -31,15 +31,17 @@ export const useWalletStore = create<WalletStoreState>()(
       activeAddress: null,
       upsertWallet: (wallet) =>
         set((state) => {
-          const existingWallet = state.wallets.find((item) => item.address === wallet.address);
-          const nextWallets = [
-            ...state.wallets.filter((item) => item.address !== wallet.address),
-            {
-              ...existingWallet,
-              ...wallet,
-              refreshSessionHandle: wallet.refreshSessionHandle ?? existingWallet?.refreshSessionHandle ?? null,
-            },
-          ];
+          const existingIndex = state.wallets.findIndex((item) => item.address === wallet.address);
+          const existingWallet = existingIndex >= 0 ? state.wallets[existingIndex] : undefined;
+          const mergedWallet = {
+            ...existingWallet,
+            ...wallet,
+            refreshSessionHandle: wallet.refreshSessionHandle ?? existingWallet?.refreshSessionHandle ?? null,
+          };
+          const nextWallets =
+            existingIndex >= 0
+              ? state.wallets.map((item, index) => (index === existingIndex ? mergedWallet : item))
+              : [...state.wallets, mergedWallet];
 
           return {
             wallets: nextWallets,

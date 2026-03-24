@@ -13,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import ssatto.BE_ssatto.global.logging.RequestLoggingFilter;
 
 /**
  * 백엔드 초기 환경 구성 단계의 보안 설정이다.
@@ -23,15 +24,18 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RequestLoggingFilter requestLoggingFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
     private final AuthCorsProperties authCorsProperties;
 
     public SecurityConfig(
         JwtAuthenticationFilter jwtAuthenticationFilter,
+        RequestLoggingFilter requestLoggingFilter,
         JwtAuthenticationEntryPoint authenticationEntryPoint,
         AuthCorsProperties authCorsProperties
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.requestLoggingFilter = requestLoggingFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.authCorsProperties = authCorsProperties;
     }
@@ -67,6 +71,7 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers(
                     "/api/v1/wallet/*/activities",
+                    "/api/v1/wallet/*/utxos",
                     "/api/v1/lotto",
                     "/api/v1/lotto/entries",
                     "/api/v1/lotto/entries/*/result",
@@ -77,7 +82,8 @@ public class SecurityConfig {
                 ).authenticated()
                 .anyRequest().permitAll()
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(requestLoggingFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(jwtAuthenticationFilter, RequestLoggingFilter.class);
 
         return http.build();
     }

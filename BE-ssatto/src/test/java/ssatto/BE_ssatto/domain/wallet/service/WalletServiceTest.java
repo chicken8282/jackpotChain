@@ -13,7 +13,10 @@ import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.blockchain.entity.Block;
 import ssatto.BE_ssatto.domain.blockchain.entity.Transaction;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBalances;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainOnboardingReward;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainUnspentOutput;
+import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletRequest;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletListResponse;
 import ssatto.BE_ssatto.domain.wallet.entity.Wallet;
@@ -25,6 +28,7 @@ import ssatto.BE_ssatto.domain.wallet.repository.WalletActivityRepository;
 import ssatto.BE_ssatto.domain.wallet.repository.WalletRepository;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,13 +55,16 @@ class WalletServiceTest {
     @Mock
     private WalletAuthCrypto walletAuthCrypto;
 
+    @Mock
+    private BlockchainReadModelSyncService blockchainReadModelSyncService;
+
     @InjectMocks
     private WalletService walletService;
 
     @Test
     @DisplayName("지갑 메타데이터를 저장한다")
     void createWalletSavesMetadata() {
-        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE");
+        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", false);
         Wallet wallet = Wallet.create(
             "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
             "내 지갑",
@@ -73,13 +80,62 @@ class WalletServiceTest {
 
         assertThat(response.address()).isEqualTo("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82");
         assertThat(response.walletColor()).isEqualTo("BLUE");
+        assertThat(response.onboardingRewardGranted()).isFalse();
         verify(walletRepository).save(any(Wallet.class));
     }
 
     @Test
-    @DisplayName("이미 등록된 지갑 주소면 예외를 던진다")
+    @DisplayName("지갑 생성 시 onboarding reward 요청이 있으면 1 POT 지급 결과를 함께 반환한다")
+    void createWalletGrantsOnboardingRewardWhenRequested() {
+        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", true);
+        Wallet wallet = Wallet.create(
+            "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+            "내 지갑",
+            "BLUE",
+            LocalDateTime.of(2026, 3, 20, 9, 0)
+        );
+
+        given(walletAuthCrypto.isValidAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(true);
+        given(walletRepository.findByAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(Optional.empty());
+        given(walletRepository.save(any(Wallet.class))).willReturn(wallet);
+        given(jackpotChainRpcClient.grantOnboardingPotReward("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
+            .willReturn(new JackpotChainOnboardingReward("reward-tx-001", 100_000_000L));
+
+        var response = walletService.createWallet(request);
+
+        assertThat(response.onboardingRewardGranted()).isTrue();
+        assertThat(response.onboardingRewardTxId()).isEqualTo("reward-tx-001");
+        assertThat(response.onboardingRewardPotAmount()).isEqualTo(100_000_000L);
+        verify(jackpotChainRpcClient).grantOnboardingPotReward("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82");
+    }
+
+    @Test
+    @DisplayName("이미 등록된 지갑이라도 onboarding reward가 완료된 생성 요청은 성공으로 재시도할 수 있다")
+    void createWalletReturnsExistingWalletForIdempotentCreateRetry() {
+        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", true);
+        Wallet existingWallet = Wallet.create(
+            "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+            "내 지갑",
+            "BLUE",
+            LocalDateTime.of(2026, 3, 20, 9, 0)
+        );
+        existingWallet.markOnboardingRewardGranted("reward-tx-001", LocalDateTime.of(2026, 3, 20, 9, 1));
+
+        given(walletAuthCrypto.isValidAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(true);
+        given(walletRepository.findByAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
+            .willReturn(Optional.of(existingWallet));
+
+        var response = walletService.createWallet(request);
+
+        assertThat(response.address()).isEqualTo(existingWallet.getAddress());
+        assertThat(response.onboardingRewardGranted()).isTrue();
+        assertThat(response.onboardingRewardTxId()).isEqualTo("reward-tx-001");
+    }
+
+    @Test
+    @DisplayName("이미 등록된 지갑 주소면 복구 등록 요청은 예외를 던진다")
     void createWalletThrowsWhenDuplicated() {
-        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE");
+        CreateWalletRequest request = new CreateWalletRequest("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", false);
 
         given(walletAuthCrypto.isValidAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(true);
         given(walletRepository.findByAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
@@ -92,7 +148,7 @@ class WalletServiceTest {
     @Test
     @DisplayName("블록체인 주소 형식이 아니면 예외를 던진다")
     void createWalletThrowsWhenAddressFormatInvalid() {
-        CreateWalletRequest request = new CreateWalletRequest("invalid-address", "내 지갑", "BLUE");
+        CreateWalletRequest request = new CreateWalletRequest("invalid-address", "내 지갑", "BLUE", false);
         given(walletAuthCrypto.isValidAddress("invalid-address")).willReturn(false);
 
         assertThatThrownBy(() -> walletService.createWallet(request))
@@ -147,6 +203,7 @@ class WalletServiceTest {
         assertThat(response.activities()).hasSize(1);
         assertThat(response.activities().getFirst().txId()).isEqualTo("tx-001");
         assertThat(response.activities().getFirst().potAmount()).isEqualTo(-100_000_000L);
+        verify(blockchainReadModelSyncService).syncToTip();
     }
 
     @Test
@@ -159,5 +216,37 @@ class WalletServiceTest {
             20,
             null
         )).isInstanceOf(ssatto.BE_ssatto.global.exception.BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("인증된 지갑 주소의 UTXO 목록을 반환한다")
+    void getUtxosReturnsMappedItems() {
+        Wallet wallet = Wallet.create("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82", "내 지갑", "BLUE", LocalDateTime.of(2026, 3, 20, 9, 0));
+
+        given(walletAuthCrypto.isValidAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(true);
+        given(walletRepository.findByAddress("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82")).willReturn(Optional.of(wallet));
+        given(jackpotChainRpcClient.listUnspent("XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"))
+            .willReturn(java.util.List.of(
+                new JackpotChainUnspentOutput(
+                    "tx-001",
+                    1,
+                    "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+                    100_000_000L,
+                    Map.of("POT", 200_000_000L),
+                    12,
+                    false
+                )
+            ));
+
+        var response = walletService.getUtxos(
+            "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82",
+            "XB2T67yhoaXCMVvuEQFU4bGGbsACchbu82"
+        );
+
+        assertThat(response.utxos()).hasSize(1);
+        assertThat(response.utxos().getFirst().txId()).isEqualTo("tx-001");
+        assertThat(response.utxos().getFirst().jackAmount()).isEqualTo(100_000_000L);
+        assertThat(response.utxos().getFirst().assets()).containsEntry("POT", 200_000_000L);
+        assertThat(response.utxos().getFirst().coinbase()).isFalse();
     }
 }

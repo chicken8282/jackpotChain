@@ -10,8 +10,12 @@ import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBalances;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainJackpotPool;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainLottoInfo;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainLottoResult;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimRequest;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimContextResponse;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimPoolUtxoResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoCommitRequest;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoEntriesResponse;
@@ -25,6 +29,10 @@ import ssatto.BE_ssatto.domain.lotto.exception.LottoEntryNotFoundException;
 import ssatto.BE_ssatto.domain.lotto.entity.LottoEntry;
 import ssatto.BE_ssatto.domain.lotto.entity.LottoEntryStatus;
 import ssatto.BE_ssatto.domain.lotto.repository.LottoEntryRepository;
+import ssatto.BE_ssatto.global.logging.BusinessEventLogger;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -41,6 +49,7 @@ public class LottoService {
     private final JackpotChainRpcClient jackpotChainRpcClient;
     private final LottoEntryRepository lottoEntryRepository;
     private final WalletAuthCrypto walletAuthCrypto;
+    private final BlockchainReadModelSyncService blockchainReadModelSyncService;
 
     /**
      * 로또 페이지 통합 정보를 조회한다.
@@ -100,7 +109,14 @@ public class LottoService {
         validateWalletSubject(authenticatedWalletAddress, request.fromAddress());
         validateCommitRequest(request);
         String txId = jackpotChainRpcClient.sendRawTransaction(request.signedTxHex());
-        log.info("LOTTO_COMMIT_SUBMITTED txId={} address={}", txId, request.fromAddress());
+        BusinessEventLogger.info(
+            LoggingEventType.LOTTO_COMMIT_SUBMITTED,
+            "lotto commit submitted",
+            LoggingUtils.fields(
+                LoggingFields.TX_ID, txId,
+                LoggingFields.WALLET_ADDRESS, request.fromAddress()
+            )
+        );
         return txId;
     }
 
@@ -114,6 +130,7 @@ public class LottoService {
     public LottoClaimResponse claim(String authenticatedWalletAddress, LottoClaimRequest request) {
         validateWalletSubject(authenticatedWalletAddress, request.fromAddress());
         validateAddress(request.fromAddress());
+        blockchainReadModelSyncService.syncToTip();
 
         if (!StringUtils.hasText(request.commitHash()) || !StringUtils.hasText(request.signedTxHex())) {
             throw new InvalidLottoRequestException();
@@ -133,7 +150,15 @@ public class LottoService {
         LocalDateTime claimedAt = LocalDateTime.now();
         Long rewardJack = resolveRewardJack(status, entry.getMatchCount(), entry.getRewardJack());
 
-        log.info("LOTTO_CLAIM_SUBMITTED txId={} address={} commitHash={}", claimTxId, request.fromAddress(), request.commitHash());
+        BusinessEventLogger.info(
+            LoggingEventType.LOTTO_CLAIM_SUBMITTED,
+            "lotto claim submitted",
+            LoggingUtils.fields(
+                LoggingFields.TX_ID, claimTxId,
+                LoggingFields.WALLET_ADDRESS, request.fromAddress(),
+                LoggingFields.COMMIT_HASH, request.commitHash()
+            )
+        );
 
         return new LottoClaimResponse(claimTxId, entry.getMatchCount(), rewardJack, claimedAt);
     }
@@ -149,6 +174,7 @@ public class LottoService {
         if (!StringUtils.hasText(commitHash)) {
             throw new InvalidLottoRequestException();
         }
+        blockchainReadModelSyncService.syncToTip();
 
         LottoEntry entry = lottoEntryRepository.findByCommitTransactionTxId(commitHash)
             .orElseThrow(LottoEntryNotFoundException::new);
@@ -165,6 +191,52 @@ public class LottoService {
             isClaimable,
             status,
             resolveRewardJack(status, entry.getMatchCount(), entry.getRewardJack())
+        );
+    }
+
+    /**
+     * 클라이언트 claim 서명에 필요한 체인 기준 컨텍스트를 조회한다.
+     *
+     * @param authenticatedWalletAddress 인증된 지갑 주소
+     * @param commitHash 커밋 해시
+     * @return 클레임 컨텍스트 응답
+     */
+    @Transactional(readOnly = true)
+    public LottoClaimContextResponse getClaimContext(String authenticatedWalletAddress, String commitHash) {
+        if (!StringUtils.hasText(commitHash)) {
+            throw new InvalidLottoRequestException();
+        }
+        blockchainReadModelSyncService.syncToTip();
+
+        LottoEntry entry = lottoEntryRepository.findByCommitTransactionTxId(commitHash)
+            .orElseThrow(LottoEntryNotFoundException::new);
+        validateWalletSubject(authenticatedWalletAddress, entry.getWallet().getAddress());
+
+        Long currentHeight = jackpotChainRpcClient.getBlockCount();
+        String status = resolveResultStatus(entry, currentHeight);
+        if (!isClaimable(entry, currentHeight, status)) {
+            throw new InvalidLottoRequestException();
+        }
+
+        JackpotChainLottoResult chainResult = jackpotChainRpcClient.checkLottoResult(commitHash);
+        if (!chainResult.claimable() || chainResult.paid()) {
+            throw new InvalidLottoRequestException();
+        }
+
+        return new LottoClaimContextResponse(
+            commitHash,
+            chainResult.matches(),
+            chainResult.payoutJack(),
+            chainResult.payoutPot(),
+            true,
+            jackpotChainRpcClient.listPoolUnspent().stream()
+                .map(utxo -> new LottoClaimPoolUtxoResponse(
+                    utxo.txId(),
+                    utxo.vout(),
+                    utxo.jackSatoshi(),
+                    utxo.confirmations()
+                ))
+                .toList()
         );
     }
 
@@ -192,6 +264,7 @@ public class LottoService {
     public LottoEntriesResponse getEntries(String authenticatedWalletAddress, String address, String status) {
         validateAddress(address);
         validateWalletSubject(authenticatedWalletAddress, address);
+        blockchainReadModelSyncService.syncToTip();
 
         LottoEntryStatus entryStatus = parseEntryStatus(status);
         List<LottoEntry> entries = entryStatus == null

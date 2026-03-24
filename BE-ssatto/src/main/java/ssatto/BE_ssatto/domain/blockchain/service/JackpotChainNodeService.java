@@ -5,6 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBlockchainInfo;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.global.logging.BusinessEventLogger;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
 /**
  * JackpotChain 서버 노드 RPC를 백엔드 유즈케이스에 맞게 조합한다.
@@ -44,7 +48,13 @@ public class JackpotChainNodeService {
      */
     public String submitSignedTransaction(String signedTxHex) {
         String txId = jackpotChainRpcClient.sendRawTransaction(signedTxHex);
-        log.info("JACKPOTCHAIN_TRANSACTION_SUBMITTED txId={}", txId);
+        BusinessEventLogger.info(
+            LoggingEventType.JACKPOTCHAIN_TRANSACTION_SUBMITTED,
+            "jackpotchain transaction submitted",
+            LoggingUtils.fields(
+                LoggingFields.TX_ID, txId
+            )
+        );
         return txId;
     }
 }

@@ -460,8 +460,7 @@ class Node:
             _log('SYNC', f'IBD 시작: 로컬={self.height}, 피어={peer.start_height}, 주소={address.ip}:{address.port}')
             await self._request_blocks(address)
         else:
-            peer_height = peer.start_height if peer else "N/A"
-            _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer_height}')
+            _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer.start_height if peer else "N/A"}')
 
     async def _handle_ping(self, address: PeerAddress, payload: bytes):
         """PING 처리"""

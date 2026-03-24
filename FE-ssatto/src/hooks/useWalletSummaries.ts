@@ -7,6 +7,7 @@ interface UseWalletSummariesResult {
   walletSummaries: WalletSummary[];
   isLoading: boolean;
   error: string | null;
+  refetch: () => Promise<void>;
 }
 
 export function useWalletSummaries(
@@ -17,7 +18,7 @@ export function useWalletSummaries(
   const enabled = addresses.length > 0;
   const queryKey = useMemo(() => addresses.join(","), [addresses]);
 
-  const { data, isLoading, error } = usePollingQuery<WalletSummary[]>({
+  const { data, isLoading, error, refetch } = usePollingQuery<WalletSummary[]>({
     enabled,
     intervalMs,
     initialData: [],
@@ -33,6 +34,7 @@ export function useWalletSummaries(
       walletSummaries: [],
       isLoading: false,
       error: null,
+      refetch: async () => {},
     };
   }
 
@@ -40,5 +42,6 @@ export function useWalletSummaries(
     walletSummaries: queryKey ? data : [],
     isLoading,
     error,
+    refetch,
   };
 }

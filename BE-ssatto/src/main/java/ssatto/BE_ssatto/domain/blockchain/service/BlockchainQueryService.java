@@ -5,15 +5,18 @@ import org.springframework.stereotype.Service;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainBlockDetailResponse;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainDashboardBlockResponse;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainDashboardResponse;
+import ssatto.BE_ssatto.domain.blockchain.dto.MempoolTransactionResponse;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBlock;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBlockchainInfo;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainPeerInfo;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.domain.blockchain.rpc.MempoolTransactionEntry;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.List;
 
 /**
@@ -82,7 +85,9 @@ public class BlockchainQueryService {
             block.nonce(),
             block.difficultyDisplay(),
             block.minerAddress(),
-            block.mainChain()
+            block.mainChain(),
+            block.merkleRoot(),
+            calculateJackpotContribution(block.feeRewardJack())
         );
     }
 
@@ -101,7 +106,8 @@ public class BlockchainQueryService {
                 toLocalDateTime(block.timestamp()),
                 block.minerAddress(),
                 block.rewardJack(),
-                block.confirmations()
+                block.confirmations(),
+                calculateJackpotContribution(block.feeRewardJack())
             ));
         }
 
@@ -114,6 +120,32 @@ public class BlockchainQueryService {
             nodes.add(index + 1);
         }
         return nodes;
+    }
+
+    /**
+     * 멤풀 트랜잭션 상세 목록을 조회한다.
+     *
+     * @return 멤풀 트랜잭션 목록
+     */
+    public List<MempoolTransactionResponse> getMempoolTransactions() {
+        Map<String, MempoolTransactionEntry> rawMempool = jackpotChainRpcClient.getRawMempool();
+        List<MempoolTransactionResponse> transactions = new ArrayList<>();
+
+        for (Map.Entry<String, MempoolTransactionEntry> entry : rawMempool.entrySet()) {
+            MempoolTransactionEntry tx = entry.getValue();
+            transactions.add(new MempoolTransactionResponse(
+                entry.getKey(),
+                tx.fee(),
+                tx.size(),
+                tx.time()
+            ));
+        }
+
+        return transactions;
+    }
+
+    private long calculateJackpotContribution(long feeRewardJack) {
+        return feeRewardJack * 30 / 100;
     }
 
     private LocalDateTime toLocalDateTime(long epochSeconds) {

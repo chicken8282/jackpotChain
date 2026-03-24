@@ -10,13 +10,17 @@ import org.springframework.util.StringUtils;
 import ssatto.BE_ssatto.domain.auth.exception.AuthForbiddenException;
 import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainBalances;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainOnboardingReward;
 import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainRpcClient;
+import ssatto.BE_ssatto.domain.blockchain.rpc.JackpotChainUnspentOutput;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletRequest;
 import ssatto.BE_ssatto.domain.wallet.dto.CreateWalletResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletActivityCursorResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletActivityItemResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletListResponse;
 import ssatto.BE_ssatto.domain.wallet.dto.WalletSummaryResponse;
+import ssatto.BE_ssatto.domain.wallet.dto.WalletUtxoItemResponse;
+import ssatto.BE_ssatto.domain.wallet.dto.WalletUtxoListResponse;
 import ssatto.BE_ssatto.domain.wallet.exception.InvalidWalletRequestException;
 import ssatto.BE_ssatto.domain.wallet.exception.WalletAddressDuplicatedException;
 import ssatto.BE_ssatto.domain.wallet.exception.WalletNotFoundException;
@@ -25,6 +29,10 @@ import ssatto.BE_ssatto.domain.wallet.entity.WalletActivityType;
 import ssatto.BE_ssatto.domain.wallet.entity.Wallet;
 import ssatto.BE_ssatto.domain.wallet.repository.WalletActivityRepository;
 import ssatto.BE_ssatto.domain.wallet.repository.WalletRepository;
+import ssatto.BE_ssatto.global.logging.BusinessEventLogger;
+import ssatto.BE_ssatto.global.logging.LoggingEventType;
+import ssatto.BE_ssatto.global.logging.LoggingFields;
+import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -37,6 +45,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class WalletService {
+
+    private static final long ONBOARDING_REWARD_POT_SATOSHI = 100_000_000L;
 
     private final WalletRepository walletRepository;
     private final WalletActivityRepository walletActivityRepository;
@@ -52,11 +62,42 @@ public class WalletService {
     @Transactional
     public CreateWalletResponse createWallet(CreateWalletRequest request) {
         validateAddress(request.address());
-
-        if (walletRepository.findByAddress(request.address()).isPresent()) {
+        boolean grantOnboardingReward = Boolean.TRUE.equals(request.grantOnboardingReward());
+        Wallet existingWallet = walletRepository.findByAddress(request.address()).orElse(null);
+        if (existingWallet != null && !grantOnboardingReward) {
             throw new WalletAddressDuplicatedException();
         }
+        Wallet wallet = existingWallet == null ? registerWalletMetadata(request) : existingWallet;
 
+        JackpotChainOnboardingReward onboardingReward = null;
+        if (grantOnboardingReward && !wallet.isOnboardingRewardGranted()) {
+            onboardingReward = jackpotChainRpcClient.grantOnboardingPotReward(wallet.getAddress());
+            wallet.markOnboardingRewardGranted(onboardingReward.txId(), LocalDateTime.now());
+
+            BusinessEventLogger.info(
+                LoggingEventType.WALLET_ONBOARDING_REWARD_GRANTED,
+                "wallet onboarding reward granted",
+                LoggingUtils.fields(
+                    LoggingFields.WALLET_ADDRESS, wallet.getAddress(),
+                    LoggingFields.TX_ID, onboardingReward.txId()
+                )
+            );
+        }
+
+        return new CreateWalletResponse(
+            wallet.getAddress(),
+            wallet.getNickname(),
+            wallet.getWalletColor(),
+            wallet.getCreatedAt(),
+            wallet.isOnboardingRewardGranted(),
+            wallet.getOnboardingRewardTxId(),
+            onboardingReward == null
+                ? (wallet.isOnboardingRewardGranted() ? ONBOARDING_REWARD_POT_SATOSHI : 0L)
+                : onboardingReward.potSatoshi()
+        );
+    }
+
+    private Wallet registerWalletMetadata(CreateWalletRequest request) {
         Wallet wallet = walletRepository.save(Wallet.create(
             request.address(),
             request.nickname(),
@@ -64,14 +105,15 @@ public class WalletService {
             LocalDateTime.now()
         ));
 
-        log.info("WALLET_REGISTERED address={}", wallet.getAddress());
-
-        return new CreateWalletResponse(
-            wallet.getAddress(),
-            wallet.getNickname(),
-            wallet.getWalletColor(),
-            wallet.getCreatedAt()
+        BusinessEventLogger.info(
+            LoggingEventType.WALLET_REGISTERED,
+            "wallet registered",
+            LoggingUtils.fields(
+                LoggingFields.WALLET_ADDRESS, wallet.getAddress()
+            )
         );
+
+        return wallet;
     }
 
     /**
@@ -141,6 +183,27 @@ public class WalletService {
         return new WalletActivityCursorResponse(page.hasNext(), nextCursor, activities);
     }
 
+    /**
+     * 인증된 지갑 주소의 UTXO 목록을 조회한다.
+     *
+     * @param authenticatedWalletAddress 인증된 지갑 주소
+     * @param address 요청 지갑 주소
+     * @return UTXO 목록 응답
+     */
+    @Transactional(readOnly = true)
+    public WalletUtxoListResponse getUtxos(String authenticatedWalletAddress, String address) {
+        validateAddress(address);
+        validateWalletSubject(authenticatedWalletAddress, address);
+        walletRepository.findByAddress(address)
+            .orElseThrow(WalletNotFoundException::new);
+
+        List<WalletUtxoItemResponse> utxos = jackpotChainRpcClient.listUnspent(address).stream()
+            .map(this::toUtxoItem)
+            .toList();
+
+        return new WalletUtxoListResponse(utxos);
+    }
+
     private WalletSummaryResponse loadWalletSummary(String address) {
         Wallet wallet = walletRepository.findByAddress(address)
             .orElseThrow(WalletNotFoundException::new);
@@ -205,6 +268,18 @@ public class WalletService {
             activity.getJackAmount(),
             activity.getPotAmount(),
             activity.getCreatedAt()
+        );
+    }
+
+    private WalletUtxoItemResponse toUtxoItem(JackpotChainUnspentOutput output) {
+        return new WalletUtxoItemResponse(
+            output.txId(),
+            output.vout(),
+            output.address(),
+            output.jackSatoshi(),
+            output.assets(),
+            output.confirmations(),
+            output.coinbase()
         );
     }
 

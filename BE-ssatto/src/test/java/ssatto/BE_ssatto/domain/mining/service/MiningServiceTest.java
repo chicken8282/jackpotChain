@@ -12,6 +12,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.blockchain.entity.Block;
 import ssatto.BE_ssatto.domain.blockchain.repository.BlockRepository;
+import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 /**
  * 채굴 블록 조회 서비스 로직을 검증한다.
@@ -31,6 +33,9 @@ class MiningServiceTest {
 
     @Mock
     private WalletAuthCrypto walletAuthCrypto;
+
+    @Mock
+    private BlockchainReadModelSyncService blockchainReadModelSyncService;
 
     @InjectMocks
     private MiningService miningService;
@@ -84,6 +89,7 @@ class MiningServiceTest {
         assertThat(response.totalRewardJack()).isEqualTo(20_000_000_000L);
         assertThat(response.blocks()).hasSize(2);
         assertThat(response.blocks().getFirst().height()).isEqualTo(1042L);
+        verify(blockchainReadModelSyncService).syncToTip();
     }
 
     @Test

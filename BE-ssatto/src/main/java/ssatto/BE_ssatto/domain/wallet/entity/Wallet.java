@@ -37,11 +37,31 @@ public class Wallet {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    private Wallet(String address, String nickname, String walletColor, LocalDateTime createdAt) {
+    @Column(name = "onboarding_reward_granted", nullable = false)
+    private boolean onboardingRewardGranted;
+
+    @Column(name = "onboarding_reward_tx_id", length = 64)
+    private String onboardingRewardTxId;
+
+    @Column(name = "onboarding_reward_granted_at")
+    private LocalDateTime onboardingRewardGrantedAt;
+
+    private Wallet(
+        String address,
+        String nickname,
+        String walletColor,
+        LocalDateTime createdAt,
+        boolean onboardingRewardGranted,
+        String onboardingRewardTxId,
+        LocalDateTime onboardingRewardGrantedAt
+    ) {
         this.address = address;
         this.nickname = nickname;
         this.walletColor = walletColor == null ? "DEFAULT" : walletColor;
         this.createdAt = createdAt == null ? LocalDateTime.now() : createdAt;
+        this.onboardingRewardGranted = onboardingRewardGranted;
+        this.onboardingRewardTxId = onboardingRewardTxId;
+        this.onboardingRewardGrantedAt = onboardingRewardGrantedAt;
     }
 
     /**
@@ -54,6 +74,18 @@ public class Wallet {
      * @return 생성된 지갑 엔티티
      */
     public static Wallet create(String address, String nickname, String walletColor, LocalDateTime createdAt) {
-        return new Wallet(address, nickname, walletColor, createdAt);
+        return new Wallet(address, nickname, walletColor, createdAt, false, null, null);
+    }
+
+    /**
+     * onboarding POT 지급 완료 상태를 반영한다.
+     *
+     * @param txId 지급 트랜잭션 ID
+     * @param grantedAt 지급 완료 시각
+     */
+    public void markOnboardingRewardGranted(String txId, LocalDateTime grantedAt) {
+        this.onboardingRewardGranted = true;
+        this.onboardingRewardTxId = txId;
+        this.onboardingRewardGrantedAt = grantedAt == null ? LocalDateTime.now() : grantedAt;
     }
 }
