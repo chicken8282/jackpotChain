@@ -10,6 +10,32 @@ import type { MissionResult } from "../../services/learningService";
 
 // --- Concept 콘텐츠 ---
 import { CONCEPT_DATA } from "./concepts/conceptData";
+// --- 커스텀 Concept 컴포넌트 ---
+import VaultConcept from "./concepts/VaultConcept";
+import HashConcept from "./concepts/HashConcept";
+import ConsensusConcept from "./concepts/ConsensusConcept";
+import KeyConcept from "./concepts/KeyConcept";
+import SignatureConcept from "./concepts/SignatureConcept";
+import UTXOConcept from "./concepts/UTXOConcept";
+import TxConcept from "./concepts/TxConcept";
+import MiningConcept from "./concepts/MiningConcept";
+import EconomyConcept from "./concepts/EconomyConcept";
+import LottoConcept from "./concepts/LottoConcept";
+import FairnessConcept from "./concepts/FairnessConcept";
+
+const CUSTOM_CONCEPT_MAP: Record<string, React.FC<{ onGoInteraction: () => void }>> = {
+  "1.1": VaultConcept,
+  "1.2": HashConcept,
+  "1.3": ConsensusConcept,
+  "2.1": KeyConcept,
+  "2.2": SignatureConcept,
+  "3.1": UTXOConcept,
+  "3.2": TxConcept,
+  "4.1": MiningConcept,
+  "4.2": EconomyConcept,
+  "5.1": LottoConcept,
+  "5.2": FairnessConcept,
+};
 // --- Interaction 모듈 ---
 import TransparentVault from "./modules/TransparentVault";
 import HashExperience from "./modules/HashExperience";
@@ -105,25 +131,47 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
         <div className="rounded-3xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl p-6 min-h-[300px]">
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-              {tab === "concept" && concept && (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-blue-500/15 bg-blue-500/[0.04] p-4 text-sm leading-relaxed text-white/60">
-                    <p className="mb-1 font-semibold text-blue-400">{concept.analogy}</p>
-                    <p>{concept.description}</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {concept.points.map((pt, i) => (
-                      <div key={i} className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-3">
-                        <p className="text-xs font-semibold text-accent-gold">{pt.title}</p>
-                        <p className="mt-1 text-[11px] text-white/40 leading-relaxed">{pt.desc}</p>
+              {tab === "concept" && (() => {
+                const CustomConcept = CUSTOM_CONCEPT_MAP[moduleId];
+                if (CustomConcept) {
+                  return <CustomConcept onGoInteraction={() => setTab("interaction")} />;
+                }
+                if (!concept) return null;
+                return (
+                  <div className="space-y-6">
+                    {/* 핵심 개념 설명 */}
+                    <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] to-blue-600/[0.02] p-6">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400 text-lg">💡</span>
+                        <div>
+                          <p className="font-bold text-blue-300 text-base">{concept.analogy}</p>
+                        </div>
                       </div>
-                    ))}
+                      <p className="text-sm leading-[1.8] text-white/80 pl-11">{concept.description}</p>
+                    </div>
+
+                    {/* 핵심 포인트 카드 */}
+                    <div>
+                      <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">핵심 포인트</p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {concept.points.map((pt, i) => (
+                          <div key={i} className="group rounded-xl border border-accent-gold/10 bg-gradient-to-b from-accent-gold/[0.06] to-transparent p-4 hover:border-accent-gold/25 transition-colors">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-gold/20 text-[10px] font-bold text-accent-gold">{i + 1}</span>
+                              <p className="text-sm font-bold text-accent-gold">{pt.title}</p>
+                            </div>
+                            <p className="text-[12px] text-white/70 leading-relaxed">{pt.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 text-center">
+                      <GlassButton onClick={() => setTab("interaction")}>직접 체험해보기 →</GlassButton>
+                    </div>
                   </div>
-                  <div className="pt-2 text-center">
-                    <GlassButton onClick={() => setTab("interaction")}>체험하러 가기 →</GlassButton>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               {tab === "interaction" && (
                 <div>
                   <InteractionComponent />
