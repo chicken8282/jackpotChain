@@ -47,6 +47,7 @@ def main():
     node_parser.add_argument('--seed-node', action='store_true', help='Run as seed node (enables rendezvous server)')
     node_parser.add_argument('--rendezvous-port', type=int, default=8334, help='Rendezvous server port (default: 8334)')
     node_parser.add_argument('--rendezvous-seed', action='append', help='Rendezvous seed (ip:port) for hole punching')
+    node_parser.add_argument('--rpc-host', default='127.0.0.1', help='RPC bind host (default: 127.0.0.1)')
 
     # wallet 명령
     wallet_parser = subparsers.add_parser('wallet', help='Wallet operations')
@@ -141,7 +142,8 @@ def run_node(args):
         node=node,
         data_dir=data_dir,
         wallet_dir=wallet_dir,
-        port=args.rpc_port
+        port=args.rpc_port,
+        host=args.rpc_host
     )
 
     # 채굴 상태
