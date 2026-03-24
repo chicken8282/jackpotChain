@@ -7,6 +7,11 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LottoPage = lazy(() => import("./pages/LottoPage"));
 const WalletPage = lazy(() => import("./pages/WalletPage"));
 const MiningPage = lazy(() => import("./pages/MiningPage"));
+// [학습 프론트엔드 v2] 추가 시작: 학습 페이지 lazy import
+const LearnLandingPage = lazy(() => import("./pages/LearnLandingPage"));
+const LearnModulePage = lazy(() => import("./pages/LearnModulePage"));
+const LearnReportPage = lazy(() => import("./pages/LearnReportPage"));
+// [학습 프론트엔드 v2] 추가 끝
 
 const pageTransition = {
   initial: { opacity: 0 },
@@ -42,6 +47,11 @@ export default function App() {
               <Route path="/lotto" element={<LottoPage />} />
               <Route path="/wallet" element={<WalletPage />} />
               <Route path="/mining" element={<MiningPage />} />
+              {/* [학습 프론트엔드 v2] 추가 시작: 학습 라우트 */}
+              <Route path="/learn" element={<LearnLandingPage />} />
+              <Route path="/learn/:stage/:module" element={<LearnModulePage />} />
+              <Route path="/learn/report" element={<LearnReportPage />} />
+              {/* [학습 프론트엔드 v2] 추가 끝 */}
             </Routes>
           </motion.div>
         </AnimatePresence>
