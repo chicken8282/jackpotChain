@@ -41,6 +41,22 @@ auth:
     secure: true
     same-site: None
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+    prometheus:
+      enabled: true
+  health:
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
+
 logging:
   level:
     root: INFO
