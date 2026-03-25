@@ -73,11 +73,32 @@ function HistoryModal({
 }: {
   entry: LottoHistoryDetail;
   onClose: () => void;
-  onClaim?: (entryId: string) => void;
+  onClaim?: (entryId: string) => Promise<void> | void;
 }) {
+  const [claimState, setClaimState] = useState<"idle" | "claiming" | "done">("idle");
+
   if (typeof document === "undefined") {
     return null;
   }
+
+  const handleClaimClick = async () => {
+    if (!entry.claimable || !onClaim || claimState !== "idle") return;
+    setClaimState("claiming");
+    try {
+      await onClaim(entry.id);
+      setClaimState("done");
+    } catch {
+      setClaimState("idle");
+    }
+  };
+
+  const isClaimDone = claimState === "done";
+  const isClaiming = claimState === "claiming";
+
+  // 부분 결과: 6개가 안 되면 "-" 로 패딩
+  const paddedResultNumbers = entry.resultNumbers
+    ? [...entry.resultNumbers, ...Array(6).fill("-")].slice(0, 6)
+    : Array(6).fill("-");
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
@@ -121,8 +142,8 @@ function HistoryModal({
           <div className="rounded-[24px] border border-info/20 bg-info/5 p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-widest text-info">블록 결과 번호</p>
             <div className="grid grid-cols-3 gap-3">
-              {(entry.resultNumbers ?? ["-", "-", "-", "-", "-", "-"]).map((number, index) => {
-                const matched = entry.numbers[index] === number;
+              {paddedResultNumbers.map((number, index) => {
+                const matched = number !== "-" && entry.numbers[index] === number;
 
                 return (
                   <div
@@ -130,7 +151,9 @@ function HistoryModal({
                     className={`flex h-14 items-center justify-center rounded-xl border font-display text-xl font-bold ${
                       matched
                         ? "border-accent-gold/40 bg-accent-gold/12 text-accent-gold"
-                        : "border-white/10 bg-white/5 text-white"
+                        : number === "-"
+                          ? "border-white/5 bg-white/[0.02] text-white/30"
+                          : "border-white/10 bg-white/5 text-white"
                     }`}
                   >
                     {number}
@@ -152,26 +175,28 @@ function HistoryModal({
             {entry.rewardLabel ? (
               <p className="mt-1 text-sm font-bold text-accent-gold">{entry.rewardLabel}</p>
             ) : null}
+            {isClaimDone ? (
+              <p className="mt-2 text-sm font-bold text-emerald-400">수령되었습니다</p>
+            ) : null}
           </div>
         </div>
 
         <div className="mt-8 flex gap-3">
           <button
             type="button"
-            disabled={!entry.claimable}
+            disabled={!entry.claimable || isClaiming || isClaimDone}
             onClick={() => {
-              if (entry.claimable && onClaim) {
-                onClaim(entry.id);
-              }
-              onClose();
+              void handleClaimClick();
             }}
             className={`h-14 flex-1 rounded-2xl border font-bold transition-colors ${
-              entry.claimable
-                ? "border-accent-gold/35 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/15"
-                : "cursor-not-allowed border-white/10 bg-white/5 text-white/40"
+              isClaimDone || !entry.claimable
+                ? "cursor-not-allowed border-white/10 bg-white/5 text-white/40"
+                : isClaiming
+                  ? "cursor-not-allowed border-white/10 bg-white/5 text-white/40"
+                  : "border-accent-gold/35 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/15"
             }`}
           >
-            수령
+            {isClaimDone ? "수령완료" : isClaiming ? "수령중..." : "수령"}
           </button>
           <button
             type="button"
@@ -205,6 +230,22 @@ function SuccessModal({ open }: { open: boolean }) {
   );
 }
 
+function ClaimSuccessModal({ open }: { open: boolean }) {
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-emerald-400/30 bg-emerald-400/[0.08] px-6 py-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.56)] backdrop-blur-md">
+        <p className="text-lg font-bold text-emerald-400">수령되었습니다</p>
+        <p className="mt-1 text-sm text-white/60">보상 수령 트랜잭션이 제출되었습니다.</p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function HexPicker({
   disabled = false,
   jackBalance,
@@ -223,6 +264,7 @@ export default function HexPicker({
   const [selectedHistory, setSelectedHistory] = useState<LottoHistoryDetail | null>(null);
   const [slotPulse, setSlotPulse] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showClaimSuccessModal, setShowClaimSuccessModal] = useState(false);
   const [claimedEntryIds, setClaimedEntryIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -277,6 +319,18 @@ export default function HexPicker({
 
     return () => window.clearTimeout(timeout);
   }, [showSuccessModal]);
+
+  useEffect(() => {
+    if (!showClaimSuccessModal) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowClaimSuccessModal(false);
+    }, 2000);
+
+    return () => window.clearTimeout(timeout);
+  }, [showClaimSuccessModal]);
 
   useEffect(
     () => () => {
@@ -434,8 +488,10 @@ export default function HexPicker({
     try {
       await onClaim(entryId);
       setClaimedEntryIds((prev) => new Set([...prev, entryId]));
+      setShowClaimSuccessModal(true);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "수령 처리에 실패했습니다.");
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -669,17 +725,27 @@ export default function HexPicker({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {entry.claimable && !claimedEntryIds.has(entry.id) && onClaim ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleClaim(entry.id);
-                        }}
-                        className="rounded-full border border-accent-gold/35 bg-accent-gold/10 px-3 py-1 text-xs font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
-                      >
-                        수령
-                      </button>
+                    {entry.claimable && onClaim ? (
+                      claimedEntryIds.has(entry.id) ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/40"
+                        >
+                          수령완료
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleClaim(entry.id);
+                          }}
+                          className="rounded-full border border-accent-gold/35 bg-accent-gold/10 px-3 py-1 text-xs font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
+                        >
+                          수령
+                        </button>
+                      )
                     ) : null}
                     <span className="text-xs font-bold text-text-secondary">
                       {entry.statusLabel === "PENDING"
@@ -707,13 +773,12 @@ export default function HexPicker({
       </Card>
 
       <SuccessModal open={showSuccessModal} />
+      <ClaimSuccessModal open={showClaimSuccessModal} />
       {selectedHistory ? (
         <HistoryModal
           entry={selectedHistory}
           onClose={() => setSelectedHistory(null)}
-          onClaim={(entryId) => {
-            void handleClaim(entryId);
-          }}
+          onClaim={handleClaim}
         />
       ) : null}
     </>

@@ -34,6 +34,7 @@ import ssatto.BE_ssatto.global.logging.LoggingEventType;
 import ssatto.BE_ssatto.global.logging.LoggingFields;
 import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.time.LocalDateTime;
@@ -183,10 +184,15 @@ public class LottoService {
         String status = resolveResultStatus(entry, currentHeight);
         boolean isClaimable = isClaimable(entry, currentHeight, status);
 
+        List<Integer> resultNumbers = parseNullableNumbers(entry.getResultNumbers());
+        if (resultNumbers == null && "DRAWING".equals(status)) {
+            resultNumbers = computePartialResultNumbers(entry, currentHeight);
+        }
+
         return new LottoResultResponse(
             commitHash,
             parseNumbers(entry.getChosenNumbers()),
-            parseNullableNumbers(entry.getResultNumbers()),
+            resultNumbers,
             entry.getMatchCount(),
             isClaimable,
             status,
@@ -219,14 +225,18 @@ public class LottoService {
         }
 
         JackpotChainLottoResult chainResult = jackpotChainRpcClient.checkLottoResult(commitHash);
-        if (!chainResult.claimable() || chainResult.paid()) {
+        if (chainResult.paid()) {
             throw new InvalidLottoRequestException();
         }
 
+        // DB 기준 rewardJack 우선 사용 (lottocheckresult RPC는 jackpot 1등 pool_snapshot=0 버그 있음)
+        Long rewardJack = entry.getRewardJack() != null ? entry.getRewardJack() : chainResult.payoutJack();
+        Integer matchCount = entry.getMatchCount() != null ? entry.getMatchCount() : chainResult.matches();
+
         return new LottoClaimContextResponse(
             commitHash,
-            chainResult.matches(),
-            chainResult.payoutJack(),
+            matchCount,
+            rewardJack,
             chainResult.payoutPot(),
             true,
             jackpotChainRpcClient.listPoolUnspent().stream()
@@ -362,6 +372,37 @@ public class LottoService {
         } catch (NumberFormatException exception) {
             throw new LottoEntryMappingException();
         }
+    }
+
+    /**
+     * DRAWING 상태에서 현재까지 채굴된 비교 블록들의 결과 숫자를 부분적으로 계산한다.
+     * 비교 오프셋: N+3, N+6, N+9, N+12, N+15, N+18
+     * 결과 숫자 = 블록 해시 마지막 hex 문자 (0~15)
+     */
+    private List<Integer> computePartialResultNumbers(LottoEntry entry, Long currentHeight) {
+        int[] offsets = {3, 6, 9, 12, 15, 18};
+        List<Integer> partial = new ArrayList<>();
+        long commitHeight = entry.getCommitBlockHeight();
+
+        for (int offset : offsets) {
+            long targetHeight = commitHeight + offset;
+            if (targetHeight > currentHeight) {
+                break;
+            }
+            try {
+                String blockHash = jackpotChainRpcClient.getBlockHash(targetHeight);
+                if (blockHash == null || blockHash.isEmpty()) {
+                    break;
+                }
+                // 마지막 hex 문자 = 마지막 바이트 하위 4비트 (block_hash[-1] & 0x0f)
+                int digit = Integer.parseInt(blockHash.substring(blockHash.length() - 1), 16);
+                partial.add(digit);
+            } catch (Exception e) {
+                break;
+            }
+        }
+
+        return partial.isEmpty() ? null : partial;
     }
 
     private List<Integer> parseNullableNumbers(String value) {
