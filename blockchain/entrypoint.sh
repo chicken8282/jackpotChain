@@ -10,7 +10,6 @@ WALLET_FILE="${NODE_WALLET_FILE:-${WALLET_DIR}/default.json}"
 NODE_SEED_VALUE="${NODE_SEED:-}"
 NODE_MINE_VALUE="${NODE_MINE:-false}"
 NODE_MINING_ADDRESS_VALUE="${NODE_MINING_ADDRESS:-}"
-NODE_BOOTSTRAP_ONBOARDING_REWARD_VALUE="${NODE_BOOTSTRAP_ONBOARDING_REWARD:-false}"
 NODE_DISABLE_DISCOVERY_VALUE="${NODE_DISABLE_DISCOVERY:-false}"
 NODE_SEED_NODE_VALUE="${NODE_SEED_NODE:-false}"
 NODE_RENDEZVOUS_PORT_VALUE="${NODE_RENDEZVOUS_PORT:-9778}"
@@ -48,10 +47,6 @@ if [ "${NODE_MINE_VALUE}" = "true" ]; then
     WALLET_ADDR=$(python -c "import json; w=json.load(open('${WALLET_FILE}')); print(w['addresses'][0]['address'])")
     set -- "$@" --address "${WALLET_ADDR}"
   fi
-fi
-
-if [ "${NODE_BOOTSTRAP_ONBOARDING_REWARD_VALUE}" = "true" ]; then
-  set -- "$@" --bootstrap-onboarding-reward
 fi
 
 if [ "${NODE_DISABLE_DISCOVERY_VALUE}" = "true" ]; then

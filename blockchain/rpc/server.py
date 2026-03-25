@@ -1081,7 +1081,7 @@ class RPCServer:
         """
         신규 지갑에 온보딩 보상 지급 (1 POT)
 
-        서버 운영자 지갑에서 100 JACK을 교환하여 1 POT을 recipient_address로 전송.
+        서버 운영자 지갑(채굴 보상)에서 100 JACK을 교환하여 1 POT을 recipient_address로 전송.
 
         Args:
             recipient_address: 보상 받을 지갑 주소

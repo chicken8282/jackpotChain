@@ -8,6 +8,8 @@ import {
   dashboardStats,
   type DashboardBlockDetail,
 } from "./dashboardMockData";
+import { getJson } from "../../lib/api";
+import type { BlockDetailApiResponse } from "../../hooks/dashboardDataHelpers";
 
 interface BlockchainVisualizerProps {
   blocks?: DashboardBlockDetail[];
@@ -105,6 +107,8 @@ export default function BlockchainVisualizer({
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<DashboardBlockDetail | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const selectedHeightRef = useRef<number | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const centerRef = useRef<HTMLDivElement | null>(null);
@@ -202,7 +206,37 @@ export default function BlockchainVisualizer({
       return;
     }
 
+    selectedHeightRef.current = block.height;
     setSelectedBlock(block);
+    setIsDetailLoading(true);
+
+    getJson<BlockDetailApiResponse>(`/v1/blockchain/blocks/${block.height}`)
+      .then((detail) => {
+        if (selectedHeightRef.current !== block.height) return;
+        setSelectedBlock((prev) => {
+          if (!prev || prev.height !== block.height) return prev;
+          return {
+            ...prev,
+            feeReward: detail.feeReward / 100_000_000,
+            jackpotContribution: detail.jackpotContribution / 100_000_000,
+            version: detail.version,
+            previousHash: detail.previousHash,
+            nonce: detail.nonce,
+            difficulty: detail.difficulty,
+            miningElapsed: `${detail.miningElapsed}초`,
+            isMainChain: detail.isMainChain,
+            merkleRoot: detail.merkleRoot ?? undefined,
+          };
+        });
+      })
+      .catch(() => {
+        // detail fetch fails silently — modal still shows summary data
+      })
+      .finally(() => {
+        if (selectedHeightRef.current === block.height) {
+          setIsDetailLoading(false);
+        }
+      });
   };
 
   useEffect(() => {
@@ -414,7 +448,15 @@ export default function BlockchainVisualizer({
         </div>
       </section>
 
-      <BlockDetailModal block={selectedBlock} onClose={() => setSelectedBlock(null)} />
+      <BlockDetailModal
+        block={selectedBlock}
+        isDetailLoading={isDetailLoading}
+        onClose={() => {
+          selectedHeightRef.current = null;
+          setSelectedBlock(null);
+          setIsDetailLoading(false);
+        }}
+      />
     </>
   );
 }

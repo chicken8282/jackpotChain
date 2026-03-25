@@ -81,15 +81,20 @@ pipeline {
 
         stage('Build & Push Images') {
             steps {
-                sh """
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG} ./BE-ssatto
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG} ./FE-ssatto
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./blockchain
+                withCredentials([string(credentialsId: 'gms-api-key', variable: 'GMS_API_KEY')]) {
+                    sh """
+                    docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG} ./BE-ssatto
+                    docker build \\
+                        --build-arg VITE_GMS_API_KEY=\${GMS_API_KEY} \\
+                        -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG} \\
+                        ./FE-ssatto
+                    docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./blockchain
 
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG}
-                """
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG}
+                    """
+                }
             }
         }
 

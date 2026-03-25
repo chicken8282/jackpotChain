@@ -1,10 +1,7 @@
-import { useRef } from "react";
 import type { DashboardBlockDetail } from "../components/dashboard/dashboardMockData";
 import { getJson } from "../lib/api";
 import {
-  getMissingBlockHeights,
-  mapDashboardBlock,
-  type BlockDetailApiResponse,
+  formatDateTime,
   type DashboardBlockSummaryApi,
 } from "./dashboardDataHelpers";
 import { usePollingQuery } from "./usePollingQuery";
@@ -23,9 +20,29 @@ export interface DashboardDataState {
   error: string | null;
 }
 
-export function useDashboardData(limit = 5): DashboardDataState {
-  const detailCacheRef = useRef<Map<number, BlockDetailApiResponse>>(new Map());
+function mapSummaryToBlock(block: DashboardBlockSummaryApi): DashboardBlockDetail {
+  return {
+    id: block.hash,
+    height: block.height,
+    hash: block.hash,
+    reward: block.rewardJack / 100_000_000,
+    feeReward: 0,
+    jackpotContribution: 0,
+    status: "confirmed",
+    txCount: block.txCount,
+    confirmations: block.confirmations,
+    version: "",
+    previousHash: "",
+    nonce: 0,
+    difficulty: "",
+    minedAt: formatDateTime(block.minedAt),
+    miningElapsed: "",
+    isMainChain: true,
+    minerLabel: block.minerLabel ?? "Unknown Miner",
+  };
+}
 
+export function useDashboardData(limit = 5): DashboardDataState {
   const { data, isLoading, error } = usePollingQuery<Omit<DashboardDataState, "isLoading" | "error">>({
     enabled: true,
     intervalMs: 10_000,
@@ -40,27 +57,9 @@ export function useDashboardData(limit = 5): DashboardDataState {
         `/v1/blockchain/dashboard?limit=${limit}`,
         signal,
       );
-      const missingHeights = getMissingBlockHeights(dashboard.blocks, detailCacheRef.current);
-
-      if (missingHeights.length > 0) {
-        const hydratedDetails = await Promise.all(
-          missingHeights.map((height) =>
-            getJson<BlockDetailApiResponse>(`/v1/blockchain/blocks/${height}`, signal),
-          ),
-        );
-
-        hydratedDetails.forEach((detail) => {
-          detailCacheRef.current.set(detail.height, detail);
-        });
-      }
 
       return {
-        blocks: dashboard.blocks
-          .map((block) => {
-            const detail = detailCacheRef.current.get(block.height);
-            return detail ? mapDashboardBlock(block, detail) : null;
-          })
-          .filter((block): block is DashboardBlockDetail => block !== null),
+        blocks: dashboard.blocks.map(mapSummaryToBlock),
         currentHeight: dashboard.height,
         activeNodes: dashboard.connections,
       };
