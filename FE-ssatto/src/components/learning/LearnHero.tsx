@@ -32,7 +32,7 @@ export default function LearnHero() {
           직접 설계하고, 즉시 증명하는 블록체인
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <GlassButton onClick={() => navigate("/learn/1/1.1")} className="px-8 py-3.5 text-base">
+          <GlassButton onClick={() => navigate("/learn/0/0.1")} className="px-8 py-3.5 text-base">
             학습 시작하기
           </GlassButton>
         </div>

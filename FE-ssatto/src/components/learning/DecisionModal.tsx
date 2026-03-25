@@ -69,11 +69,6 @@ export default function DecisionModal({ result, onClose }: Props) {
             </div>
           )}
 
-          {/* 보상 */}
-          <div className="mt-4 rounded-xl border border-accent-gold/15 bg-accent-gold/[0.03] p-3 text-center text-sm text-accent-gold">
-            보상: <span className="font-bold">{(result.rewardJack / 100_000_000).toFixed(1)} JACK</span> 획득!
-          </div>
-
           {/* 경로 선택 */}
           <div className="mt-5 flex flex-col gap-2">
             {result.nextModule && (
