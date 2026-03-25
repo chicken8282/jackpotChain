@@ -6,6 +6,8 @@ import { useLearningStore } from "../../stores/useLearningStore";
 import GlassCard from "./ui/GlassCard";
 
 const STAGES = [
+  { stage: 0, title: "프롤로그", subtitle: "왜 탈중앙화인가", modules: [
+    { id: "0.1", title: "탈중앙화의 필요성" }] },
   { stage: 1, title: "신뢰의 근원", subtitle: "분산 원장과 투명성", modules: [
     { id: "1.1", title: "투명한 유리 금고" }, { id: "1.2", title: "디지털 봉인 (해시)" }, { id: "1.3", title: "합의의 힘" }] },
   { stage: 2, title: "디지털 소유권", subtitle: "지갑과 열쇠", modules: [

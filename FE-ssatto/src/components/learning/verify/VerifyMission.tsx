@@ -16,6 +16,41 @@ interface Question {
 }
 
 const MODULE_QUESTIONS: Record<string, Question[]> = {
+  "0.1": [
+    {
+      text: "짐바브웨 초인플레이션의 근본 원인은?",
+      choices: [
+        "전쟁으로 인한 생산 시설 파괴",
+        "중앙은행이 무제한으로 화폐를 발행했기 때문",
+        "외국 기업의 투자 철수",
+        "자연재해로 인한 식량 부족",
+      ],
+      answer: 1,
+      category: "탈중앙화",
+    },
+    {
+      text: "블록체인이 \"Don't Trust, Verify\"를 실현하는 방법은?",
+      choices: [
+        "정부가 모든 거래를 직접 감사",
+        "신뢰할 수 있는 은행이 중간에서 보증",
+        "수학적 알고리즘과 코드로 규칙을 고정",
+        "사용자 신원을 철저히 검증",
+      ],
+      answer: 2,
+      category: "탈중앙화",
+    },
+    {
+      text: "탈중앙화 금융(DeFi)의 핵심 가치는?",
+      choices: [
+        "더 높은 이자율 제공",
+        "정부의 강력한 보호",
+        "국가와 무관하게 개인이 자산 소유권을 완전히 통제",
+        "익명성 완전 보장",
+      ],
+      answer: 2,
+      category: "탈중앙화",
+    },
+  ],
   "1.1": [
     {
       text: "앞에서 배운 '마을 광장의 공동 일기장' 비유에서, 블록체인의 핵심 특징은 무엇이었나요?",
@@ -430,6 +465,7 @@ const MODULE_QUESTIONS: Record<string, Question[]> = {
 
 // moduleId -> nextModule mapping
 const NEXT_MODULE_MAP: Record<string, string | null> = {
+  "0.1": "1.1",
   "1.1": "1.2",
   "1.2": "1.3",
   "1.3": "2.1",
@@ -540,11 +576,6 @@ export default function VerifyMission({ moduleId, onComplete }: VerifyMissionPro
               {Math.round(result.timeSpentMs / 1000)}초
             </span>
           </p>
-          {result.success && (
-            <p className="text-accent-gold font-semibold">
-              +{result.rewardJack.toLocaleString()} JACK 획득
-            </p>
-          )}
           {wrongCategories.length > 0 && (
             <p className="text-white/30 text-sm">
               취약 분야: {wrongCategories.join(", ")}
