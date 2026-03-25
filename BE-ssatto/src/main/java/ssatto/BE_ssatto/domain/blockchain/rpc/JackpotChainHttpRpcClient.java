@@ -543,6 +543,10 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
         if (normalizedMessage.contains("transaction not found")) {
             return new BusinessException(ErrorCode.BLOCKCHAIN_TX_NOT_FOUND);
         }
+        // POT UTXO 이중 지출 또는 잔액 부족: "Double spend: ..." / "Invalid TX: ... insufficient funds ..."
+        if (normalizedMessage.contains("double spend") || normalizedMessage.contains("insufficient funds")) {
+            return new BusinessException(ErrorCode.LOTTO_INSUFFICIENT_POT);
+        }
         return new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED);
     }
 

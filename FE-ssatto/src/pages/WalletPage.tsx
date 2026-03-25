@@ -67,6 +67,8 @@ export default function WalletPage() {
   const upsertWallet = useWalletStore((state) => state.upsertWallet);
   const replaceWallets = useWalletStore((state) => state.replaceWallets);
   const setActiveAddress = useWalletStore((state) => state.setActiveAddress);
+  const potOptimisticOffsetByAddress = useWalletStore((state) => state.potOptimisticOffsetByAddress);
+  const clearPotOptimisticOffset = useWalletStore((state) => state.clearPotOptimisticOffset);
 
   const accessSessions = useWalletSessionStore((state) => state.accessSessions);
   const unlockedWallets = useWalletSessionStore(
@@ -246,12 +248,25 @@ export default function WalletPage() {
     upsertWallet,
   ]);
 
+  // walletSummaries potBalance 변경 감지 → optimistic offset 초기화
+  const prevWalletPotRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    for (const summary of walletSummaries) {
+      const prev = prevWalletPotRef.current[summary.address];
+      if (prev !== undefined && summary.potBalance !== prev) {
+        clearPotOptimisticOffset(summary.address);
+      }
+      prevWalletPotRef.current[summary.address] = summary.potBalance;
+    }
+  }, [walletSummaries, clearPotOptimisticOffset]);
+
   const allWallets = useMemo<WalletViewModel[]>(
     () =>
       wallets.map((wallet) => {
         const summary = walletSummaries.find(
           (item) => item.address === wallet.address
         );
+        const potOffset = potOptimisticOffsetByAddress[wallet.address] ?? 0;
         return {
           walletId: wallet.walletId,
           keystoreId: wallet.keystoreId,
@@ -259,10 +274,10 @@ export default function WalletPage() {
           address: wallet.address,
           color: wallet.walletColor,
           jackBalance: Math.floor((summary?.jackBalance ?? 0) / 100_000_000),
-          potBalance: Math.floor((summary?.potBalance ?? 0) / 100_000_000),
+          potBalance: Math.max(0, Math.floor((summary?.potBalance ?? 0) / 100_000_000) + potOffset),
         };
       }),
-    [walletSummaries, wallets]
+    [walletSummaries, wallets, potOptimisticOffsetByAddress]
   );
 
   const isCurrentWalletLocked = activeWallet
