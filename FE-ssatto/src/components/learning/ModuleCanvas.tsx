@@ -22,8 +22,10 @@ import MiningConcept from "./concepts/MiningConcept";
 import EconomyConcept from "./concepts/EconomyConcept";
 import LottoConcept from "./concepts/LottoConcept";
 import FairnessConcept from "./concepts/FairnessConcept";
+import DecentralizationConcept from "./concepts/DecentralizationConcept";
 
 const CUSTOM_CONCEPT_MAP: Record<string, React.FC<{ onGoInteraction: () => void }>> = {
+  "0.1": DecentralizationConcept,
   "1.1": VaultConcept,
   "1.2": HashConcept,
   "1.3": ConsensusConcept,
@@ -49,18 +51,21 @@ import MiningPuzzle from "./modules/MiningPuzzle";
 import TokenEconomy from "./modules/TokenEconomy";
 import LottoSimulation from "./modules/LottoSimulation";
 import FairnessDemo from "./modules/FairnessDemo";
+import InflationGame from "./modules/InflationGame";
 // --- Verify 미션 ---
 import VerifyMission from "./verify/VerifyMission";
 
-const INTERACTION_MAP: Record<string, React.FC> = {
+const INTERACTION_MAP: Record<string, React.FC<{ onGoVerify?: () => void }>> = {
+  "0.1": InflationGame,
   "1.1": TransparentVault, "1.2": HashExperience, "1.3": ConsensusDemo,
   "2.1": KeyPairDemo, "2.2": SignatureDemo, "3.1": UTXOFlow, "3.2": TxBuilder, "3.3": PropagationFlow,
   "4.1": MiningPuzzle, "4.2": TokenEconomy, "5.1": LottoSimulation, "5.2": FairnessDemo,
 };
 
-const MODULE_ORDER = ["1.1","1.2","1.3","2.1","2.2","3.1","3.2","3.3","4.1","4.2","5.1","5.2"];
+const MODULE_ORDER = ["0.1","1.1","1.2","1.3","2.1","2.2","3.1","3.2","3.3","4.1","4.2","5.1","5.2"];
 
 const MODULE_TITLES: Record<string, string> = {
+  "0.1": "탈중앙화의 필요성",
   "1.1": "투명한 유리 금고", "1.2": "디지털 봉인 (해시)", "1.3": "합의의 힘",
   "2.1": "나만의 열쇠 만들기", "2.2": "디지털 서명 체험",
   "3.1": "디지털 지폐의 여행", "3.2": "트랜잭션 만들어보기", "3.3": "블록 확정까지의 여정",
@@ -174,7 +179,7 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
               })()}
               {tab === "interaction" && (
                 <div>
-                  <InteractionComponent />
+                  <InteractionComponent onGoVerify={() => setTab("verify")} />
                   <div className="mt-6 text-center">
                     <GlassButton onClick={() => setTab("verify")}>검증 미션 도전 →</GlassButton>
                   </div>
