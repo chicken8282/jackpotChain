@@ -166,6 +166,41 @@ FE                        BE                          Redis / DB
 
 ---
 
+### Q&A: challenge-response 인증 심화 이해
+
+**Q. challenge가 정확히 무엇인가?**
+> 서버가 클라이언트에게 던지는 **일회용 문제(nonce 포함 메시지)**다.
+> `{ challengeId, nonce, message }` 형태로 발급되며, Redis에 TTL 5분으로 저장된다.
+> 클라이언트는 이 메시지를 자신의 개인키로 서명해서 되돌려 보내야 한다.
+> "서버만 알 수 있는 것"이 아니라 "클라이언트만 서명할 수 있는 것"을 증명하는 구조다.
+
+**Q. 서버가 서명 검증 시 무엇과 무엇을 비교하는가?**
+> **비교값을 만드는 것이 아니라 수학 등식으로 판정**한다.
+> ECDSA 서명 `(r, s)`는 `privateKey`로 만든 두 정수다.
+> 서버는 `(message, publicKey, signature(r,s))`를 받아 타원곡선 방정식을 계산한다:
+> - `(r, s)`와 `message` + `publicKey`로 점 `R'`을 도출
+> - `R'.x mod n == r` 이면 검증 성공
+> 서버는 개인키를 모르지만, **올바른 개인키로 서명했다면 이 등식이 반드시 성립**한다.
+
+**Q. 임의로 키페어를 만들면 인증을 통과할 수 있는가?**
+> 불가능하다. **2단계 검증**이 있기 때문이다:
+> 1. challenge 요청 시 → DB에서 해당 address 존재 여부 확인 (없으면 즉시 401)
+> 2. verify 요청 시 → `deriveAddress(publicKey) == address` 일치 확인 + 서명 수학 검증
+>
+> 즉, 임의 키페어를 만들어도 해당 address가 DB에 등록되어 있지 않으면 challenge 자체가 발급되지 않는다.
+
+**Q. `deriveAddress(publicKey)`는 항상 동일한 결과를 내는가?**
+> 그렇다. `publicKey → hash160(SHA-256 + RIPEMD-160) → Base58Check 인코딩 → address`
+> 같은 publicKey를 넣으면 항상 같은 address가 나온다 (결정론적 단방향 함수).
+> address에서 publicKey로 역산은 불가능하다.
+
+**Q. 서명 `(r, s)`는 어떤 형태인가?**
+> 두 정수로 이루어진 쌍이다. SHA-256 같은 해시값이 아니라 타원곡선 위의 점 좌표에서 파생된 값이다.
+> 실제로는 DER(Distinguished Encoding Rules) 형식으로 인코딩되어 hex 문자열로 전송된다.
+> 예: `3045022100...` 형태의 16진수 문자열 (71~72바이트)
+
+---
+
 ## 5. 지갑 상태 유지 — 다른 탭/페이지 이동 후에도 로그인 유지
 
 ### 두 개의 저장소 역할 분리
