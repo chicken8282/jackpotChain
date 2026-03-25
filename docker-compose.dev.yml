@@ -89,7 +89,7 @@ services:
       NODE_P2P_PORT: "8777"
       NODE_RENDEZVOUS_PORT: "8778"
       NODE_SEED_NODE: "false"
-      NODE_MINE: "false"
+      NODE_MINE: "true"
       NODE_MAX_INBOUND: "128"
       NODE_MAX_OUTBOUND: "16"
     ports:
