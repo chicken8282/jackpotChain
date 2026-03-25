@@ -213,10 +213,36 @@ FE                        BE                          Redis / DB
 
 ## 6. 지갑 생성 & 1 POT 온보딩 보상
 
+### 1 POT 재원: Seed Node 채굴 보상
+
+**Seed Node는 채굴자이기도 하다.** `.env.local` / 운영 환경 모두 `NODE_MINE=true`, `NODE_SEED_NODE=true`로 실행.
+채굴 성공 시 블록 보상(JACK)이 Seed Node 운영자 지갑의 Coinbase UTXO로 쌓이고,
+**이 Coinbase JACK이 온보딩 보상 재원**이다. Coinbase UTXO는 100 블록 성숙(maturity) 후에야 사용 가능.
+
+```
+[Seed Node — 상시 채굴]
+
+ PoW 채굴 성공
+     │
+     ▼
+ Coinbase TX 생성 (블록 높이 H)
+   출력: BLOCK_REWARD JACK → 운영자 지갑
+     │
+     ▼
+ 블록 H+100 이후 → Coinbase UTXO 성숙 (is_coinbase && current_height - block_height >= 100)
+     │
+     ▼
+ grantonboardingreward 호출 시 사용 가능한 UTXO 풀에 편입
+```
+
 ### 지갑 생성 (type: "create")
 
 ```
-FE                              BE                         Node (Python)
+FE                              BE                         Seed Node (Python)
+ │                               │                         │
+ │                               │                         │ [상시 채굴 중]
+ │                               │                         │ PoW 성공 → Coinbase JACK 적립
+ │                               │                         │ (100블록 이후 성숙)
  │                               │
  │ [브라우저에서 키페어 생성]      │
  │  generateKeyPair()            │
@@ -239,16 +265,28 @@ FE                              BE                         Node (Python)
  │                               │    JSON-RPC:             │
  │                               │    grantonboardingreward │
  │                               │    (recipient_address)   │
- │                               │                         │── 서버 운영자 지갑의 JACK UTXO 선택
- │                               │                         │   (로컬: bootstrap 10,000 JACK UTXO)
- │                               │                         │── 교환 TX 생성:
- │                               │                         │   100 JACK in
- │                               │                         │   → 80 JACK → 잭팟 풀
- │                               │                         │   → 1 POT   → recipient
- │                               │                         │   → 19 JACK → 소각(burn)
- │                               │                         │   + fee_jack 사용
- │                               │                         │── TX를 미확정 보관소에 추가 (mempool)
- │                               │                         │── 다음 블록에 포함됨
+ │                               │                         │── 운영자 지갑 UTXO 조회
+ │                               │                         │   성숙한 Coinbase UTXO만 선택
+ │                               │                         │   (is_mature: 현재높이 - 블록높이 >= 100)
+ │                               │                         │   mempool에서 이미 소비된 UTXO 제외
+ │                               │                         │
+ │                               │                         │── 100.1 JACK 이상 수집 확인
+ │                               │                         │   (100 JACK 교환용 + 0.1 JACK 수수료용)
+ │                               │                         │
+ │                               │                         │── 교환 TX 생성 (version=2):
+ │                               │                         │   입력: 성숙한 Coinbase JACK UTXO
+ │                               │                         │   출력[0]: 1 POT   → recipient
+ │                               │                         │   출력[1]: 80 JACK → 잭팟 풀
+ │                               │                         │   출력[2]: OP_RETURN EXCHANGE:19JACK
+ │                               │                         │            (소각 기록)
+ │                               │                         │   출력[3]: 0.1 JACK → recipient
+ │                               │                         │            (향후 TX 수수료용)
+ │                               │                         │   출력[4]: 잔돈 JACK → 운영자 지갑
+ │                               │                         │   암묵적 수수료: 1 JACK (채굴자 몫)
+ │                               │                         │
+ │                               │                         │── 운영자 키로 서명
+ │                               │                         │── TX → mempool 추가
+ │                               │                         │── P2P 네트워크 전파
  │                               │◀───────────────────────│
  │                               │   { txId, potAmount }   │
  │                               │── 온보딩 보상 지급 완료 기록
@@ -257,9 +295,13 @@ FE                              BE                         Node (Python)
  │  { address, onboardingRewardGranted:true, txId }
 ```
 
-**1 POT의 출처**: 서버 노드의 운영자 지갑 JACK → 교환 TX로 POT 발행
-- 로컬 개발: `--bootstrap-onboarding-reward` 플래그로 합성 10,000 JACK UTXO 주입
-- 운영: 실제 채굴로 얻은 JACK 사용 (채굴 보상 → 운영자가 교환용으로 보유)
+**1 POT의 출처**: Seed Node가 채굴로 쌓은 Coinbase JACK → 100블록 성숙 → 교환 TX로 POT 발행
+- 100 JACK → 1 POT + 0.1 JACK (수수료) → recipient에게 전달
+- 100 JACK 중: 80 JACK → 잭팟 풀, 19 JACK → 소각(OP_RETURN 기록), 1 JACK → 채굴자 수수료
+- Coinbase UTXO가 부족(미성숙 포함)하면 RPC 오류 → 온보딩 보상 지급 실패
+
+> 로컬 개발에서도 `NODE_MINE=true`로 Seed Node가 직접 채굴하므로 초기 100블록 채굴 전에는
+> 온보딩 보상을 지급할 수 없다. (합성 UTXO 주입 방식은 현재 사용하지 않음)
 
 ### 기존 지갑 등록 (type: "restore")
 

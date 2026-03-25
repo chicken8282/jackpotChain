@@ -301,9 +301,9 @@ export default function InflationGame({ onGoVerify }: InflationGameProps) {
                   fontSize: 11,
                 }}
                 labelStyle={{ color: "rgba(255,255,255,0.5)" }}
-                formatter={(value: number, name: string) => [
-                  `Z$ ${formatZ(value)}`,
-                  name === "asset" ? "내 자산" : "빵 가격",
+                formatter={(value, name) => [
+                  `Z$ ${formatZ(typeof value === "number" ? value : 0)}`,
+                  String(name) === "asset" ? "내 자산" : "빵 가격",
                 ]}
               />
               <Legend
