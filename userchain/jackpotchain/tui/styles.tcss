@@ -1,0 +1,487 @@
+/* JackpotChain TUI — Windows-compatible, Cyan/Yellow accent only */
+
+/* ── Color Variables ────────────────────────────────────────────────────────── */
+$cyan:      #00d4ff;
+$yellow:    #ffbd2e;
+$red:       #ff5f56;
+$bg:        #0c0c0c;
+$bg-box:    #111111;
+$bg-input:  #1a1a1a;
+$border:    #333333;
+$border-hi: #555555;
+$text:      #cccccc;
+$dim:       #666666;
+
+/* ── Global ─────────────────────────────────────────────────────────────────── */
+Screen {
+    background: $bg;
+    color: $text;
+}
+
+/* ── App Header ─────────────────────────────────────────────────────────────── */
+#app-header {
+    dock: top;
+    height: 1;
+    background: #0d0d0d;
+    border-bottom: solid #252525;
+    padding: 0 1;
+}
+
+#hdr-left {
+    width: auto;
+    height: 1;
+    color: $cyan;
+}
+
+#hdr-right {
+    width: 1fr;
+    height: 1;
+    text-align: right;
+    color: $dim;
+}
+
+/* ── Menu Bar ───────────────────────────────────────────────────────────────── */
+#menu-bar {
+    dock: top;
+    height: 3;
+    width: 100%;
+    background: $bg;
+    layout: horizontal;
+}
+
+#menu-bar > .menu-item {
+    width: 1fr;
+    height: 3;
+    padding: 0 2;
+    color: $dim;
+    background: #181818;
+    border: solid $border;
+    content-align: center middle;
+    text-align: center;
+}
+
+#menu-bar > .menu-item.active {
+    color: $bg;
+    background: $cyan;
+    border: solid $cyan;
+    text-style: bold;
+}
+
+/* ── Content Area ───────────────────────────────────────────────────────────── */
+#content {
+    padding: 1;
+}
+
+ContentSwitcher {
+    width: 100%;
+    height: 1fr;
+}
+
+#setup, #lotto, #status {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* ── Stat Box ───────────────────────────────────────────────────────────────── */
+.stat-box {
+    border: solid $border;
+    background: $bg-box;
+    padding: 1;
+    margin-bottom: 1;
+    height: auto;
+}
+
+.box-title {
+    color: $cyan;
+    text-style: bold;
+    border-bottom: solid $border;
+    margin-bottom: 1;
+    height: auto;
+}
+
+/* ── Stat Rows ──────────────────────────────────────────────────────────────── */
+Horizontal {
+    height: auto;
+}
+
+.stat-label {
+    color: $dim;
+    width: 14;
+}
+
+.stat-value {
+    color: $text;
+}
+
+.cyan    { color: $cyan; }
+.yellow  { color: $yellow; }
+.red     { color: $red; }
+.dim     { color: $dim; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+.action-buttons {
+    height: auto;
+    margin-top: 1;
+}
+
+.action-buttons Button {
+    margin-right: 1;
+}
+
+/* ── Text helpers ───────────────────────────────────────────────────────────── */
+.info-text { color: $dim; }
+.separator { color: $dim; }
+.prize-info { color: $dim; }
+
+.status-msg {
+    margin-bottom: 1;
+    padding: 0 1;
+    color: $cyan;
+    background: #0a1a1a;
+    border: solid $border;
+    height: auto;
+}
+
+.hidden { display: none; }
+
+/* ── Input ──────────────────────────────────────────────────────────────────── */
+Input {
+    background: $bg-input;
+    border: solid $border-hi;
+    color: $text;
+}
+
+.send-fields {
+    width: 1fr;
+    height: auto;
+}
+
+.send-label {
+    color: $dim;
+    width: 4;
+}
+
+#setup-send-to {
+    width: 34;
+}
+
+#setup-send-amount {
+    width: 14;
+}
+
+.send-btn {
+    width: 10;
+    height: 100%;
+    margin-left: 1;
+    content-align: center middle;
+    text-align: center;
+}
+
+Input > .input--cursor {
+    color: $bg;
+    background: $foreground;
+}
+
+Input:focus {
+    border: solid $cyan;
+    background: #0d1e1e;
+}
+
+/* ── DataTable ──────────────────────────────────────────────────────────────── */
+DataTable {
+    height: 8;
+    margin-bottom: 0;
+}
+
+DataTable > .datatable--header {
+    color: $cyan;
+    background: $bg;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #0a2020;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAB 1: SETUP
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#setup-steps {
+    text-align: center;
+    color: $cyan;
+    text-style: bold;
+    border: solid $border-hi;
+    background: #0a1a1a;
+    padding: 1 2;
+    margin-bottom: 1;
+    height: auto;
+}
+
+#setup-main {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.setup-left {
+    width: 1fr;
+    margin-right: 1;
+    height: 1fr;
+    margin-bottom: 0;
+}
+
+.setup-right {
+    width: 1fr;
+    height: auto;
+}
+
+#setup-node-box {
+    height: auto;
+}
+
+#setup-mining-box {
+    height: auto;
+    margin-bottom: 0;
+}
+
+#setup-wallet-list {
+    height: 1fr;
+    border: solid $border;
+    background: #0e0e0e;
+    margin: 1 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAB 2: LOTTO
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Jackpot Hero */
+#jackpot-hero {
+    border: double $yellow;
+    background: #0f0d00;
+    padding: 1 2;
+    margin-bottom: 1;
+    height: auto;
+    align: center middle;
+}
+
+#jackpot-title {
+    color: $yellow;
+    text-style: bold;
+    text-align: center;
+    height: auto;
+}
+
+#jackpot-amount {
+    color: $yellow;
+    text-style: bold;
+    text-align: center;
+    height: auto;
+}
+
+#jackpot-sub {
+    color: $dim;
+    text-align: center;
+    height: auto;
+}
+
+/* PRIZE TABLE | MY TICKETS — 항상 같은 높이 */
+#lotto-top {
+    width: 100%;
+    height: auto;
+}
+
+#prize-section {
+    width: 2fr;
+    height: 1fr;
+    margin-right: 1;
+}
+
+#tickets-section {
+    width: 3fr;
+    height: 1fr;
+}
+
+#prize-table {
+    color: $dim;
+    height: auto;
+    padding: 0 1;
+}
+
+/* HEX Picker */
+#slot-section {
+    width: 100%;
+    height: auto;
+    align-horizontal: center;
+}
+
+#slot-header {
+    width: 100%;
+    height: auto;
+    border-bottom: solid $border;
+    margin-bottom: 1;
+    padding-bottom: 0;
+}
+
+#slot-title {
+    width: 1fr;
+    color: $cyan;
+    text-style: bold;
+}
+
+#exchange-bar {
+    width: auto;
+    height: auto;
+    align-vertical: middle;
+}
+
+#lbl-pot, #lbl-jack {
+    color: $dim;
+    width: auto;
+    padding: 0 1;
+}
+
+#exchange-bar .stat-value {
+    width: auto;
+    padding-right: 2;
+}
+
+#exchange-bar Button {
+    height: 3;
+    min-width: 9;
+    padding: 0 1;
+    margin-left: 1;
+}
+
+#my-tickets {
+    width: 100%;
+    height: auto;
+}
+
+#slot-labels-row {
+    height: 1;
+    margin-bottom: 0;
+    align-horizontal: center;
+}
+
+#slot-inputs-row {
+    height: auto;
+    margin-bottom: 1;
+    align-horizontal: center;
+}
+
+#slot-section > .action-buttons {
+    align-horizontal: center;
+}
+
+.slot-label {
+    width: 10;
+    color: $dim;
+    text-align: center;
+    height: 1;
+}
+
+#s0, #s1, #s2, #s3, #s4, #s5 {
+    width: 10;
+    height: 5;
+    margin-right: 0;
+    padding: 1 0 1 3;
+    background: $bg-input;
+    color: $yellow;
+    border: solid $border-hi;
+    text-align: center;
+}
+
+#s0:focus, #s1:focus, #s2:focus, #s3:focus, #s4:focus, #s5:focus {
+    border: solid $cyan;
+    background: #0d1e1e;
+    color: $cyan;
+}
+
+
+/* ── Toggle Buttons ─────────────────────────────────────────────────────── */
+.toggle-btn {
+    width: 100%;
+    height: 3;
+    content-align: center middle;
+    text-align: center;
+    text-style: bold;
+    margin-top: 1;
+    margin-bottom: 0;
+}
+
+.toggle-off {
+    color: #777777;
+    border: solid #444444;
+    background: #111111;
+}
+
+.toggle-on-cyan {
+    color: $cyan;
+    border: solid $cyan;
+    background: #091414;
+}
+
+.toggle-on-yellow {
+    color: $yellow;
+    border: solid $yellow;
+    background: #100d00;
+}
+
+/* ── Ticket History ──────────────────────────────────────────────────────── */
+#lotto-history-display {
+    height: auto;
+    min-height: 3;
+    padding: 0 1;
+}
+
+/* ── Step Checklist ─────────────────────────────────────────────────────── */
+#setup-step-bar {
+    height: auto;
+    background: #0a1010;
+    border: solid #1e2e2e;
+    padding: 0 2;
+    margin-bottom: 1;
+    text-align: center;
+    content-align: center middle;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAB 3: STATUS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#status-grid {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.status-col {
+    width: 1fr;
+    margin-right: 1;
+}
+
+.status-col:last-child {
+    margin-right: 0;
+}
+
+.bar-label {
+    color: $dim;
+    width: 12;
+}
+
+.bar-value {
+    color: $cyan;
+    width: auto;
+}
+
+#st-blocks-display {
+    height: auto;
+    color: $cyan;
+    margin: 1 0;
+}
+
+#st-blocks-dir {
+    text-align: center;
+    color: $dim;
+}
