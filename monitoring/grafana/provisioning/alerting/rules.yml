@@ -1,0 +1,157 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: JackpotChain Alerts
+    folder: JackpotChain
+    interval: 1m
+    rules:
+      # RPC latency p95 > 3s → WARN
+      - uid: jc-rpc-latency-warn
+        title: "[WARN] RPC Latency p95 > 3s"
+        condition: threshold
+        for: 2m
+        labels:
+          severity: warning
+          team: jackpotchain
+        annotations:
+          summary: "JackpotChain RPC 응답 지연"
+          description: "RPC p95 latency가 3초를 초과했습니다. method={{ $labels.method }}"
+        data:
+          - refId: query
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: histogram_quantile(0.95, sum(rate(jackpotchain_rpc_duration_seconds_bucket[5m])) by (le, method))
+              refId: query
+          - refId: threshold
+            datasourceUid: "-100"
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [3]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [query]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: "-100"
+              expression: query
+              refId: threshold
+              type: threshold
+
+      # HTTP 5xx 에러율 > 1% → CRITICAL
+      - uid: jc-5xx-error-critical
+        title: "[CRITICAL] HTTP 5xx 에러율 > 1%"
+        condition: threshold
+        for: 1m
+        labels:
+          severity: critical
+          team: jackpotchain
+        annotations:
+          summary: "HTTP 5xx 에러율 임계치 초과"
+          description: "최근 5분간 5xx 에러율이 1%를 초과했습니다."
+        data:
+          - refId: total
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: sum(rate(http_server_requests_seconds_count{application="jackpotchain-backend"}[5m]))
+              refId: total
+          - refId: errors
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: sum(rate(http_server_requests_seconds_count{application="jackpotchain-backend", status=~"5.."}[5m]))
+              refId: errors
+          - refId: ratio
+            datasourceUid: "-100"
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expression: errors / total * 100
+              refId: ratio
+              type: math
+          - refId: threshold
+            datasourceUid: "-100"
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [ratio]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: "-100"
+              expression: ratio
+              refId: threshold
+              type: threshold
+
+      # Node 연결 끊김 → CRITICAL
+      # Prometheus가 spring-blue/green/dev target을 scrape하지 못하면 up=0
+      - uid: jc-node-connection-critical
+        title: "[CRITICAL] JackpotChain Node 연결 끊김"
+        condition: threshold
+        for: 2m
+        labels:
+          severity: critical
+          team: jackpotchain
+        annotations:
+          summary: "JackpotChain 노드 RPC 연결 실패"
+          description: "최근 2분간 RPC 실패가 지속되고 있습니다."
+        data:
+          - refId: query
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: sum(rate(jackpotchain_rpc_duration_seconds_count{outcome=~"rpc_error|http_error"}[5m]))
+              refId: query
+          - refId: threshold
+            datasourceUid: "-100"
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0.1]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [query]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: "-100"
+              expression: query
+              refId: threshold
+              type: threshold

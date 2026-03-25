@@ -5,6 +5,7 @@ AGENTS.md
 **/dist/
 **/.vite/
 **/claude
+.env
 .env.local
 tmp/
 .claire/

@@ -16,6 +16,10 @@ import ssatto.BE_ssatto.global.logging.LoggingEventType;
 import ssatto.BE_ssatto.global.logging.LoggingFields;
 import ssatto.BE_ssatto.global.logging.LoggingUtils;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import java.net.URI;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,9 +37,11 @@ import java.util.Map;
 public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
 
     private static final long RPC_WARN_THRESHOLD_MS = 1_000L;
+    private static final String RPC_DURATION_METRIC = "jackpotchain.rpc.duration";
 
     private final RestClient restClient;
     private final String rpcEndpoint;
+    private final MeterRegistry meterRegistry;
 
     /**
      * JSON-RPC 호출용 HTTP 클라이언트를 생성한다.
@@ -44,7 +50,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
      * @param properties RPC 엔드포인트 설정
      */
     @Autowired
-    public JackpotChainHttpRpcClient(RestClient.Builder builder, JackpotChainRpcProperties properties) {
+    public JackpotChainHttpRpcClient(RestClient.Builder builder, JackpotChainRpcProperties properties, MeterRegistry meterRegistry) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(properties.getConnectTimeoutMs());
         requestFactory.setReadTimeout(properties.getReadTimeoutMs());
@@ -56,6 +62,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
             .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
             .build();
         this.rpcEndpoint = normalizedBaseUrl;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -66,6 +73,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
     private JackpotChainHttpRpcClient(RestClient restClient) {
         this.restClient = restClient;
         this.rpcEndpoint = "test";
+        this.meterRegistry = new SimpleMeterRegistry();
     }
 
     static JackpotChainHttpRpcClient createForTest(RestClient restClient) {
@@ -445,6 +453,8 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
 
     private JsonNode invoke(String method, List<Object> params) {
         long startedAt = System.currentTimeMillis();
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String outcome = "success";
         try {
             JsonNode responseNode = restClient.post()
                 .uri(URI.create("/"))
@@ -454,11 +464,13 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
                 .body(JsonNode.class);
 
             if (responseNode == null || responseNode.isNull()) {
+                outcome = "rpc_error";
                 logRpcFailure(method, startedAt, "response body is empty", null);
                 throw invalidResponse();
             }
 
             if (responseNode.hasNonNull("error")) {
+                outcome = "rpc_error";
                 JsonNode errorNode = responseNode.path("error");
                 String message = errorNode.path("message").asText("unknown rpc error");
                 logRpcFailure(method, startedAt, message, null);
@@ -468,13 +480,24 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
             logSlowRpcIfNeeded(method, startedAt);
             return responseNode;
         } catch (BusinessException exception) {
+            if ("success".equals(outcome)) {
+                outcome = "rpc_error";
+            }
             throw exception;
         } catch (RestClientException exception) {
+            outcome = "http_error";
             logRpcFailure(method, startedAt, exception.getMessage(), exception);
             throw new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED, exception);
         } catch (IllegalArgumentException exception) {
+            outcome = "http_error";
             logRpcFailure(method, startedAt, exception.getMessage(), exception);
             throw new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED, exception);
+        } finally {
+            sample.stop(Timer.builder(RPC_DURATION_METRIC)
+                .description("JackpotChain RPC call duration")
+                .tag("method", method)
+                .tag("outcome", outcome)
+                .register(meterRegistry));
         }
     }
 

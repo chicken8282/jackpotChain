@@ -2,17 +2,35 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
+  # 로컬 개발 환경 (docker-compose.local.yml)
+  - job_name: 'spring-local'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          env: local
+
+  # Dev 환경
   - job_name: 'spring-dev'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['spring-dev:8080']
+        labels:
+          env: dev
 
+  # Prod Blue/Green
   - job_name: 'spring-blue'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['spring-blue:8080']
+        labels:
+          env: prod
+          color: blue
 
   - job_name: 'spring-green'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['spring-green:8080']
+        labels:
+          env: prod
+          color: green

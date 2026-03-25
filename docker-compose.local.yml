@@ -123,6 +123,7 @@ services:
       dockerfile: Dockerfile.local
       args:
         VITE_API_BASE_URL: /api
+        VITE_GMS_API_KEY: ${VITE_GMS_API_KEY:-}
     container_name: jc-frontend-local
     restart: unless-stopped
     networks:
@@ -133,7 +134,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 10s
       timeout: 3s
       retries: 3

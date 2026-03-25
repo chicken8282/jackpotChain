@@ -19,9 +19,7 @@ export const CHATBOT_ENABLED = true;
 //    프로덕션 배포 시 Nginx에서 동일한 프록시 룰을 설정해야 합니다.
 // ──────────────────────────────────────────────────────────────────────────────
 export const GMS_ENDPOINT = "/gms-proxy/api.openai.com/v1/chat/completions";
-export const GMS_API_KEY =
-  import.meta.env.VITE_GMS_API_KEY ??
-  "S14P22E202-4ba1e4df-6ad5-4888-a92f-29c1fbb3f638";
+export const GMS_API_KEY = import.meta.env.VITE_GMS_API_KEY ?? "";
 export const MODEL = "gpt-4.1-mini";
 
 // ──────────────────────────────────────────────────────────────────────────────
