@@ -26,9 +26,9 @@ RUN sed -i 's/\r$//' /entrypoint.sh \
 
 USER jackpot
 
-EXPOSE 9776 9777 9778
+EXPOSE 8776 8777 8778
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \
-  CMD curl -sf -X POST http://localhost:9776 -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"params\":[],\"id\":1}" || exit 1
+  CMD curl -sf -X POST http://localhost:8776 -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getblockcount\",\"params\":[],\"id\":1}" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -85,18 +85,18 @@ services:
       NODE_DATA_DIR: /data
       NODE_WALLET_FILE: /wallets/default.json
       NODE_RPC_HOST: 0.0.0.0
-      NODE_RPC_PORT: "9776"
-      NODE_P2P_PORT: "9777"
-      NODE_RENDEZVOUS_PORT: "9778"
+      NODE_RPC_PORT: "8776"
+      NODE_P2P_PORT: "8777"
+      NODE_RENDEZVOUS_PORT: "8778"
       NODE_SEED_NODE: "true"
       NODE_MINE: "false"
       NODE_MAX_INBOUND: "128"
       NODE_MAX_OUTBOUND: "16"
     ports:
-      - "127.0.0.1:8776:9776"
-      - "8777:9777/tcp"
-      - "8777:9777/udp"
-      - "8778:9778"
+      - "127.0.0.1:8776:8776"
+      - "8777:8777/tcp"
+      - "8777:8777/udp"
+      - "8778:8778"
     volumes:
       - node-prod-data:/data
       - node-prod-wallets:/wallets
@@ -108,7 +108,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'curl -sf -X POST http://localhost:9776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
+          'curl -sf -X POST http://localhost:8776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
         ]
       interval: 15s
       timeout: 5s
@@ -137,7 +137,7 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node-prod:9776
+      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node-prod:8776
       JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseContainerSupport"
     ports:
       - "127.0.0.1:8090:8080"
@@ -179,7 +179,7 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node-prod:9776
+      JACKPOTCHAIN_RPC_URL: http://jackpotchain-node-prod:8776
       JAVA_OPTS: "-Xms512m -Xmx1g -XX:+UseContainerSupport"
     ports:
       - "127.0.0.1:8092:8080"
