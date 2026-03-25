@@ -18,9 +18,13 @@ interface WalletStoreState {
   schemaVersion: number;
   wallets: WalletMetadata[];
   activeAddress: string | null;
+  /** 로또 commit 후 블록 확정 전까지 즉시 표시할 POT 오프셋 (POT 단위). persist 제외. */
+  potOptimisticOffsetByAddress: Record<string, number>;
   upsertWallet: (wallet: WalletMetadata) => void;
   replaceWallets: (wallets: WalletMetadata[]) => void;
   setActiveAddress: (address: string | null) => void;
+  applyPotOptimisticOffset: (address: string, delta: number) => void;
+  clearPotOptimisticOffset: (address: string) => void;
 }
 
 export const useWalletStore = create<WalletStoreState>()(
@@ -29,6 +33,7 @@ export const useWalletStore = create<WalletStoreState>()(
       schemaVersion: WALLET_STORE_SCHEMA_VERSION,
       wallets: [],
       activeAddress: null,
+      potOptimisticOffsetByAddress: {},
       upsertWallet: (wallet) =>
         set((state) => {
           const existingIndex = state.wallets.findIndex((item) => item.address === wallet.address);
@@ -60,10 +65,28 @@ export const useWalletStore = create<WalletStoreState>()(
         set(() => ({
           activeAddress: address,
         })),
+      applyPotOptimisticOffset: (address, delta) =>
+        set((state) => ({
+          potOptimisticOffsetByAddress: {
+            ...state.potOptimisticOffsetByAddress,
+            [address]: (state.potOptimisticOffsetByAddress[address] ?? 0) + delta,
+          },
+        })),
+      clearPotOptimisticOffset: (address) =>
+        set((state) => {
+          const next = { ...state.potOptimisticOffsetByAddress };
+          delete next[address];
+          return { potOptimisticOffsetByAddress: next };
+        }),
     }),
     {
       name: WALLET_STORE_KEY,
       version: WALLET_STORE_SCHEMA_VERSION,
+      partialize: (state) => ({
+        schemaVersion: state.schemaVersion,
+        wallets: state.wallets,
+        activeAddress: state.activeAddress,
+      }),
     },
   ),
 );

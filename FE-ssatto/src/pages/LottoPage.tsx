@@ -14,6 +14,39 @@ import type { LottoHistoryEntry } from "../services/readModelAdapters";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
+function CommitFailedModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[30px] border border-danger/20 bg-[rgba(12,16,28,0.98)] px-6 py-7 shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
+        <h3 className="text-xl font-bold text-white">로또 참여 실패</h3>
+        <p className="mt-3 text-sm leading-6 text-text-secondary">
+          로또 추첨을 다시 시도해주세요
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-12 flex-1 rounded-2xl border border-white/10 bg-white/5 font-bold text-white transition-colors hover:bg-white/10"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function WalletRequiredModal({
   open,
   onClose,
@@ -60,6 +93,9 @@ export default function LottoPage() {
   const navigate = useNavigate();
   const wallets = useWalletStore((state) => state.wallets);
   const activeAddress = useWalletStore((state) => state.activeAddress);
+  const potOptimisticOffsetByAddress = useWalletStore((state) => state.potOptimisticOffsetByAddress);
+  const applyPotOptimisticOffset = useWalletStore((state) => state.applyPotOptimisticOffset);
+  const clearPotOptimisticOffset = useWalletStore((state) => state.clearPotOptimisticOffset);
   const accessSessions = useWalletSessionStore((state) => state.accessSessions);
   const unlockedWallets = useWalletSessionStore((state) => state.unlockedWallets);
   const activeWallet = wallets.find((wallet) => wallet.address === activeAddress);
@@ -68,26 +104,26 @@ export default function LottoPage() {
   const { overview, refetch: refetchLottoOverview } = useLottoOverview(activeAddress, activeAccessToken);
   const { entries } = useLottoEntries(activeAddress, activeAccessToken);
   const [pendingEntries, setPendingEntries] = useState<LottoHistoryEntry[]>([]);
-  // Optimistic POT balance offset in display units (1 = 1 POT).
-  // Decremented immediately after a successful commit; reset to 0 once the
-  // server-side polling reflects the new balance.
-  const [optimisticPotOffset, setOptimisticPotOffset] = useState(0);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWalletRequiredModal, setShowWalletRequiredModal] = useState(false);
+  const [showCommitFailedModal, setShowCommitFailedModal] = useState(false);
 
-  // ── S2: reset optimistic offset whenever server potBalance changes ──────────
+  // 현재 address 의 optimistic pot offset (POT 단위, 전역 store)
+  const optimisticPotOffset = activeAddress ? (potOptimisticOffsetByAddress[activeAddress] ?? 0) : 0;
+
+  // ── reset optimistic offset whenever server potBalance changes ──────────────
   const prevOverviewPotRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (overview?.potBalance === undefined) return;
+    if (!activeAddress || overview?.potBalance === undefined) return;
     if (
       prevOverviewPotRef.current !== undefined &&
       overview.potBalance !== prevOverviewPotRef.current
     ) {
-      setOptimisticPotOffset(0);
+      clearPotOptimisticOffset(activeAddress);
     }
     prevOverviewPotRef.current = overview.potBalance;
-  }, [overview?.potBalance]);
+  }, [overview?.potBalance, activeAddress, clearPotOptimisticOffset]);
 
   // ── S2: failure detection — runs on every entries poll cycle ────────────────
   // Using a ref to read the latest pendingEntries without making it a reactive
@@ -125,8 +161,12 @@ export default function LottoPage() {
 
     if (timedOutIds.length > 0) {
       // Restore optimistic offset for each failed commit
-      setOptimisticPotOffset((prev) => Math.min(0, prev + timedOutIds.length));
-      setActionStatus("로또 추첨에 실패했습니다.");
+      if (activeAddress) {
+        for (let i = 0; i < timedOutIds.length; i++) {
+          applyPotOptimisticOffset(activeAddress, 1);
+        }
+      }
+      setShowCommitFailedModal(true);
     }
   // intentionally omitting pendingEntries: reading via ref to avoid update loop
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,8 +242,10 @@ export default function LottoPage() {
         chosenNumbers,
       });
 
-      // S2: optimistic POT decrement — show -1 immediately before block confirm
-      setOptimisticPotOffset((prev) => prev - 1);
+      // optimistic POT decrement — show -1 immediately before block confirm
+      if (activeAddress) {
+        applyPotOptimisticOffset(activeAddress, -1);
+      }
 
       // 대기중 항목 추가
       const now = new Intl.DateTimeFormat("ko-KR", {
@@ -229,7 +271,7 @@ export default function LottoPage() {
       ]);
       setActionStatus("로또 참여 트랜잭션을 제출했습니다. 약 10분 뒤 결과를 확인해 주세요.");
 
-      // S1: immediate refetch so the server potBalance updates as fast as possible
+      // immediate refetch so the server potBalance updates as fast as possible
       void refetchLottoOverview();
     } finally {
       setIsSubmitting(false);
@@ -267,6 +309,10 @@ export default function LottoPage() {
           setShowWalletRequiredModal(false);
           navigate("/wallet");
         }}
+      />
+      <CommitFailedModal
+        open={showCommitFailedModal}
+        onClose={() => setShowCommitFailedModal(false)}
       />
       {actionStatus ? (
         <div className="mb-4 rounded-[18px] border border-info/20 bg-info/10 px-4 py-3 text-sm text-info">
