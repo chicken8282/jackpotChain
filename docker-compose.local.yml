@@ -73,8 +73,8 @@ services:
     networks:
       - local-net
     ports:
-      - "9776:9776"
-      - "9777:9777"
+      - "8776:8776"
+      - "8777:8777"
     volumes:
       - node-local-data:/data
       - node-local-wallets:/wallets
@@ -82,7 +82,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'curl -sf -X POST http://localhost:9776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
+          'curl -sf -X POST http://localhost:8776 -H ''Content-Type: application/json'' -d ''{"jsonrpc":"2.0","method":"getblockcount","id":1}'' || exit 1',
         ]
       interval: 15s
       timeout: 5s

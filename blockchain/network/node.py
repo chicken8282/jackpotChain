@@ -367,9 +367,9 @@ class Node:
                     await self._process_message(address, header, payload)
 
         except asyncio.TimeoutError:
-            pass
+            _log('PEER', f'타임아웃: {address}')
         except Exception as e:
-            pass
+            _log('ERROR', f'피어 핸들링 오류 ({address}): {type(e).__name__}: {e}')
         finally:
             await self._disconnect(address)
 
@@ -449,10 +449,10 @@ class Node:
         # 피어에게 주소 요청
         await self._send_getaddr(address)
 
-        # 동기화 체크 (아웃바운드는 VERSION 수신 후에 체크)
+        # 동기화 체크 (READY 상태 확정 후 인바운드/아웃바운드 모두 체크)
+        # 아웃바운드는 VERSION 수신 시 아직 READY가 아니라 스킵되므로 여기서 처리
         peer = self.peer_manager.get_peer(address)
-        if peer and peer.is_inbound:
-            # 인바운드면 VERACK 받은 후 동기화 체크
+        if peer and peer.state == PeerState.READY:
             await self._check_sync(address)
 
     async def _check_sync(self, address: PeerAddress):
@@ -555,12 +555,17 @@ class Node:
     async def _handle_getdata(self, address: PeerAddress, payload: bytes):
         """GETDATA 처리"""
         getdata = GetDataMessage.deserialize(payload)
+        block_count = sum(1 for i in getdata.items if i.inv_type == InvType.BLOCK)
+        tx_count = sum(1 for i in getdata.items if i.inv_type == InvType.TX)
+        _log('SYNC', f'GETDATA 수신: 블록 {block_count}개, TX {tx_count}개 from {address}')
 
         for item in getdata.items:
             if item.inv_type == InvType.BLOCK:
                 block = self.blockchain.get_block(item.hash)
                 if block:
                     await self._send_message(address, MessageType.BLOCK, block.serialize())
+                else:
+                    _log('SYNC', f'GETDATA 블록 없음: {item.hash.hex()[:16]}...')
             elif item.inv_type == InvType.TX:
                 # Mempool에서 TX 조회 후 전송
                 tx = None
