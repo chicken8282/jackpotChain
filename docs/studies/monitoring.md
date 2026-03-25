@@ -7,63 +7,37 @@
 
 ## 0. 전체 아키텍처 다이어그램
 
-```mermaid
-flowchart TD
-    subgraph SpringBoot["Spring Boot (jackpotchain-backend)"]
-        direction TB
-        JVM["JVM / HTTP / HikariCP\n(Micrometer 자동 계측)"]
-        RPC_TIMER["JackpotChainHttpRpcClient\njackpotchain.rpc.duration\n(커스텀 Timer)"]
-        LOGBACK["logback-spring.xml\nprod → LogstashEncoder JSON\nlocal/dev/test → 패턴 텍스트"]
-        MDC["RequestLoggingFilter\nMDC: traceId, requestId, method, uri"]
-        BIZ["BusinessEventLogger\neventType 구조화 로그"]
-    end
+![모니터링 아키텍처 다이어그램](./assets/monitoring-architecture.svg)
 
-    subgraph MetricPipeline["메트릭 파이프라인"]
-        ACTUATOR["/actuator/prometheus\nHTTP endpoint"]
-        PROM["Prometheus\njc-prometheus:9090\nTSDB 15일 보관"]
-    end
-
-    subgraph LogPipeline["로그 파이프라인"]
-        DOCKER_LOG["Docker 컨테이너 stdout\n/var/lib/docker/containers/..."]
-        PROMTAIL["Promtail\njc-promtail:9080\ndocker_sd_configs"]
-        LOKI["Loki\njc-loki:3100\ntsdb v13, 24h index"]
-    end
-
-    subgraph ContainerPipeline["컨테이너 리소스 파이프라인"]
-        CADVISOR["cAdvisor\njc-cadvisor:8088\nCPU/메모리/네트워크"]
-    end
-
-    subgraph Grafana["Grafana (jc-grafana:3002)"]
-        DS["datasources.yml\nPrometheus + Loki 자동 연결"]
-        DASH1["spring-overview.json\nJVM · HTTP · HikariCP · RPC · Business"]
-        DASH2["loki-logs.json\nError · Business Events · All Logs"]
-        ALERT["rules.yml\n알림 규칙 3개"]
-    end
-
-    JackpotChainNode["JackpotChain 노드\n(Bitcoin-like RPC)"]
-
-    JVM -->|Micrometer 수집| ACTUATOR
-    RPC_TIMER -->|Micrometer 수집| ACTUATOR
-    ACTUATOR -->|"15초마다 GET (Pull)"| PROM
-
-    LOGBACK -->|stdout JSON/패턴| DOCKER_LOG
-    MDC -->|MDC 필드 주입| LOGBACK
-    BIZ -->|eventType 필드 주입| LOGBACK
-    DOCKER_LOG -->|docker socket 감시| PROMTAIL
-    PROMTAIL -->|"HTTP POST /loki/api/v1/push"| LOKI
-
-    CADVISOR -->|"/metrics 스크랩"| PROM
-
-    PROM -->|PromQL 쿼리| DS
-    LOKI -->|LogQL 쿼리| DS
-    DS --> DASH1
-    DS --> DASH2
-    DS --> ALERT
-
-    RPC_TIMER <-->|"JSON-RPC HTTP"| JackpotChainNode
-```
+> 참고: 현재 Markdown 미리보기 환경이 Mermaid fenced block을 그림으로 렌더링하지 않아, Mermaid 원본을 SVG 이미지로 렌더링해 문서에 포함했다. 원본 Mermaid 소스는 [monitoring-architecture.mmd](./assets/monitoring-architecture.mmd)에 있다.
 
 ---
+
+## 0-1. 다이어그램 용어 정리
+
+이 절은 다이어그램에 등장하는 고유명사와 보조 기술을 먼저 짧게 설명하는 용도다. 아래 내용을 읽고 나면 뒤쪽 상세 설명을 훨씬 수월하게 따라갈 수 있다.
+
+| 용어 | 개념 | 이 프로젝트에서의 역할 | 운영상 포인트 |
+|------|------|------------------------|---------------|
+| `JVM` | Spring Boot가 실행되는 자바 런타임이다. | 백엔드 프로세스, 스레드, GC, 메모리 사용량이 여기서 발생하고 Micrometer가 이를 메트릭으로 노출한다. | GC pause, live thread, heap 사용량이 먼저 흔들리면 애플리케이션 부담 신호일 가능성이 높다. |
+| `HikariCP` | JDBC 커넥션 풀 구현체다. | DB 연결을 재사용하고 `active`, `idle`, `pending` 같은 풀 상태 메트릭을 제공한다. | `pending`이 증가하면 앱 전체가 느린 것이 아니라 DB 연결 대기가 병목일 수 있다. |
+| `Micrometer` | Spring Boot에서 사용하는 메트릭 계측 라이브러리다. | JVM, HTTP, HikariCP를 자동 계측하고 RPC Timer 같은 커스텀 메트릭도 등록한다. | Micrometer는 저장소가 아니라 계측 도구다. 저장은 Prometheus가 담당한다. |
+| `Actuator` | Spring Boot의 운영용 엔드포인트 묶음이다. | `/actuator/prometheus`를 통해 Prometheus가 읽을 수 있는 메트릭을 노출한다. | 이 엔드포인트가 막히면 앱이 살아 있어도 애플리케이션 메트릭은 수집되지 않는다. |
+| `MDC` | 요청 처리 스레드에 붙는 로그 문맥 저장소다. | `traceId`, `requestId`, `method`, `uri`를 한 요청 전체 로그에 일관되게 붙인다. | MDC는 요청 단위 상관관계 도구이지, 분산 추적 시스템 자체는 아니다. |
+| `BusinessEventLogger` | 핵심 비즈니스 이벤트를 구조화해서 남기는 프로젝트 유틸이다. | `LOTTO_COMMIT_SUBMITTED` 같은 안정적인 `eventType` 값을 로그에 기록해 Loki와 Grafana에서 검색 가능하게 만든다. | 자유로운 문자열 로그보다 이벤트명을 고정해 두는 편이 검색 안정성과 오타 방지에 유리하다. |
+| `Logback` | Spring Boot 기본 로깅 백엔드다. | 환경별로 로그 형식을 나눈다. local/dev/test는 사람이 읽기 쉬운 텍스트, prod는 기계가 읽기 쉬운 JSON을 출력한다. | 로그 포맷은 단순 출력 형식이 아니라 수집 파이프라인과 연결되는 운영 계약이다. |
+| `LogstashEncoder` | Logback 로그를 한 줄 JSON으로 만드는 인코더다. | prod 로그를 JSON으로 출력해 Promtail이 필드를 파싱할 수 있게 해준다. | JSON 구조를 무심코 바꾸면 Loki 파싱과 대시보드가 함께 깨질 수 있다. |
+| `stdout 컨테이너 로그` | Docker가 수집하는 표준 출력 로그다. | 애플리케이션 로그가 파일 수집 없이도 Promtail로 넘어가는 연결 지점이 된다. | 컨테이너에 접속하지 않아도 Docker는 stdout 로그를 파일로 보관한다. |
+| `Prometheus` | Pull 기반 메트릭 수집기이자 시계열 데이터베이스다. | Spring Boot와 cAdvisor의 메트릭을 주기적으로 스크랩해 저장하고 Grafana에 제공한다. | 수치 추세, 비율, 임계치 감지에 강하고 로그 본문 검색에는 적합하지 않다. |
+| `TSDB` | 시간에 따라 쌓이는 수치 데이터를 저장하는 구조다. | Prometheus와 Loki 내부 저장 방식의 핵심이며 보관 기간과 인덱스 주기에 영향을 준다. | 보관 기간과 인덱스 주기 설정은 디스크 사용량과 조회 성능에 직접 영향을 준다. |
+| `Promtail` | Loki로 로그를 보내는 수집 에이전트다. | Docker 컨테이너 로그를 발견하고 JSON 필드를 추출한 뒤 Loki에 push한다. | 자주 바뀌는 값은 라벨로 올리지 말고 본문 필드로 두는 편이 안전하다. |
+| `docker_sd_configs` | Promtail의 Docker 서비스 디스커버리 설정이다. | 컨테이너 목록을 자동으로 찾아 새 컨테이너 로그도 별도 설정 없이 수집하게 해준다. | Docker 소켓 접근 권한과 relabel 설정이 틀리면 수집 대상이 누락될 수 있다. |
+| `Loki` | 라벨 기반으로 로그를 저장하는 로그 저장소다. | 백엔드 로그를 모아두고 `level`, `eventType`, `traceId` 기준으로 조회하게 해준다. | Loki는 라벨만 인덱싱하므로 라벨 설계가 비용과 조회 속도를 좌우한다. |
+| `cAdvisor` | 컨테이너 자원 사용량을 노출하는 수집기다. | 애플리케이션 내부 메트릭과 별개로 컨테이너 CPU, 메모리, 네트워크 사용량을 제공한다. | 앱 문제인지 컨테이너/호스트 자원 부족인지 구분할 때 유용하다. |
+| `Grafana datasource provisioning` | Grafana 데이터소스를 파일로 자동 등록하는 방식이다. | `datasources.yml`로 Prometheus와 Loki를 자동 연결해 수동 설정 드리프트를 줄인다. | 새 인스턴스를 띄워도 같은 설정을 재현할 수 있다는 점이 핵심이다. |
+| `PromQL` | Prometheus 메트릭을 조회하는 쿼리 언어다. | 요청 수, 지연 시간, 에러율, 리소스 압박 같은 수치성 상태를 계산한다. | 시간 구간 집계와 비율 계산에 강하지만 로그 본문 읽기 용도는 아니다. |
+| `LogQL` | Loki 로그를 조회하는 쿼리 언어다. | 에러 로그 필터링, 특정 `traceId` 요청 추적, 이벤트 건수 집계에 사용된다. | 비용은 라벨 설계와 본문 스캔량에 크게 좌우된다. |
+| `JSON-RPC` | JSON 형식으로 원격 프로시저 호출을 수행하는 HTTP 기반 프로토콜이다. | `JackpotChainHttpRpcClient`가 JackpotChain 노드와 통신할 때 사용한다. | 이 경계가 느리거나 실패하면 여러 비즈니스 기능이 함께 영향을 받는다. |
 
 ## 1. 왜 모니터링이 필요한가
 

@@ -19,6 +19,7 @@ import ssatto.BE_ssatto.domain.lotto.entity.LottoEntry;
 import ssatto.BE_ssatto.domain.lotto.entity.LottoEntryStatus;
 import ssatto.BE_ssatto.domain.lotto.repository.JackpotPoolRepository;
 import ssatto.BE_ssatto.domain.lotto.repository.LottoEntryRepository;
+import ssatto.BE_ssatto.domain.lotto.service.LottoRankingService;
 import ssatto.BE_ssatto.domain.wallet.entity.Wallet;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivity;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivityType;
@@ -53,6 +54,7 @@ public class BlockchainReadModelSyncService {
     private final JackpotPoolRepository jackpotPoolRepository;
     private final WalletRepository walletRepository;
     private final WalletActivityRepository walletActivityRepository;
+    private final LottoRankingService lottoRankingService;
 
     /**
      * 현재 체인 팁까지 read-model을 동기화한다.
@@ -69,6 +71,7 @@ public class BlockchainReadModelSyncService {
         }
 
         refreshLottoEntries();
+        lottoRankingService.refreshTopRankings();
         syncJackpotPool(currentHeight);
     }
 

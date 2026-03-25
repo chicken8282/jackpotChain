@@ -4,6 +4,7 @@ import HexPicker from "../components/lotto/HexPicker";
 import LottoTierRanking from "../components/lotto/LottoTierRanking";
 import { useLottoEntries } from "../hooks/useLottoEntries";
 import { useLottoOverview } from "../hooks/useLottoOverview";
+import { useLottoRanking } from "../hooks/useLottoRanking";
 import { getLottoEntryResult } from "../services/lottoService";
 import { mapLottoResult, type LottoHistoryDetail } from "../services/readModelAdapters";
 import { useWalletSessionStore } from "../stores/useWalletSessionStore";
@@ -103,6 +104,7 @@ export default function LottoPage() {
   const activePrivateKey = activeWallet ? unlockedWallets[activeWallet.walletId]?.privateKey : undefined;
   const { overview, refetch: refetchLottoOverview } = useLottoOverview(activeAddress, activeAccessToken);
   const { entries } = useLottoEntries(activeAddress, activeAccessToken);
+  const { winners } = useLottoRanking();
   const [pendingEntries, setPendingEntries] = useState<LottoHistoryEntry[]>([]);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -324,7 +326,7 @@ export default function LottoPage() {
           className="h-full"
           value={Math.floor((overview?.poolBalanceJack ?? 0) / 100_000_000)}
         />
-        <LottoTierRanking entries={overview?.prizeTiers ?? []} />
+        <LottoTierRanking winners={winners} />
       </section>
       <HexPicker
         disabled={isSubmitting}

@@ -17,7 +17,9 @@ import ssatto.BE_ssatto.domain.lotto.dto.LottoClaimContextResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoCommitRequest;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoEntriesResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoOverviewResponse;
+import ssatto.BE_ssatto.domain.lotto.dto.LottoRankingResponse;
 import ssatto.BE_ssatto.domain.lotto.dto.LottoResultResponse;
+import ssatto.BE_ssatto.domain.lotto.service.LottoRankingService;
 import ssatto.BE_ssatto.domain.lotto.service.LottoService;
 import ssatto.BE_ssatto.global.response.ApiResponse;
 
@@ -36,8 +38,10 @@ public class LottoController {
     private static final String GET_CLAIM_CONTEXT_SUCCESS_MESSAGE = "로또 클레임 컨텍스트 조회가 완료되었습니다.";
     private static final String GET_ENTRIES_SUCCESS_MESSAGE = "로또 참여 내역 조회가 완료되었습니다.";
     private static final String GET_RESULT_SUCCESS_MESSAGE = "로또 결과 조회가 완료되었습니다.";
+    private static final String GET_RANKING_SUCCESS_MESSAGE = "랭킹 조회가 완료되었습니다.";
 
     private final LottoService lottoService;
+    private final LottoRankingService lottoRankingService;
 
     /**
      * 로또 페이지 통합 정보를 조회한다.
@@ -129,6 +133,16 @@ public class LottoController {
             GET_CLAIM_CONTEXT_SUCCESS_MESSAGE,
             lottoService.getClaimContext(resolveWalletSubject(authentication), commitHash)
         );
+    }
+
+    /**
+     * 로또 당첨자 Top 3 랭킹을 조회한다. 인증 불필요.
+     *
+     * @return 랭킹 응답 목록
+     */
+    @GetMapping("/ranking")
+    public ApiResponse<List<LottoRankingResponse>> getRanking() {
+        return ApiResponse.success(SUCCESS_CODE, GET_RANKING_SUCCESS_MESSAGE, lottoRankingService.getTopRankings());
     }
 
     private String resolveWalletSubject(Authentication authentication) {
