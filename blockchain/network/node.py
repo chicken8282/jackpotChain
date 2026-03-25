@@ -561,10 +561,14 @@ class Node:
                     await self._send_message(address, MessageType.BLOCK, block.serialize())
             elif item.inv_type == InvType.TX:
                 # Mempool에서 TX 조회 후 전송
+                tx = None
                 if self.mempool:
                     tx = self.mempool.get_tx(item.hash)
-                    if tx:
-                        await self._send_message(address, MessageType.TX, tx.serialize())
+                # mempool에 없으면 최근 블록에서 검색 (채굴 직후 레이스 컨디션 대응)
+                if tx is None:
+                    tx = self._find_tx_in_recent_blocks(item.hash)
+                if tx:
+                    await self._send_message(address, MessageType.TX, tx.serialize())
 
     async def _handle_block(self, address: PeerAddress, payload: bytes):
         """BLOCK 수신"""
@@ -600,6 +604,11 @@ class Node:
         # 블록 처리
         if self._on_block:
             self._on_block(block, peer)
+
+        # 블록에 포함된 TX를 mempool에서 제거 (콜백 누락 대비 안전장치)
+        if self.mempool:
+            for tx in block.transactions[1:]:  # coinbase 제외
+                self.mempool.remove_tx(tx.get_txid())
 
         # 피어 높이 갱신 (체인 현재 높이로)
         chain_height = self.blockchain.get_height() if self.blockchain else 0
@@ -986,3 +995,14 @@ class Node:
         for addr in list(self._connections.keys()):
             if addr != exclude:
                 await self._send_message(addr, MessageType.INV, payload)
+
+    def _find_tx_in_recent_blocks(self, txid: bytes, depth: int = 10) -> Optional[Transaction]:
+        """최근 블록에서 TX 검색 (mempool에서 제거된 직후 GETDATA 대응)"""
+        height = self.blockchain.get_height()
+        for h in range(height, max(0, height - depth), -1):
+            block = self.blockchain.get_block_by_height(h)
+            if block:
+                for tx in block.transactions:
+                    if tx.get_txid() == txid:
+                        return tx
+        return None
