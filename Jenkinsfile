@@ -113,6 +113,9 @@ pipeline {
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/prometheus
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/loki
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/promtail
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting
 
                         cp ${REMOTE_REPO_DIR}/docker-compose.dev.yml ${REMOTE_APP_DIR}/compose/
                         cp ${REMOTE_REPO_DIR}/docker-compose.prod.yml ${REMOTE_APP_DIR}/compose/
@@ -124,6 +127,11 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/prometheus/prometheus.yml ${REMOTE_APP_DIR}/monitoring/prometheus/
                         cp ${REMOTE_REPO_DIR}/monitoring/loki/config.yml ${REMOTE_APP_DIR}/monitoring/loki/
                         cp ${REMOTE_REPO_DIR}/monitoring/promtail/config.yml ${REMOTE_APP_DIR}/monitoring/promtail/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/datasources/datasources.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/dashboard.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.dev
 
@@ -154,6 +162,9 @@ pipeline {
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/prometheus
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/loki
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/promtail
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting
 
                         cp ${REMOTE_REPO_DIR}/docker-compose.dev.yml ${REMOTE_APP_DIR}/compose/
                         cp ${REMOTE_REPO_DIR}/docker-compose.prod.yml ${REMOTE_APP_DIR}/compose/
@@ -165,6 +176,11 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/prometheus/prometheus.yml ${REMOTE_APP_DIR}/monitoring/prometheus/
                         cp ${REMOTE_REPO_DIR}/monitoring/loki/config.yml ${REMOTE_APP_DIR}/monitoring/loki/
                         cp ${REMOTE_REPO_DIR}/monitoring/promtail/config.yml ${REMOTE_APP_DIR}/monitoring/promtail/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/datasources/datasources.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/dashboard.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.prod
 
