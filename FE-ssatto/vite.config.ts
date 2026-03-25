@@ -30,7 +30,8 @@ function gmsProxyPlugin(): Plugin {
 
         // /gms-proxy 접두사를 제거하고 /gmsapi로 변환
         const stripped = req.url.replace(/^\/gms-proxy/, "");
-        const targetUrl = `https://gms.ssafy.io/gmsapi${stripped}`;
+        const gmsHost = process.env.VITE_GMS_HOST ?? "https://gms.ssafy.io/gmsapi";
+        const targetUrl = `${gmsHost}${stripped}`;
         console.log(`[GMS Proxy] ${req.method} ${req.url} → ${targetUrl}`);
 
         try {

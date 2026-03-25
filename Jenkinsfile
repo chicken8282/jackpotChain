@@ -81,15 +81,20 @@ pipeline {
 
         stage('Build & Push Images') {
             steps {
-                sh """
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG} ./BE-ssatto
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG} ./FE-ssatto
-                docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./blockchain
+                withCredentials([string(credentialsId: 'gms-api-key', variable: 'GMS_API_KEY')]) {
+                    sh """
+                    docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG} ./BE-ssatto
+                    docker build \\
+                        --build-arg VITE_GMS_API_KEY=\${GMS_API_KEY} \\
+                        -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG} \\
+                        ./FE-ssatto
+                    docker build -t ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG} ./blockchain
 
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
-                docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG}
-                """
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_BE}:${IMAGE_TAG}
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_FE}:${IMAGE_TAG}
+                    docker push ${DOCKERHUB_REPO}/${DOCKER_IMAGE_NODE}:${IMAGE_TAG}
+                    """
+                }
             }
         }
 
@@ -113,6 +118,9 @@ pipeline {
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/prometheus
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/loki
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/promtail
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting
 
                         cp ${REMOTE_REPO_DIR}/docker-compose.dev.yml ${REMOTE_APP_DIR}/compose/
                         cp ${REMOTE_REPO_DIR}/docker-compose.prod.yml ${REMOTE_APP_DIR}/compose/
@@ -124,6 +132,11 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/prometheus/prometheus.yml ${REMOTE_APP_DIR}/monitoring/prometheus/
                         cp ${REMOTE_REPO_DIR}/monitoring/loki/config.yml ${REMOTE_APP_DIR}/monitoring/loki/
                         cp ${REMOTE_REPO_DIR}/monitoring/promtail/config.yml ${REMOTE_APP_DIR}/monitoring/promtail/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/datasources/datasources.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/dashboard.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.dev
 
@@ -154,6 +167,9 @@ pipeline {
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/prometheus
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/loki
                         mkdir -p ${REMOTE_APP_DIR}/monitoring/promtail
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards
+                        mkdir -p ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting
 
                         cp ${REMOTE_REPO_DIR}/docker-compose.dev.yml ${REMOTE_APP_DIR}/compose/
                         cp ${REMOTE_REPO_DIR}/docker-compose.prod.yml ${REMOTE_APP_DIR}/compose/
@@ -165,6 +181,11 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/prometheus/prometheus.yml ${REMOTE_APP_DIR}/monitoring/prometheus/
                         cp ${REMOTE_REPO_DIR}/monitoring/loki/config.yml ${REMOTE_APP_DIR}/monitoring/loki/
                         cp ${REMOTE_REPO_DIR}/monitoring/promtail/config.yml ${REMOTE_APP_DIR}/monitoring/promtail/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/datasources/datasources.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/datasources/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/dashboard.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.prod
 

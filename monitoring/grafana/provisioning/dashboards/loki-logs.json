@@ -1,0 +1,159 @@
+{
+  "id": null,
+  "uid": "jc-loki-logs",
+  "title": "JackpotChain — Logs (Loki)",
+  "tags": ["jackpotchain", "loki", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(container)",
+        "label": "Container",
+        "current": {},
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "level",
+        "type": "custom",
+        "label": "Level",
+        "query": "ERROR,WARN,INFO",
+        "current": { "text": "All", "value": "$__all" },
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Error Logs",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Error / Warn Log Rate",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 1 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (rate({container=~\"jc-backend.*\"} | json | level=~\"ERROR|WARN\" [2m]))",
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Error Logs — Backend",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{container=~\"jc-backend.*\"} | json | level=~\"ERROR|WARN\"",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Business Events",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Business Event Rate by eventType",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (eventType) (rate({container=~\"jc-backend.*\"} | json | eventType != \"\" [5m]))",
+          "legendFormat": "{{eventType}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 12,
+      "type": "logs",
+      "title": "Business Event Logs (AUTH_TOKEN_ISSUED / WALLET_REGISTERED / LOTTO_* / EXCHANGE_*)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{container=~\"jc-backend.*\"} | json | eventType =~ \"AUTH_TOKEN_ISSUED|WALLET_REGISTERED|LOTTO_COMMIT_SUBMITTED|LOTTO_CLAIM_SUBMITTED|EXCHANGE_TRANSACTION_SUBMITTED|JACKPOTCHAIN_TRANSACTION_SUBMITTED\"",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "All Container Logs",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "collapsed": true
+    },
+    {
+      "id": 21,
+      "type": "logs",
+      "title": "All Logs — $container / level=$level",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 35 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{container=~\"$container\"} | json | level=~\"$level\"",
+          "legendFormat": ""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import type { DashboardBlockDetail } from "./dashboardMockData";
 interface BlockDetailModalProps {
   block: DashboardBlockDetail | null;
   onClose: () => void;
+  isDetailLoading?: boolean;
 }
 
 function shortenMiddle(value: string, head = 10, tail = 6) {
@@ -74,7 +75,7 @@ function MetaSection({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-export default function BlockDetailModal({ block, onClose }: BlockDetailModalProps) {
+export default function BlockDetailModal({ block, onClose, isDetailLoading = false }: BlockDetailModalProps) {
   const [mounted, setMounted] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -209,24 +210,32 @@ export default function BlockDetailModal({ block, onClose }: BlockDetailModalPro
                   <MetaSection title="요약 정보">
                     <InfoRow label="높이" value={`#${block.height}`} />
                     <InfoRow label="상태" value={block.status === "confirmed" ? "확정" : "후보"} />
-                    <InfoRow label="총 보상" value={totalReward} accent="gold" />
+                    <InfoRow label="총 보상" value={isDetailLoading ? "..." : totalReward} accent="gold" />
                     <InfoRow label="채굴 시각" value={block.minedAt} fullValue={block.minedAt} />
                     <InfoRow label="TX 수" value={`${block.txCount}건`} />
-                    <InfoRow label="채굴 시간" value={block.miningElapsed} />
+                    <InfoRow label="채굴 시간" value={isDetailLoading ? "..." : block.miningElapsed} />
                   </MetaSection>
 
                   <MetaSection title="블록 상세">
-                    <InfoRow label="버전" value={block.version} fullValue={block.version} monospace />
-                    <InfoRow
-                      label="이전 해시"
-                      value={shortenMiddle(block.previousHash)}
-                      fullValue={block.previousHash}
-                      monospace
-                      onCopy={() => copyValue("previousHash", block.previousHash)}
-                      copied={copiedField === "previousHash"}
-                    />
-                    <InfoRow label="Nonce" value={block.nonce.toLocaleString("ko-KR")} monospace />
-                    <InfoRow label="난이도" value={block.difficulty} accent="blue" monospace />
+                    {isDetailLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <span className="text-xs text-text-secondary">불러오는 중...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <InfoRow label="버전" value={block.version} fullValue={block.version} monospace />
+                        <InfoRow
+                          label="이전 해시"
+                          value={shortenMiddle(block.previousHash)}
+                          fullValue={block.previousHash}
+                          monospace
+                          onCopy={() => copyValue("previousHash", block.previousHash)}
+                          copied={copiedField === "previousHash"}
+                        />
+                        <InfoRow label="Nonce" value={block.nonce.toLocaleString("ko-KR")} monospace />
+                        <InfoRow label="난이도" value={block.difficulty} accent="blue" monospace />
+                      </>
+                    )}
                   </MetaSection>
                 </div>
               </div>

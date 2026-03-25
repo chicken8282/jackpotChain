@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useLearningStore } from "../../stores/useLearningStore";
 
 const STAGES = [
+  { stage: 0, title: "프롤로그", modules: ["0.1"], difficulty: 0 },
   { stage: 1, title: "신뢰", modules: ["1.1", "1.2", "1.3"], difficulty: 1 },
   { stage: 2, title: "소유권", modules: ["2.1", "2.2"], difficulty: 2 },
   { stage: 3, title: "흐름", modules: ["3.1", "3.2", "3.3"], difficulty: 3 },

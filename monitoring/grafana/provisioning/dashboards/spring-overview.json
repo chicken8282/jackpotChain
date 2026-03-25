@@ -1,0 +1,301 @@
+{
+  "id": null,
+  "uid": "jc-spring-overview",
+  "title": "JackpotChain — Spring Overview",
+  "tags": ["jackpotchain", "spring"],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "JVM",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "JVM Heap Used",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_memory_used_bytes{application=\"jackpotchain-backend\", area=\"heap\"}",
+          "legendFormat": "heap used"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_memory_max_bytes{application=\"jackpotchain-backend\", area=\"heap\"}",
+          "legendFormat": "heap max"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "JVM Threads",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_threads_live_threads{application=\"jackpotchain-backend\"}",
+          "legendFormat": "live"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_threads_daemon_threads{application=\"jackpotchain-backend\"}",
+          "legendFormat": "daemon"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "GC Pause Duration",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(jvm_gc_pause_seconds_sum{application=\"jackpotchain-backend\"}[2m])",
+          "legendFormat": "{{action}} {{cause}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "HTTP",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"jackpotchain-backend\"}[2m])) by (uri, method, status)",
+          "legendFormat": "{{method}} {{uri}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "HTTP p95 Latency",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"jackpotchain-backend\"}[2m])) by (le, uri))",
+          "legendFormat": "p95 {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "HTTP 5xx Error Rate",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"jackpotchain-backend\", status=~\"5..\"}[2m]))",
+          "legendFormat": "5xx rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "HikariCP",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "HikariCP Connections",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{application=\"jackpotchain-backend\"}",
+          "legendFormat": "active"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_pending{application=\"jackpotchain-backend\"}",
+          "legendFormat": "pending"
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections_idle{application=\"jackpotchain-backend\"}",
+          "legendFormat": "idle"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "HikariCP Acquire Duration p95",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, rate(hikaricp_connections_acquire_seconds_bucket{application=\"jackpotchain-backend\"}[2m]))",
+          "legendFormat": "p95 acquire"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "JackpotChain RPC",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "RPC Duration p95 by Method",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(jackpotchain_rpc_duration_seconds_bucket[2m])) by (le, method))",
+          "legendFormat": "p95 {{method}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p95" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 1 },
+                    { "color": "red", "value": 3 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "RPC Call Rate & Error Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(jackpotchain_rpc_duration_seconds_count{outcome=\"success\"}[2m])) by (method)",
+          "legendFormat": "ok {{method}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(jackpotchain_rpc_duration_seconds_count{outcome!=\"success\"}[2m])) by (method, outcome)",
+          "legendFormat": "err {{method}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Business Metrics",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Lotto Commit / Claim Request Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(http_server_requests_seconds_count{application=\"jackpotchain-backend\", uri=\"/api/v1/lotto/commit\", method=\"POST\", status=\"200\"}[5m])",
+          "legendFormat": "commit/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(http_server_requests_seconds_count{application=\"jackpotchain-backend\", uri=\"/api/v1/lotto/claim\", method=\"POST\", status=\"200\"}[5m])",
+          "legendFormat": "claim/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Exchange Request Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(http_server_requests_seconds_count{application=\"jackpotchain-backend\", uri=\"/api/v1/exchange/jack-to-pot\", method=\"POST\", status=\"200\"}[5m])",
+          "legendFormat": "exchange/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      }
+    }
+  ]
+}
