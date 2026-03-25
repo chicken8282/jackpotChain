@@ -357,6 +357,8 @@ class Node:
                 while len(buffer) >= 24:
                     header, payload = parse_message(buffer)
                     if header is None:
+                        if len(buffer) >= 24:
+                            _log('DEBUG', f'불완전/잘못된 메시지: 버퍼={len(buffer)} bytes from {address}')
                         break
 
                     msg_len = 24 + header.length
@@ -579,6 +581,7 @@ class Node:
 
     async def _handle_block(self, address: PeerAddress, payload: bytes):
         """BLOCK 수신"""
+        _log('SYNC', f'BLOCK 수신: {len(payload)} bytes from {address}')
         block, _ = Block.deserialize(payload)
         peer = self.peer_manager.get_peer(address)
         block_hash = block.get_hash()
