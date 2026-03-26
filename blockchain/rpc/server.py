@@ -502,6 +502,7 @@ class RPCServer:
                     'amount': utxo.output.jack_value / 100_000_000,
                     'assets': utxo.output.assets,
                     'confirmations': max(0, current_height - utxo.block_height + 1),
+                    'is_coinbase': utxo.is_coinbase,
                 }
                 for utxo in utxos
             ]
@@ -521,6 +522,7 @@ class RPCServer:
                 'amount': utxo.output.jack_value / 100_000_000,
                 'assets': utxo.output.assets,
                 'confirmations': max(0, current_height - utxo.block_height + 1),
+                'is_coinbase': utxo.is_coinbase,
             }
             for utxo in utxos
         ]

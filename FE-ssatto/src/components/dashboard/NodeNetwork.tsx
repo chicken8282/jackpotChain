@@ -45,10 +45,8 @@ export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }
 
     if (count === 0) return result;
 
-    // center → 최대 3개 peripheral (0, 1/3, 2/3 위치)
-    const centerTargets = count <= 2
-      ? Array.from({ length: count }, (_, i) => i)
-      : [0, Math.floor(count / 3), Math.floor((2 * count) / 3)];
+    // center → 모든 peripheral 노드와 연결
+    const centerTargets = Array.from({ length: count }, (_, i) => i);
     for (const i of centerTargets) {
       result.push(["center", `n${i + 1}`]);
     }

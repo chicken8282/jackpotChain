@@ -167,7 +167,7 @@ export default function WalletInfo({
 
   return (
     <div className="relative w-full">
-      <div className="absolute right-0 -top-12 z-20 flex items-center justify-end">
+      <div className="mb-3 flex items-center justify-end">
         <div className="relative">
           <button
             type="button"
