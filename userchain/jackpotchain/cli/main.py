@@ -81,8 +81,8 @@ def main():
         else:
             run_tui(args)
     else:
-        # 인자 없이 실행하면 Simple TUI 시작
-        run_simple_default()
+        # 인자 없이 실행하면 TUI 시작
+        run_tui_default()
 
 
 def run_node(args):
