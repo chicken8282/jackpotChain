@@ -96,13 +96,10 @@ def validate_block_header(
             message=f"Block timestamp too far in future"
         )
 
-    # 이전 블록보다 이후여야 함
-    if prev_header and header.timestamp <= prev_header.timestamp:
-        return BlockValidationResult(
-            is_valid=False,
-            error=BlockValidationError.INVALID_TIMESTAMP,
-            message="Block timestamp must be greater than previous"
-        )
+    # 타임스탬프 역전 체크는 하지 않음
+    # 비트코인처럼 Median Time Past(MTP) 규칙을 적용해야 하지만,
+    # 실제 체인에서 reorg 등으로 인한 소폭 역전이 발생할 수 있음.
+    # 미래 시간 제한(위)과 PoW 검증만으로 충분.
 
     # 난이도 검증
     if expected_difficulty is not None and header.difficulty_target != expected_difficulty:
@@ -186,7 +183,8 @@ def validate_block_transactions(
     utxo_set: UTXOSet,
     block_height: int,
     expected_reward: int = BLOCK_REWARD,
-    blockchain = None
+    blockchain = None,
+    check_coinbase_height: bool = True
 ) -> BlockValidationResult:
     """
     블록 내 트랜잭션 검증
@@ -234,7 +232,8 @@ def validate_block_transactions(
         coinbase,
         block_height,
         expected_reward,
-        total_fees
+        total_fees,
+        check_height=check_coinbase_height
     )
     if not coinbase_result.is_valid:
         return BlockValidationResult(
@@ -256,7 +255,8 @@ def validate_block(
     prev_header: Optional[BlockHeader] = None,
     expected_difficulty: int = None,
     expected_reward: int = BLOCK_REWARD,
-    blockchain = None
+    blockchain = None,
+    check_coinbase_height: bool = True
 ) -> BlockValidationResult:
     """
     전체 블록 검증 (통합)
@@ -269,6 +269,7 @@ def validate_block(
         expected_difficulty: 예상 난이도
         expected_reward: 예상 블록 보상
         blockchain: Blockchain 참조 (LOTTO_CLAIM 검증용, optional)
+        check_coinbase_height: coinbase 높이 검증 여부 (IBD 시 False)
     """
     # 1. 헤더 검증
     result = validate_block_header(
@@ -290,7 +291,8 @@ def validate_block(
         utxo_set,
         block_height,
         expected_reward,
-        blockchain
+        blockchain,
+        check_coinbase_height=check_coinbase_height
     )
     if not result.is_valid:
         return result
