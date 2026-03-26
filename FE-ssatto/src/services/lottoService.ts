@@ -105,3 +105,15 @@ export function commitLotto(request: LottoCommitRequest, token: string) {
 export function claimLottoReward(request: LottoClaimRequest, token: string) {
   return postJson<LottoClaimResponse, LottoClaimRequest>("/v1/lotto/claim", request, token);
 }
+
+export interface LottoRankingItem {
+  rank: number;
+  walletAddress: string;
+  rewardJack: number;
+  matchCount: number;
+  claimedAt: string;
+}
+
+export function getLottoRanking() {
+  return getJson<LottoRankingItem[]>("/v1/lotto/ranking");
+}

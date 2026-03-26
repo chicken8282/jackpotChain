@@ -19,7 +19,10 @@ interface HexPickerProps {
   onClaim?: (entryId: string) => Promise<void> | void;
   onLoadResult?: (commitHash: string) => Promise<LottoHistoryDetail>;
   hasWallet?: boolean;
+  isWalletLocked?: boolean;
   onRequireWallet?: () => void;
+  onWalletLocked?: () => void;
+  onInsufficientJack?: () => void;
 }
 
 const slotThemes = [
@@ -256,7 +259,10 @@ export default function HexPicker({
   onClaim,
   onLoadResult,
   hasWallet = true,
+  isWalletLocked = false,
   onRequireWallet,
+  onWalletLocked,
+  onInsufficientJack,
 }: HexPickerProps) {
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
@@ -450,10 +456,12 @@ export default function HexPicker({
 
     const state = getLottoParticipationState({
       hasWallet,
+      isWalletLocked,
       disabled,
       randomizing,
       isSubmitting,
       potBalance,
+      jackBalance,
     });
 
     if (state === "blocked") {
@@ -465,8 +473,18 @@ export default function HexPicker({
       return;
     }
 
-    if (state === "insufficient-pot") {
-      showNotice("POT이 부족합니다.");
+    if (state === "wallet-locked") {
+      onWalletLocked?.();
+      return;
+    }
+
+    if (state === "insufficient-pot-exchange") {
+      showNotice("jack을 pot으로 교환하세요.");
+      return;
+    }
+
+    if (state === "insufficient-pot-mine") {
+      onInsufficientJack?.();
       return;
     }
 

@@ -7,12 +7,17 @@ interface UseWalletActivitiesResult {
   activities: Activity[];
   isLoading: boolean;
   error: string | null;
+  refetch: () => Promise<void>;
 }
 
-export function useWalletActivities(address?: string | null, token?: string): UseWalletActivitiesResult {
-  const { data, isLoading, error } = usePollingQuery<Activity[]>({
+export function useWalletActivities(
+  address?: string | null,
+  token?: string,
+  intervalMs = 10_000,
+): UseWalletActivitiesResult {
+  const { data, isLoading, error, refetch } = usePollingQuery<Activity[]>({
     enabled: Boolean(address && token),
-    intervalMs: 10_000,
+    intervalMs,
     initialData: [],
     errorFallback: "wallet-activities-load-failed",
     queryFn: async () => {
@@ -29,5 +34,6 @@ export function useWalletActivities(address?: string | null, token?: string): Us
     activities: data,
     isLoading,
     error,
+    refetch,
   };
 }

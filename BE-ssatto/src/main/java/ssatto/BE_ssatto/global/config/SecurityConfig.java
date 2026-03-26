@@ -66,6 +66,7 @@ public class SecurityConfig {
                     "/v1/auth/logout",
                     "/v1/blockchain/**",
                     "/v1/learning/**",   // [학습 프론트엔드 v2] 추가
+                    "/v1/lotto/ranking",
                     "/v1/wallet",
                     "/v1/wallet/"
                 ).permitAll()

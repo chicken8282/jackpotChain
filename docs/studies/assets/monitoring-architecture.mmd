@@ -1,0 +1,53 @@
+flowchart TD
+    subgraph SpringBoot["Spring Boot 백엔드 (jackpotchain-backend)"]
+        direction TB
+        JVM["JVM / HTTP / HikariCP\nMicrometer 자동 계측"]
+        RPC_TIMER["JackpotChainHttpRpcClient\njackpotchain.rpc.duration\n커스텀 Timer"]
+        LOGBACK["logback-spring.xml\nprod -> JSON 로그\nlocal/dev/test -> 텍스트 로그"]
+        MDC["RequestLoggingFilter\nMDC: traceId, requestId, method, uri"]
+        BIZ["BusinessEventLogger\neventType 구조화 로그"]
+    end
+
+    subgraph MetricPipeline["메트릭 파이프라인"]
+        ACTUATOR["/actuator/prometheus\n메트릭 노출 엔드포인트"]
+        PROM["Prometheus\njc-prometheus:9090\nTSDB 15일 보관"]
+    end
+
+    subgraph LogPipeline["로그 파이프라인"]
+        DOCKER_LOG["Docker 컨테이너 stdout\n/var/lib/docker/containers/..."]
+        PROMTAIL["Promtail\njc-promtail:9080\ndocker_sd_configs"]
+        LOKI["Loki\njc-loki:3100\ntsdb v13, 24시간 인덱스"]
+    end
+
+    subgraph ContainerPipeline["컨테이너 리소스 파이프라인"]
+        CADVISOR["cAdvisor\njc-cadvisor:8088\nCPU / 메모리 / 네트워크"]
+    end
+
+    subgraph Grafana["Grafana (jc-grafana:3002)"]
+        DS["datasources.yml\nPrometheus + Loki 자동 연결"]
+        DASH1["spring-overview.json\nJVM / HTTP / HikariCP / RPC / 비즈니스"]
+        DASH2["loki-logs.json\n에러 / 비즈니스 이벤트 / 전체 로그"]
+        ALERT["rules.yml\n알림 규칙 3개"]
+    end
+
+    NODE["JackpotChain 노드\nBitcoin 유사 RPC"]
+
+    JVM -->|"Micrometer 수집"| ACTUATOR
+    RPC_TIMER -->|"Micrometer 수집"| ACTUATOR
+    ACTUATOR -->|"15초마다 GET (Pull)"| PROM
+
+    LOGBACK -->|"stdout JSON/텍스트"| DOCKER_LOG
+    MDC -->|"MDC 필드 주입"| LOGBACK
+    BIZ -->|"eventType 필드 주입"| LOGBACK
+    DOCKER_LOG -->|"Docker 소켓 감시"| PROMTAIL
+    PROMTAIL -->|"HTTP POST /loki/api/v1/push"| LOKI
+
+    CADVISOR -->|"/metrics 스크랩"| PROM
+
+    PROM -->|"PromQL 쿼리"| DS
+    LOKI -->|"LogQL 쿼리"| DS
+    DS --> DASH1
+    DS --> DASH2
+    DS --> ALERT
+
+    RPC_TIMER <-->|"JSON-RPC HTTP"| NODE
