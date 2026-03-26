@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)
 
 ---
 
+## [1.0.8] - 2026-03-26
+
+### Fixed
+- 리오그 미발동 버그 수정: `is_in_main_chain` → `_block_index` 체크 변경 (사이드체인 블록 허용)
+- 경쟁 체인 감지 시 자동 GETHEADERS 트리거 추가 (경쟁 블록 전체 동기화)
+
+---
+
 ## [1.0.7] - 2026-03-26
 
 ### Fixed
