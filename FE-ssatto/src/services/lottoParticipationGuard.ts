@@ -1,15 +1,19 @@
 export type LottoParticipationState =
   | "blocked"
   | "require-wallet"
-  | "insufficient-pot"
+  | "wallet-locked"
+  | "insufficient-pot-exchange"
+  | "insufficient-pot-mine"
   | "ready";
 
 interface LottoParticipationGuardInput {
   hasWallet: boolean;
+  isWalletLocked: boolean;
   disabled: boolean;
   randomizing: boolean;
   isSubmitting: boolean;
   potBalance: number;
+  jackBalance: number;
 }
 
 export function getLottoParticipationState(input: LottoParticipationGuardInput): LottoParticipationState {
@@ -17,12 +21,16 @@ export function getLottoParticipationState(input: LottoParticipationGuardInput):
     return "require-wallet";
   }
 
+  if (input.isWalletLocked) {
+    return "wallet-locked";
+  }
+
   if (input.disabled || input.randomizing || input.isSubmitting) {
     return "blocked";
   }
 
   if (input.potBalance < 1) {
-    return "insufficient-pot";
+    return input.jackBalance >= 100 ? "insufficient-pot-exchange" : "insufficient-pot-mine";
   }
 
   return "ready";

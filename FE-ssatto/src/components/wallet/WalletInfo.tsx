@@ -26,6 +26,8 @@ interface WalletInfoProps {
     color?: WalletThemeId,
   ) => void;
   onExchangeJackToPot?: (walletAddress: string) => Promise<void> | void;
+  isLocked?: boolean;
+  onLockRequest?: () => void;
 }
 
 export default function WalletInfo({
@@ -34,6 +36,8 @@ export default function WalletInfo({
   onChangeIndex,
   onAddWallet,
   onExchangeJackToPot,
+  isLocked = false,
+  onLockRequest,
 }: WalletInfoProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"choose" | "create" | "restore">("choose");
@@ -198,6 +202,21 @@ export default function WalletInfo({
       </div>
 
       <div className="relative flex items-center justify-center" style={{ height: 340, perspective: "1400px" }}>
+        {isLocked && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[34px] bg-black/50 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={onLockRequest}
+              className="flex flex-col items-center gap-3 transition-transform hover:scale-105"
+              aria-label="지갑 잠금 해제"
+            >
+              <svg className="h-16 w-16 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              <span className="text-sm font-bold text-white/60">탭하여 잠금 해제</span>
+            </button>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -369,7 +388,7 @@ export default function WalletInfo({
                 exit={{ y: 80, opacity: 0, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 300, damping: 28 }}
                 onClick={(event) => event.stopPropagation()}
-                className={`w-full max-w-md rounded-[32px] border ${activeTheme.borderClassName} bg-[rgba(14,10,26,0.97)] px-6 py-8 shadow-[0_32px_80px_rgba(0,0,0,0.6)] backdrop-blur-xl`}
+                className={`relative w-full max-w-md rounded-[32px] border ${activeTheme.borderClassName} bg-[rgba(14,10,26,0.97)] px-6 py-8 shadow-[0_32px_80px_rgba(0,0,0,0.6)] backdrop-blur-xl`}
               >
                 <button
                   type="button"

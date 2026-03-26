@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import PageLayout from "../components/layout/PageLayout";
 import type { WalletThemeId } from "../components/wallet/walletThemes";
 import {
@@ -62,6 +63,7 @@ function WalletSectionFallback({ label }: { label: string }) {
 }
 
 export default function WalletPage() {
+  const location = useLocation();
   const wallets = useWalletStore((state) => state.wallets);
   const activeAddress = useWalletStore((state) => state.activeAddress);
   const upsertWallet = useWalletStore((state) => state.upsertWallet);
@@ -88,9 +90,6 @@ export default function WalletPage() {
   );
 
   // Initialize to the index of activeAddress to avoid a two-render cycle
-  // (useState(0) → render → setActiveWalletIndex(correct) → re-render) which
-  // causes the session-restore effect to fire twice with different walletIds,
-  // producing the 401→400 double-refresh cascade.
   const [activeWalletIndex, setActiveWalletIndex] = useState(() => {
     if (!activeAddress) return 0;
     const idx = wallets.findIndex((w) => w.address === activeAddress);
@@ -103,6 +102,7 @@ export default function WalletPage() {
   const [legacyWallets, setLegacyWallets] = useState<LegacyWalletRecord[]>([]);
   const [writeStatus, setWriteStatus] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
+  const [potRewardPending, setPotRewardPending] = useState(false);
   const writeStatusTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   useEffect(() => {
@@ -122,21 +122,26 @@ export default function WalletPage() {
     setLegacyWallets(extractLegacyWallets(window.localStorage));
   }, []);
 
-  const { walletSummaries, refetch: refetchWalletSummaries } = useWalletSummaries(wallets);
+  // Disable individual auto-polling; combined interval below syncs both together
+  const { walletSummaries, refetch: refetchWalletSummaries } = useWalletSummaries(wallets, 999_999_999);
 
   useEffect(() => {
-    if (!activeAddress) {
-      setActiveWalletIndex(0);
-      return;
-    }
+    if (typeof window === "undefined") return;
+    if (wallets.length === 0) return;
+    // Trigger an immediate refetch when wallets are added (mirrors useWalletSummaries internal behavior)
+    void refetchWalletSummaries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallets.map((w) => w.address).join(",")]);
 
-    const nextIndex = wallets.findIndex(
-      (wallet) => wallet.address === activeAddress
-    );
-    if (nextIndex >= 0) {
-      setActiveWalletIndex(nextIndex);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const locationState = location.state as { showUnlockModal?: boolean } | null;
+    if (locationState?.showUnlockModal) {
+      setUnlockModalSessionExpired(false);
+      setShowUnlockModal(true);
     }
-  }, [activeAddress, wallets]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const activityEvents: Array<keyof WindowEventMap> = [
@@ -173,10 +178,57 @@ export default function WalletPage() {
   const activeAccessSession = activeWallet
     ? accessSessions[activeWallet.walletId]
     : undefined;
-  const { activities: currentActivities } = useWalletActivities(
+
+  // Disable individual auto-polling for activities too; combined interval handles both
+  const { activities: currentActivities, refetch: refetchActivities } = useWalletActivities(
     activeWallet?.address,
-    activeAccessSession?.accessToken
+    activeAccessSession?.accessToken,
+    999_999_999
   );
+
+  // Refs for stable access in combined interval callback
+  const refetchWalletSummariesRef = useRef(refetchWalletSummaries);
+  refetchWalletSummariesRef.current = refetchWalletSummaries;
+  const refetchActivitiesRef = useRef(refetchActivities);
+  refetchActivitiesRef.current = refetchActivities;
+
+  // Synchronized polling: wallet summaries + activities update on the same interval tick
+  useEffect(() => {
+    if (wallets.length === 0) return;
+    const doRefetch = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void refetchWalletSummariesRef.current();
+      void refetchActivitiesRef.current();
+    };
+    const id = window.setInterval(doRefetch, 10_000);
+    return () => window.clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallets.length === 0]);
+
+  // When active address changes, immediately refetch activities for the new wallet
+  const prevActiveAddressRef = useRef(activeWallet?.address);
+  useEffect(() => {
+    if (activeWallet?.address !== prevActiveAddressRef.current) {
+      prevActiveAddressRef.current = activeWallet?.address;
+      if (activeWallet?.address) {
+        void refetchActivitiesRef.current();
+      }
+    }
+  }, [activeWallet?.address]);
+
+  useEffect(() => {
+    if (!activeAddress) {
+      setActiveWalletIndex(0);
+      return;
+    }
+
+    const nextIndex = wallets.findIndex(
+      (wallet) => wallet.address === activeAddress
+    );
+    if (nextIndex >= 0) {
+      setActiveWalletIndex(nextIndex);
+    }
+  }, [activeAddress, wallets]);
 
   // refs so the effect can read the latest values without being a reactive dep
   const activeWalletRef = useRef(activeWallet);
@@ -260,6 +312,21 @@ export default function WalletPage() {
     }
   }, [walletSummaries, clearPotOptimisticOffset]);
 
+  // 1 POT 지급 대기 중일 때, 잔액이 1 POT 이상이 되면 메시지 자동 닫기
+  useEffect(() => {
+    if (!potRewardPending || !activeWallet?.address) return;
+    const summary = walletSummaries.find((s) => s.address === activeWallet.address);
+    // potBalance is in satoshi units (100_000_000 = 1 POT)
+    if ((summary?.potBalance ?? 0) >= 100_000_000) {
+      setPotRewardPending(false);
+      setWriteStatus(null);
+      if (writeStatusTimerRef.current !== null) {
+        window.clearTimeout(writeStatusTimerRef.current);
+        writeStatusTimerRef.current = null;
+      }
+    }
+  }, [walletSummaries, potRewardPending, activeWallet?.address]);
+
   const allWallets = useMemo<WalletViewModel[]>(
     () =>
       wallets.map((wallet) => {
@@ -333,22 +400,21 @@ export default function WalletPage() {
         return;
       }
 
-      // refetchWalletSummaries() is intentionally not called here.
-      // upsertWallet() above triggers a re-render; useWalletSummaries then
-      // immediately refetches with the correct addresses via its queryKey effect.
-      // Calling refetch() before the re-render would use a stale closure (addresses=[]).
       if (writeStatusTimerRef.current !== null) {
         window.clearTimeout(writeStatusTimerRef.current);
       }
       if (type === "create") {
-        const msg = result.response?.onboardingRewardGranted
-          ? "1 POT 생성 중입니다. 잔액이 곧 반영됩니다."
-          : "지갑이 등록되었습니다.";
-        setWriteStatus(msg);
-        writeStatusTimerRef.current = window.setTimeout(() => {
-          setWriteStatus(null);
-          writeStatusTimerRef.current = null;
-        }, 30_000);
+        if (result.response?.onboardingRewardGranted) {
+          setWriteStatus("1 POT 생성 중입니다. 잔액이 곧 반영됩니다.");
+          setPotRewardPending(true);
+          writeStatusTimerRef.current = window.setTimeout(() => {
+            setWriteStatus(null);
+            setPotRewardPending(false);
+            writeStatusTimerRef.current = null;
+          }, 30_000);
+        } else {
+          setWriteStatus("지갑이 등록되었습니다.");
+        }
       } else {
         setWriteStatus("기존 지갑이 등록되었습니다.");
       }
@@ -463,9 +529,9 @@ export default function WalletPage() {
         "ko-KR"
       )} JACK 교환 트랜잭션을 제출했습니다.`
     );
-    // Immediately refetch wallet balances so the new balance is visible
-    // without waiting for the next 10s polling interval.
+    // Immediately refetch both wallet summaries and activities together
     void refetchWalletSummaries();
+    void refetchActivities();
   };
 
   return (
@@ -515,47 +581,6 @@ export default function WalletPage() {
         </div>
       ) : (
         <div className="mx-auto w-full max-w-5xl px-6 lg:px-2">
-          {legacyWallets.length === 0 ? (
-            <div className="mb-4 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-text-secondary">
-              {isCurrentWalletLocked ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    현재 지갑은 잠금 상태입니다. 로또 참여나 교환 서명 전에는
-                    비밀번호로 잠금 해제가 필요합니다.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUnlockModalSessionExpired(false);
-                      setShowUnlockModal(true);
-                    }}
-                    className="rounded-[14px] border border-accent-gold/40 bg-accent-gold/10 px-4 py-2 font-bold text-accent-gold transition-colors hover:bg-accent-gold/20"
-                  >
-                    잠금 해제
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    현재 지갑은 메모리에서 잠금 해제된 상태입니다. 서명 가능한
-                    상태이며 5분 동안 활동이 없으면 자동으로 잠깁니다.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (activeWallet) {
-                        lockWallet(activeWallet.walletId);
-                      }
-                    }}
-                    className="rounded-[14px] border border-white/15 bg-white/5 px-4 py-2 font-bold text-white transition-colors hover:bg-white/10"
-                  >
-                    지금 잠그기
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : null}
-
           {isAuthenticating ? (
             <div className="mb-4 rounded-[18px] border border-info/20 bg-info/10 px-4 py-3 text-sm text-info">
               지갑 소유권을 확인하는 중입니다.
@@ -573,12 +598,12 @@ export default function WalletPage() {
           ) : null}
           {writeStatus ? (
             <div className="mb-4 rounded-[18px] border border-info/20 bg-info/10 px-4 py-3 text-sm text-info">
-              {writeStatus}
-            </div>
-          ) : null}
-          {activeAccessSession?.accessToken ? (
-            <div className="mb-4 rounded-[18px] border border-accent-gold/20 bg-accent-gold/10 px-4 py-3 text-sm text-accent-gold">
-              현재 활성 지갑이 인증된 상태입니다.
+              <p>{writeStatus}</p>
+              {potRewardPending ? (
+                <p className="mt-1 text-xs text-info/70">
+                  1 POT 지급은 블록체인에 트랜잭션이 기록되어야 처리됩니다. 블록이 채굴될 때까지 잠시 기다려 주세요.
+                </p>
+              ) : null}
             </div>
           ) : null}
           <Suspense
@@ -592,6 +617,11 @@ export default function WalletPage() {
               onChangeIndex={setActiveWalletIndex}
               onAddWallet={handleAddWallet}
               onExchangeJackToPot={handleExchangeJackToPot}
+              isLocked={isCurrentWalletLocked}
+              onLockRequest={() => {
+                setUnlockModalSessionExpired(false);
+                setShowUnlockModal(true);
+              }}
             />
           </Suspense>
           <div className="mt-6">
