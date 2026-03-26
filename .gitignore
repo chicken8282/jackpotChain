@@ -1,13 +1,16 @@
 .agents
 AGENTS.md
 **/node_modules
-**/package-lock.json
 **/dist/
 **/.vite/
 **/claude
-.env
 .env.local
 tmp/
+
+# 성능 테스트 생성 파일 (개인키 포함)
+perf/fixtures/test-wallets.json
+perf/fixtures/commit-payloads.json
+perf/results/
 .claire/
 .claude/
 .env.local.example

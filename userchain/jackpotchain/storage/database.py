@@ -70,8 +70,17 @@ class BlockStore:
             f.flush()
             os.fsync(f.fileno())  # 디스크에 확실히 기록
 
-        # 원자적 교체 (크래시 시에도 안전)
-        os.replace(temp_file, index_file)
+        # 원자적 교체 (Windows 파일 잠금 대비 재시도)
+        for attempt in range(5):
+            try:
+                os.replace(temp_file, index_file)
+                break
+            except PermissionError:
+                if attempt < 4:
+                    import time
+                    time.sleep(0.01)
+                else:
+                    raise
 
     def _block_path(self, block_hash: bytes) -> Path:
         """블록 파일 경로"""
