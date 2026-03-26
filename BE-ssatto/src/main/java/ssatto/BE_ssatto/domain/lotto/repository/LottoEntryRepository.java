@@ -61,4 +61,15 @@ public interface LottoEntryRepository extends JpaRepository<LottoEntry, Long> {
         Long claimableFromHeight,
         Pageable pageable
     );
+
+    /**
+     * WINNING 상태이고 claim 완료된 엔트리를 보상액 내림차순으로 상위 3개 조회한다.
+     * match=1 (POT 환불만, JACK 없음) 케이스는 rewardJack=null 이므로 제외.
+     *
+     * @param status 엔트리 상태 (WINNING)
+     * @return 보상액 내림차순 상위 3개
+     */
+    List<LottoEntry> findTop3ByStatusAndClaimedAtIsNotNullAndRewardJackIsNotNullOrderByRewardJackDesc(
+        LottoEntryStatus status
+    );
 }

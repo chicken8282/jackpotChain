@@ -19,7 +19,10 @@ interface HexPickerProps {
   onClaim?: (entryId: string) => Promise<void> | void;
   onLoadResult?: (commitHash: string) => Promise<LottoHistoryDetail>;
   hasWallet?: boolean;
+  isWalletLocked?: boolean;
   onRequireWallet?: () => void;
+  onWalletLocked?: () => void;
+  onInsufficientJack?: () => void;
 }
 
 const slotThemes = [
@@ -256,7 +259,10 @@ export default function HexPicker({
   onClaim,
   onLoadResult,
   hasWallet = true,
+  isWalletLocked = false,
   onRequireWallet,
+  onWalletLocked,
+  onInsufficientJack,
 }: HexPickerProps) {
   const [tab, setTab] = useState<"draw" | "history">("draw");
   const [selected, setSelected] = useState(["a", "f", "b", "c", "d", "e"]);
@@ -268,6 +274,8 @@ export default function HexPicker({
   const [claimedEntryIds, setClaimedEntryIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // ref로 동일 tick 이중 제출 방지 (React state 배치 업데이트 race condition 대응)
+  const isSubmittingRef = useRef(false);
   const [lockedSlotCount, setLockedSlotCount] = useState(selected.length);
   const [historyLoadingCommitHash, setHistoryLoadingCommitHash] = useState<string | null>(null);
   const randomizeSpinIntervalRef = useRef<number | null>(null);
@@ -441,12 +449,19 @@ export default function HexPicker({
   };
 
   const handleParticipate = async () => {
+    // ref guard: 동일 tick 이중 제출 방지
+    if (isSubmittingRef.current) {
+      return;
+    }
+
     const state = getLottoParticipationState({
       hasWallet,
+      isWalletLocked,
       disabled,
       randomizing,
       isSubmitting,
       potBalance,
+      jackBalance,
     });
 
     if (state === "blocked") {
@@ -458,8 +473,18 @@ export default function HexPicker({
       return;
     }
 
-    if (state === "insufficient-pot") {
-      showNotice("로또 참여에는 최소 1 POT가 필요합니다.");
+    if (state === "wallet-locked") {
+      onWalletLocked?.();
+      return;
+    }
+
+    if (state === "insufficient-pot-exchange") {
+      showNotice("jack을 pot으로 교환하세요.");
+      return;
+    }
+
+    if (state === "insufficient-pot-mine") {
+      onInsufficientJack?.();
       return;
     }
 
@@ -467,6 +492,7 @@ export default function HexPicker({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       await onCommit(selected.map((value) => Number.parseInt(value, 16)));
@@ -475,6 +501,7 @@ export default function HexPicker({
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "로또 참여 처리에 실패했습니다.");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

@@ -1,9 +1,43 @@
 # 모니터링 학습 — Prometheus · Grafana · Loki · Micrometer
 
-> 작성일: 2026-03-25
+> 작성일: 2026-03-25 / 업데이트: 2026-03-26
 > 기준: docker-compose.monitoring.yml, monitoring/ 설정 파일, BE-ssatto 실제 코드
 
 ---
+
+## 0. 전체 아키텍처 다이어그램
+
+![모니터링 아키텍처 다이어그램](./assets/monitoring-architecture.svg)
+
+> 참고: 현재 Markdown 미리보기 환경이 Mermaid fenced block을 그림으로 렌더링하지 않아, Mermaid 원본을 SVG 이미지로 렌더링해 문서에 포함했다. 원본 Mermaid 소스는 [monitoring-architecture.mmd](./assets/monitoring-architecture.mmd)에 있다.
+
+---
+
+## 0-1. 다이어그램 용어 정리
+
+이 절은 다이어그램에 등장하는 고유명사와 보조 기술을 먼저 짧게 설명하는 용도다. 아래 내용을 읽고 나면 뒤쪽 상세 설명을 훨씬 수월하게 따라갈 수 있다.
+
+| 용어 | 개념 | 이 프로젝트에서의 역할 | 운영상 포인트 |
+|------|------|------------------------|---------------|
+| `JVM` | Spring Boot가 실행되는 자바 런타임이다. | 백엔드 프로세스, 스레드, GC, 메모리 사용량이 여기서 발생하고 Micrometer가 이를 메트릭으로 노출한다. | GC pause, live thread, heap 사용량이 먼저 흔들리면 애플리케이션 부담 신호일 가능성이 높다. |
+| `HikariCP` | JDBC 커넥션 풀 구현체다. | DB 연결을 재사용하고 `active`, `idle`, `pending` 같은 풀 상태 메트릭을 제공한다. | `pending`이 증가하면 앱 전체가 느린 것이 아니라 DB 연결 대기가 병목일 수 있다. |
+| `Micrometer` | Spring Boot에서 사용하는 메트릭 계측 라이브러리다. | JVM, HTTP, HikariCP를 자동 계측하고 RPC Timer 같은 커스텀 메트릭도 등록한다. | Micrometer는 저장소가 아니라 계측 도구다. 저장은 Prometheus가 담당한다. |
+| `Actuator` | Spring Boot의 운영용 엔드포인트 묶음이다. | `/actuator/prometheus`를 통해 Prometheus가 읽을 수 있는 메트릭을 노출한다. | 이 엔드포인트가 막히면 앱이 살아 있어도 애플리케이션 메트릭은 수집되지 않는다. |
+| `MDC` | 요청 처리 스레드에 붙는 로그 문맥 저장소다. | `traceId`, `requestId`, `method`, `uri`를 한 요청 전체 로그에 일관되게 붙인다. | MDC는 요청 단위 상관관계 도구이지, 분산 추적 시스템 자체는 아니다. |
+| `BusinessEventLogger` | 핵심 비즈니스 이벤트를 구조화해서 남기는 프로젝트 유틸이다. | `LOTTO_COMMIT_SUBMITTED` 같은 안정적인 `eventType` 값을 로그에 기록해 Loki와 Grafana에서 검색 가능하게 만든다. | 자유로운 문자열 로그보다 이벤트명을 고정해 두는 편이 검색 안정성과 오타 방지에 유리하다. |
+| `Logback` | Spring Boot 기본 로깅 백엔드다. | 환경별로 로그 형식을 나눈다. local/dev/test는 사람이 읽기 쉬운 텍스트, prod는 기계가 읽기 쉬운 JSON을 출력한다. | 로그 포맷은 단순 출력 형식이 아니라 수집 파이프라인과 연결되는 운영 계약이다. |
+| `LogstashEncoder` | Logback 로그를 한 줄 JSON으로 만드는 인코더다. | prod 로그를 JSON으로 출력해 Promtail이 필드를 파싱할 수 있게 해준다. | JSON 구조를 무심코 바꾸면 Loki 파싱과 대시보드가 함께 깨질 수 있다. |
+| `stdout 컨테이너 로그` | Docker가 수집하는 표준 출력 로그다. | 애플리케이션 로그가 파일 수집 없이도 Promtail로 넘어가는 연결 지점이 된다. | 컨테이너에 접속하지 않아도 Docker는 stdout 로그를 파일로 보관한다. |
+| `Prometheus` | Pull 기반 메트릭 수집기이자 시계열 데이터베이스다. | Spring Boot와 cAdvisor의 메트릭을 주기적으로 스크랩해 저장하고 Grafana에 제공한다. | 수치 추세, 비율, 임계치 감지에 강하고 로그 본문 검색에는 적합하지 않다. |
+| `TSDB` | 시간에 따라 쌓이는 수치 데이터를 저장하는 구조다. | Prometheus와 Loki 내부 저장 방식의 핵심이며 보관 기간과 인덱스 주기에 영향을 준다. | 보관 기간과 인덱스 주기 설정은 디스크 사용량과 조회 성능에 직접 영향을 준다. |
+| `Promtail` | Loki로 로그를 보내는 수집 에이전트다. | Docker 컨테이너 로그를 발견하고 JSON 필드를 추출한 뒤 Loki에 push한다. | 자주 바뀌는 값은 라벨로 올리지 말고 본문 필드로 두는 편이 안전하다. |
+| `docker_sd_configs` | Promtail의 Docker 서비스 디스커버리 설정이다. | 컨테이너 목록을 자동으로 찾아 새 컨테이너 로그도 별도 설정 없이 수집하게 해준다. | Docker 소켓 접근 권한과 relabel 설정이 틀리면 수집 대상이 누락될 수 있다. |
+| `Loki` | 라벨 기반으로 로그를 저장하는 로그 저장소다. | 백엔드 로그를 모아두고 `level`, `eventType`, `traceId` 기준으로 조회하게 해준다. | Loki는 라벨만 인덱싱하므로 라벨 설계가 비용과 조회 속도를 좌우한다. |
+| `cAdvisor` | 컨테이너 자원 사용량을 노출하는 수집기다. | 애플리케이션 내부 메트릭과 별개로 컨테이너 CPU, 메모리, 네트워크 사용량을 제공한다. | 앱 문제인지 컨테이너/호스트 자원 부족인지 구분할 때 유용하다. |
+| `Grafana datasource provisioning` | Grafana 데이터소스를 파일로 자동 등록하는 방식이다. | `datasources.yml`로 Prometheus와 Loki를 자동 연결해 수동 설정 드리프트를 줄인다. | 새 인스턴스를 띄워도 같은 설정을 재현할 수 있다는 점이 핵심이다. |
+| `PromQL` | Prometheus 메트릭을 조회하는 쿼리 언어다. | 요청 수, 지연 시간, 에러율, 리소스 압박 같은 수치성 상태를 계산한다. | 시간 구간 집계와 비율 계산에 강하지만 로그 본문 읽기 용도는 아니다. |
+| `LogQL` | Loki 로그를 조회하는 쿼리 언어다. | 에러 로그 필터링, 특정 `traceId` 요청 추적, 이벤트 건수 집계에 사용된다. | 비용은 라벨 설계와 본문 스캔량에 크게 좌우된다. |
+| `JSON-RPC` | JSON 형식으로 원격 프로시저 호출을 수행하는 HTTP 기반 프로토콜이다. | `JackpotChainHttpRpcClient`가 JackpotChain 노드와 통신할 때 사용한다. | 이 경계가 느리거나 실패하면 여러 비즈니스 기능이 함께 영향을 받는다. |
 
 ## 1. 왜 모니터링이 필요한가
 
@@ -55,22 +89,49 @@ jackpotchain_rpc_duration_seconds_count{application="jackpotchain-backend",metho
 http_server_requests_seconds_count{status="200",uri="/api/v1/lotto/commit"} 7 1711300000
 ```
 
-**이 프로젝트의 scrape targets**
+**이 프로젝트의 실제 scrape targets (`monitoring/prometheus/prometheus.yml`)**
 
 ```yaml
-# prometheus.yml
-- job_name: 'spring-local'
-  targets: ['host.docker.internal:8080']   # 로컬 개발용
+global:
+  scrape_interval: 15s
 
-- job_name: 'spring-blue'
-  targets: ['spring-blue:8080']            # Prod Blue
+scrape_configs:
+  # 로컬 개발 환경 (docker-compose.local.yml)
+  - job_name: 'spring-local'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          env: local
 
-- job_name: 'spring-green'
-  targets: ['spring-green:8080']           # Prod Green
+  # Dev 환경
+  - job_name: 'spring-dev'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['jc-spring-dev:8080']
+        labels:
+          env: dev
 
-- job_name: 'spring-dev'
-  targets: ['spring-dev:8080']             # Dev
+  # Prod Blue/Green
+  - job_name: 'spring-blue'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['jc-spring-blue:8080']
+        labels:
+          env: prod
+          color: blue
+
+  - job_name: 'spring-green'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['jc-spring-green:8080']
+        labels:
+          env: prod
+          color: green
 ```
+
+> **주의**: cAdvisor는 docker-compose에 포함되어 있지만 현재 prometheus.yml에 별도 scrape job이 없다.
+> cAdvisor 메트릭(`container_memory_usage_bytes` 등)을 Prometheus로 수집하려면 `cadvisor` job을 추가해야 한다.
 
 **PromQL — 쿼리 언어 예시**
 
@@ -117,30 +178,62 @@ application.yml:
 | 카테고리 | 메트릭 이름 | 의미 |
 |---------|------------|------|
 | JVM | `jvm_memory_used_bytes` | Heap/Non-Heap 사용량 |
+| JVM | `jvm_memory_max_bytes` | Heap 최대 용량 |
 | JVM | `jvm_threads_live_threads` | 활성 스레드 수 |
-| JVM | `jvm_gc_pause_seconds` | GC 정지 시간 |
+| JVM | `jvm_threads_daemon_threads` | 데몬 스레드 수 |
+| JVM | `jvm_gc_pause_seconds` | GC 정지 시간 (action, cause 라벨) |
 | HTTP | `http_server_requests_seconds` | 요청 수, 지연 시간 (histogram) |
 | HikariCP | `hikaricp_connections_active` | 현재 사용 중인 DB 커넥션 수 |
 | HikariCP | `hikaricp_connections_pending` | 커넥션 대기 중인 요청 수 |
-| RabbitMQ | `rabbitmq_connections` | 메시지 큐 연결 수 |
+| HikariCP | `hikaricp_connections_idle` | 유휴 커넥션 수 |
+| HikariCP | `hikaricp_connections_acquire_seconds` | 커넥션 획득 대기 시간 (histogram) |
 
-**직접 추가한 커스텀 메트릭 — RPC Timer**
+**직접 추가한 커스텀 메트릭 — RPC Timer (`JackpotChainHttpRpcClient.java`)**
 
 ```java
-// JackpotChainHttpRpcClient.invoke()
+// invoke() 메서드 내부
+private static final String RPC_DURATION_METRIC = "jackpotchain.rpc.duration";
+private static final long RPC_WARN_THRESHOLD_MS = 1_000L;  // 1초 초과 시 WARN 로그
+
 Timer.Sample sample = Timer.start(meterRegistry);
 String outcome = "success";
 try {
-    // HTTP 호출 수행
-} catch (...) {
+    // HTTP JSON-RPC 호출 수행
+} catch (BusinessException e) {
     outcome = "rpc_error";
+    throw e;
+} catch (RestClientException | IllegalArgumentException e) {
+    outcome = "http_error";
+    throw new BusinessException(ErrorCode.BLOCKCHAIN_RPC_FAILED, e);
 } finally {
-    sample.stop(Timer.builder("jackpotchain.rpc.duration")
-        .tag("method", method)      // getblockcount, sendrawtransaction 등
-        .tag("outcome", outcome)    // success, rpc_error, http_error
+    sample.stop(Timer.builder(RPC_DURATION_METRIC)
+        .description("JackpotChain RPC call duration")
+        .tag("method", method)      // RPC 메서드명
+        .tag("outcome", outcome)    // success | rpc_error | http_error
         .register(meterRegistry));
 }
 ```
+
+**계측되는 RPC 메서드 목록**
+
+| 메서드 | 설명 |
+|--------|------|
+| `getblockcount` | 현재 블록 높이 |
+| `getblockchaininfo` | 블록체인 요약 정보 |
+| `getbalances` | 주소 기준 JACK/POT 잔액 |
+| `listunspent` | 주소 기준 UTXO 목록 |
+| `listpoolunspent` | 잭팟 풀 UTXO 목록 |
+| `getblockhash` | 블록 높이 → 해시 |
+| `getblock` | 블록 상세 정보 (verbosity 1 or 2) |
+| `getlottoinfo` | 로또 개요 정보 |
+| `getjackpotpool` | 잭팟 풀 상태 |
+| `getpeerinfo` | 연결된 피어 목록 |
+| `getmempoolinfo` | mempool 트랜잭션 수 |
+| `lottocheckresult` | 로또 결과 조회 |
+| `getexchangeinfo` | 교환 규칙 조회 |
+| `getrawmempool` | mempool 상세 트랜잭션 목록 |
+| `grantonboardingreward` | 신규 지갑 1 POT 지급 |
+| `sendrawtransaction` | 서명된 TX 제출 |
 
 → 이 코드 한 줄로 `/actuator/prometheus`에 아래 메트릭이 자동 생성됨:
 
@@ -153,7 +246,7 @@ jackpotchain_rpc_duration_seconds_bucket{method="getblockcount",outcome="success
 ```
 
 `_count`는 호출 횟수, `_sum`은 누적 시간, `_bucket`은 분포(히스토그램).
-이 세 가지를 합쳐서 `histogram_quantile(0.95, ...)`로 p95 지연 시간을 계산할 수 있다.
+이 세 가지를 합쳐서 `histogram_quantile(0.95, ...)` 로 p95 지연 시간을 계산할 수 있다.
 
 ---
 
@@ -168,9 +261,25 @@ Elasticsearch는 로그 본문 전체를 인덱싱 → 저장 공간이 크고 �
 Loki는 라벨만 인덱싱 → 가볍고 Grafana와 완벽하게 통합된다.
 대신 full-text 검색 성능은 Elasticsearch가 낫다.
 
-**설정 (loki/config.yml)**
+**실제 설정 (`monitoring/loki/config.yml`)**
 
 ```yaml
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory   # 단일 인스턴스 — ZooKeeper/etcd 불필요
+
 schema_config:
   configs:
     - from: 2026-01-01
@@ -178,6 +287,7 @@ schema_config:
       object_store: filesystem
       schema: v13
       index:
+        prefix: index_
         period: 24h         # 하루 단위 인덱스 파일
 ```
 
@@ -207,10 +317,15 @@ count_over_time(
 컨테이너에서 발생하는 로그를 수집해 Loki로 전송하는 에이전트.
 Prometheus가 메트릭을 "긁어오는" 것과 반대로, Promtail은 로그를 "밀어넣는다."
 
-**수집 방식 — Docker socket 감시**
+**실제 설정 (`monitoring/promtail/config.yml`)**
 
 ```yaml
-# promtail/config.yml
+server:
+  http_listen_port: 9080
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
 scrape_configs:
   - job_name: docker-containers
     docker_sd_configs:
@@ -218,38 +333,64 @@ scrape_configs:
         refresh_interval: 5s
     relabel_configs:
       - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
         target_label: container             # 라벨: container="jc-backend-local"
       - source_labels: [__meta_docker_container_label_com_docker_compose_service]
         target_label: service               # 라벨: service="backend"
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: compose_project       # 라벨: compose_project="jackpotchain"
+      - source_labels: [__meta_docker_container_id]
+        target_label: container_id
     pipeline_stages:
       - json:
           expressions:
-            level: level        # JSON 로그에서 level 필드 추출
-            eventType: eventType
+            level: level          # Loki 라벨로 등록됨
+            eventType: eventType  # Loki 라벨로 등록됨
+            traceId: traceId      # 라벨 미등록 — 본문에서만 검색
+            requestId: requestId  # 라벨 미등록 — 본문에서만 검색
+            walletAddress: walletAddress  # 라벨 미등록
+            txId: txId            # 라벨 미등록
       - labels:
-          level:                # 추출된 값을 Loki 라벨로 등록
-          eventType:
+          level:        # ← 이것만 Loki 인덱스 라벨이 됨
+          eventType:    # ← 이것만 Loki 인덱스 라벨이 됨
+      - output:
+          source: message
 ```
 
 **핵심**: `docker_sd_configs`로 모든 컨테이너 로그를 자동 발견하고,
-JSON 파이프라인으로 `level`, `eventType` 필드를 Loki 라벨로 변환한다.
-라벨이 되면 Loki에서 인덱스로 빠르게 검색할 수 있다.
+JSON 파이프라인으로 `level`, `eventType` 필드만 Loki **인덱스 라벨**로 변환한다.
+`traceId`, `requestId`, `walletAddress`, `txId`는 JSON에서 추출되지만 라벨이 아닌 **본문 필드**로 보관된다.
+
+> **라벨 vs 본문의 차이**
+> - 라벨(`level`, `eventType`): Loki가 인덱스로 관리 → `{level="ERROR"}` 검색이 빠름
+> - 본문(`traceId` 등): 압축 보관 → `| json | traceId="9a7c"` 검색 시 전체 스캔 (느림)
+> traceId 검색이 자주 필요하면 라벨로 올리는 것을 고려할 수 있지만, 카디널리티가 너무 높아 비효율적.
 
 **Spring Boot 로그가 JSON이 되는 이유**
 
 ```xml
-<!-- logback-spring.xml -->
+<!-- BE-ssatto/src/main/resources/logback-spring.xml -->
+
+<!-- local, dev, test: 사람이 읽기 쉬운 패턴 텍스트 -->
+<springProfile name="local,dev,test">
+    <root level="INFO">
+        <appender-ref ref="STDOUT_PATTERN"/>
+        <!-- 패턴: timestamp level [thread] logger traceId= requestId= method= uri= eventType= - message -->
+    </root>
+</springProfile>
+
+<!-- prod: Promtail이 파싱할 수 있는 JSON 한 줄 -->
 <springProfile name="prod">
-    <appender name="STDOUT_JSON" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <includeMdc>true</includeMdc>
-        </encoder>
-    </appender>
+    <root level="INFO">
+        <appender-ref ref="STDOUT_JSON"/>
+        <!-- LogstashEncoder: MDC 필드 전체를 JSON 키로 자동 포함 -->
+        <!-- customFields: {"service":"jackpotchain-backend","profile":"prod"} -->
+    </root>
 </springProfile>
 ```
 
 `prod` 프로파일에서는 `LogstashEncoder`가 로그를 JSON 한 줄로 출력한다.
-이 JSON을 Promtail이 수집하면 `level`, `eventType`, `traceId` 등이 Loki 라벨이 된다.
+이 JSON을 Promtail이 수집하면 `level`, `eventType`, `traceId` 등이 각 필드로 추출된다.
 
 ---
 
@@ -259,33 +400,44 @@ JSON 파이프라인으로 `level`, `eventType` 필드를 Loki 라벨로 변환�
 스레드 로컬 저장소. HTTP 요청이 시작될 때 고유 ID를 넣어두면,
 해당 요청을 처리하는 모든 코드에서 자동으로 로그에 ID가 붙는다.
 
-**RequestLoggingFilter — 요청 시작 시 MDC 세팅**
+**실제 코드 (`RequestLoggingFilter.java`)**
 
 ```java
 @Component
 public class RequestLoggingFilter extends OncePerRequestFilter {
+
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
+
     @Override
     protected void doFilterInternal(...) {
-        String requestId = resolveRequestId(request.getHeader("X-Request-Id"));
-        String traceId = newTraceId();
+        String requestId = LoggingUtils.resolveRequestId(request.getHeader(REQUEST_ID_HEADER));
+        String traceId = LoggingUtils.newTraceId();
+
         try {
-            MDC.put("requestId", requestId);
-            MDC.put("traceId", traceId);
-            MDC.put("method", request.getMethod());
-            MDC.put("uri", request.getRequestURI());
+            MDC.put(LoggingFields.REQUEST_ID, requestId);
+            MDC.put(LoggingFields.TRACE_ID, traceId);
+            MDC.put(LoggingFields.METHOD, request.getMethod());
+            MDC.put(LoggingFields.URI, request.getRequestURI());
+            response.setHeader(REQUEST_ID_HEADER, requestId);  // 응답에도 requestId 포함
             filterChain.doFilter(request, response);
         } finally {
-            MDC.clear();   // 요청 처리 후 반드시 정리
+            // MDC.clear() 대신 각 필드를 개별 remove — 다른 필터가 세팅한 MDC를 안전하게 보존
+            MDC.remove(LoggingFields.REQUEST_ID);
+            MDC.remove(LoggingFields.TRACE_ID);
+            MDC.remove(LoggingFields.METHOD);
+            MDC.remove(LoggingFields.URI);
         }
     }
 }
 ```
 
+> `MDC.clear()` 대신 `MDC.remove()`를 쓰는 이유: 다른 필터나 라이브러리가 세팅한 MDC 필드를 실수로 지우지 않기 위해.
+
 **결과 로그 (prod 환경, JSON)**
 
 ```json
 {
-  "timestamp": "2026-03-25T14:30:01.123+09:00",
+  "timestamp": "2026-03-26T14:30:01.123+09:00",
   "level": "INFO",
   "service": "jackpotchain-backend",
   "profile": "prod",
@@ -311,15 +463,56 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 AOP로 모든 메서드를 자동 로깅하면 잡음이 너무 많아진다.
 "무엇을 수집할지"가 코드에 명시되지 않아 Loki에서 검색 기준이 흐려진다.
 
-**이 프로젝트의 핵심 이벤트**
+**실제 코드 (`BusinessEventLogger.java`)**
 
 ```java
-// AuthService.verify()
+public final class BusinessEventLogger {
+    private static final Logger log = LoggerFactory.getLogger(BusinessEventLogger.class);
+
+    public static void info(LoggingEventType eventType, String message, Map<String, ?> fields) {
+        Map<String, Object> enrichedFields = new LinkedHashMap<>();
+        enrichedFields.put(LoggingFields.EVENT_TYPE, eventType.name());  // eventType MDC 주입
+        enrichedFields.putAll(fields);
+        LoggingUtils.withFields(enrichedFields, () -> log.info(message));
+    }
+}
+```
+
+**이 프로젝트의 실제 이벤트 타입 (`LoggingEventType.java`)**
+
+```java
+public enum LoggingEventType {
+    // 정상 비즈니스 이벤트 (INFO)
+    AUTH_TOKEN_ISSUED,
+    WALLET_REGISTERED,
+    WALLET_ONBOARDING_REWARD_GRANTED,   // 신규 지갑 1 POT 지급
+    EXCHANGE_TRANSACTION_SUBMITTED,
+    LOTTO_COMMIT_SUBMITTED,
+    LOTTO_CLAIM_SUBMITTED,
+    JACKPOTCHAIN_TRANSACTION_SUBMITTED,
+
+    // 에러/경고 이벤트 (WARN/ERROR)
+    BUSINESS_EXCEPTION,                 // 비즈니스 예외 (4xx 계열)
+    VALIDATION_EXCEPTION,               // 입력값 검증 실패
+    UNHANDLED_EXCEPTION,                // 처리되지 않은 예외 (5xx)
+    JACKPOTCHAIN_RPC_FAILURE,           // RPC 호출 실패 (ERROR)
+    JACKPOTCHAIN_RPC_SLOW               // RPC 1초 초과 (WARN)
+}
+```
+
+**사용 예시**
+
+```java
+// AuthService: 토큰 발급 시
 BusinessEventLogger.info(LoggingEventType.AUTH_TOKEN_ISSUED, "token issued",
     LoggingUtils.fields("walletAddress", address));
 
-// WalletService.createWallet()
+// WalletService: 지갑 등록 시
 BusinessEventLogger.info(LoggingEventType.WALLET_REGISTERED, "wallet registered",
+    LoggingUtils.fields("walletAddress", address));
+
+// WalletService: 온보딩 보상 지급 시
+BusinessEventLogger.info(LoggingEventType.WALLET_ONBOARDING_REWARD_GRANTED, "onboarding reward granted",
     LoggingUtils.fields("walletAddress", address));
 
 // LottoService.commit()
@@ -335,21 +528,10 @@ BusinessEventLogger.info(LoggingEventType.EXCHANGE_TRANSACTION_SUBMITTED, "excha
     LoggingUtils.fields("txId", txId, "walletAddress", fromAddress));
 ```
 
-**`eventType` 열거형으로 오타 방지**
+> `RPC_SLOW`, `RPC_FAILURE`는 `BusinessEventLogger`가 아니라 `JackpotChainHttpRpcClient` 내부의
+> `logSlowRpcIfNeeded()`, `logRpcFailure()`에서 직접 `LoggingUtils.withFields()`로 기록한다.
 
-```java
-public enum LoggingEventType {
-    AUTH_TOKEN_ISSUED,
-    WALLET_REGISTERED,
-    EXCHANGE_TRANSACTION_SUBMITTED,
-    LOTTO_COMMIT_SUBMITTED,
-    LOTTO_CLAIM_SUBMITTED,
-    JACKPOTCHAIN_TRANSACTION_SUBMITTED,
-    JACKPOTCHAIN_RPC_FAILURE,
-    JACKPOTCHAIN_RPC_SLOW,
-    UNHANDLED_EXCEPTION
-}
-```
+**`eventType` 열거형으로 오타 방지**
 
 Loki에서 `eventType="LOTTO_COMMIT_SUBMITTED"` 검색 시 오타가 있으면 아무것도 안 나온다.
 열거형이면 컴파일 타임에 잡힌다.
@@ -362,6 +544,30 @@ Loki에서 `eventType="LOTTO_COMMIT_SUBMITTED"` 검색 시 오타가 있으면 �
 Google이 만든 컨테이너 메트릭 수집기. Docker 소켓에 접근해
 각 컨테이너의 CPU 사용률, 메모리, 네트워크 I/O를 수집한다.
 
+**실제 설정 (`docker-compose.monitoring.yml`)**
+
+```yaml
+cadvisor:
+  image: gcr.io/cadvisor/cadvisor:latest
+  container_name: jc-cadvisor
+  ports:
+    - "8088:8080"
+  volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:ro
+    - /sys:/sys:ro
+    - /var/lib/docker:/var/lib/docker:ro
+```
+
+**수집 지표 예시**
+
+| 메트릭 | 의미 |
+|--------|------|
+| `container_cpu_usage_seconds_total` | 컨테이너 누적 CPU 사용량 |
+| `container_memory_usage_bytes` | 컨테이너 메모리 사용량 |
+| `container_network_receive_bytes_total` | 수신 네트워크 바이트 |
+| `container_network_transmit_bytes_total` | 송신 네트워크 바이트 |
+
 Prometheus는 cAdvisor의 `/metrics` 엔드포인트를 스크랩한다.
 **Spring Boot가 죽어있어도** 컨테이너 자체의 리소스는 계속 수집된다.
 
@@ -372,6 +578,24 @@ Prometheus는 cAdvisor의 `/metrics` 엔드포인트를 스크랩한다.
 **무엇인가**
 Prometheus와 Loki를 datasource로 연결해 대시보드와 알림을 만드는 UI.
 
+**실제 datasource 설정 (`datasources.yml`)**
+
+```yaml
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+
+  - name: Loki
+    uid: loki
+    type: loki
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000    # 한 번에 최대 1000줄 조회
+```
+
 **Provisioning — 코드로 대시보드 관리**
 
 ```
@@ -380,8 +604,8 @@ monitoring/grafana/provisioning/
 │   └── datasources.yml     → Grafana 기동 시 Prometheus, Loki 자동 연결
 ├── dashboards/
 │   ├── dashboard.yml        → 이 폴더의 JSON 파일을 자동 import
-│   ├── spring-overview.json → JVM / HTTP / HikariCP / RPC 대시보드
-│   └── loki-logs.json       → 에러 로그 / 비즈니스 이벤트 로그 대시보드
+│   ├── spring-overview.json → JVM / HTTP / HikariCP / RPC / Business 대시보드
+│   └── loki-logs.json       → 에러 로그 / 비즈니스 이벤트 / 전체 로그 대시보드
 └── alerting/
     └── rules.yml            → 알림 규칙 3개 코드로 관리
 ```
@@ -397,7 +621,7 @@ monitoring/grafana/provisioning/
 
 ```
 [Spring Boot JVM, HTTP, HikariCP]
-[RPC Timer — jackpotchain.rpc.duration]
+[RPC Timer — jackpotchain.rpc.duration (16개 메서드)]
         │
         │  Micrometer가 수집
         │
@@ -405,6 +629,7 @@ monitoring/grafana/provisioning/
 /actuator/prometheus  (HTTP endpoint)
         │
         │  Prometheus가 15초마다 GET 요청 ("Pull")
+        │  4개 job: spring-local, spring-dev, spring-blue, spring-green
         │
         ▼
 Prometheus TSDB (시계열 DB, 15일 보관)
@@ -424,21 +649,24 @@ Alert 발송 (설정한 채널로)
 ```
 [Spring Boot stderr → stdout]
     │  logback-spring.xml
-    │  prod: LogstashEncoder → JSON 한 줄
-    │  local: 패턴 텍스트
+    │  prod: LogstashEncoder → JSON 한 줄 (MDC 필드 전체 포함)
+    │  local/dev/test: 패턴 텍스트 (human-readable)
     │
     ▼
 Docker 컨테이너 stdout 로그
     /var/lib/docker/containers/{id}/{id}-json.log
     │
-    │  Promtail이 docker_sd_configs로 자동 발견
-    │  JSON 파이프라인 → level, eventType 라벨 추출
+    │  Promtail이 docker_sd_configs로 자동 발견 (5초마다 갱신)
+    │  JSON 파이프라인:
+    │    - 추출: level, eventType, traceId, requestId, walletAddress, txId
+    │    - 라벨 등록: level, eventType (인덱스)
+    │    - 나머지: 본문에만 보관
     │  Loki API로 push (HTTP POST /loki/api/v1/push)
     │
     ▼
 Loki 저장소
-    │  라벨 인덱스: container, service, level, eventType
-    │  본문: 압축 보관
+    │  라벨 인덱스: container, service, compose_project, container_id, level, eventType
+    │  본문: 압축 보관 (maxLines: 1000)
     │
     │  Grafana가 LogQL로 쿼리
     │
@@ -450,75 +678,91 @@ Grafana 로그 패널 / Explore
 
 ## 5. 이 프로젝트에서 얻을 수 있는 결과
 
-### 5-1. Spring Overview 대시보드 (`spring-overview.json`)
+### 5-1. Spring Overview 대시보드 (`spring-overview.json`, uid: `jc-spring-overview`)
 
-Grafana 기동 시 자동으로 로드되는 대시보드다.
+Grafana 기동 시 자동으로 로드되는 대시보드. 30초마다 자동 새로고침.
 
 **JVM 섹션**
 ```
-│ Heap Used    │ JVM Threads   │ GC Pause Duration  │
-│ (게이지 그래프) │ (시계열)       │ (시계열)            │
+│ Heap Used (used vs max)  │ JVM Threads (live / daemon)  │ GC Pause Duration  │
+│  jvm_memory_used_bytes   │  jvm_threads_live_threads    │  jvm_gc_pause_     │
+│  jvm_memory_max_bytes    │  jvm_threads_daemon_threads  │  seconds_sum       │
 ```
 → 메모리 누수 조기 감지, GC 과다 발생 탐지
 
 **HTTP 섹션**
 ```
-│ Request Rate     │ p95 Latency  │ 5xx Error Rate  │
-│ (엔드포인트별 RPS) │ (endpoint별) │ (시계열)         │
+│ Request Rate (uri/method/status별 RPS)  │ p95 Latency (uri별)  │ 5xx Error Rate  │
+│  http_server_requests_seconds_count     │  _bucket histogram   │  status=~"5.."  │
 ```
 → 어떤 API가 느린지 즉시 확인, 에러 급증 감지
 
 **HikariCP 섹션**
 ```
-│ Connections (active/pending/idle)  │ Acquire Duration p95  │
+│ Connections (active / pending / idle)  │ Acquire Duration p95  │
+│  hikaricp_connections_*               │  _acquire_seconds_bucket │
 ```
 → DB 커넥션 부족 사전 감지
 
 **JackpotChain RPC 섹션**
 ```
-│ RPC Duration p95 by Method  │ RPC Call Rate & Error Rate  │
+│ RPC Duration p95 by Method           │ RPC Call Rate & Error Rate          │
+│  thresholds: green<1s, yellow<3s, red│  outcome="success" vs outcome!="success" │
 ```
 → 노드 응답이 느려지는 순간 즉시 감지, 어떤 RPC 메서드에서 오류가 나는지 확인
 
 **Business Metrics 섹션**
 ```
-│ Lotto Commit/Claim Rate  │ Exchange Request Rate  │
+│ Lotto Commit / Claim Rate (/s)                   │ Exchange Request Rate (/s)          │
+│  uri="/api/v1/lotto/commit", status="200"         │  uri="/api/v1/exchange/jack-to-pot" │
+│  uri="/api/v1/lotto/claim",  status="200"         │                                     │
 ```
 → 오늘 commit이 왜 0건인지, exchange가 갑자기 급증했는지 확인
 
-### 5-2. Loki 로그 대시보드 (`loki-logs.json`)
+### 5-2. Loki 로그 대시보드 (`loki-logs.json`, uid: `jc-loki-logs`)
 
-**에러 로그 패널**
+**템플릿 변수**: Container 드롭다운, Level 필터 (ERROR / WARN / INFO / All)
+
+**Error Logs 섹션**
 ```
-Error/Warn Log Rate (시계열)
+Error/Warn Log Rate (level별 시계열)
+  sum by (level) (rate({container=~"jc-backend.*"} | json | level=~"ERROR|WARN" [2m]))
 ──────────────────────────────────────────────────────
-2026-03-25 14:30:01 | ERROR | UNHANDLED_EXCEPTION
-  {"traceId": "9a7c", "uri": "/api/v1/lotto/commit",
-   "exception": "DataIntegrityViolationException", ...}
+Error Logs — Backend
+  {container=~"jc-backend.*"} | json | level=~"ERROR|WARN"
+  → wrapLogMessage, prettifyLogMessage, enableLogDetails 활성화
 ```
 → 에러 발생 즉시 원인과 트레이스 아이디 확인
 
-**비즈니스 이벤트 패널**
+**Business Events 섹션**
 ```
 Business Event Rate by eventType (시계열)
+  sum by (eventType) (rate({container=~"jc-backend.*"} | json | eventType != "" [5m]))
 ──────────────────────────────────────────────────────
-LOTTO_COMMIT_SUBMITTED ██████████ 12/min
-AUTH_TOKEN_ISSUED      ████       4/min
-WALLET_REGISTERED      █          1/min
-──────────────────────────────────────────────────────
-2026-03-25 14:30:01 | INFO | LOTTO_COMMIT_SUBMITTED
-  {"traceId": "9a7c", "walletAddress": "jack1abc...",
-   "txId": "deadbeef..."}
+Business Event Logs
+  eventType =~ "AUTH_TOKEN_ISSUED|WALLET_REGISTERED|LOTTO_COMMIT_SUBMITTED|
+                LOTTO_CLAIM_SUBMITTED|EXCHANGE_TRANSACTION_SUBMITTED|
+                JACKPOTCHAIN_TRANSACTION_SUBMITTED"
 ```
 → traceId로 요청 전체 흐름 추적 (`{container=~"jc-backend.*"} | json | traceId="9a7c"`)
 
+**All Container Logs 섹션 (collapsed)**
+```
+All Logs — $container / level=$level
+  {container=~"$container"} | json | level=~"$level"
+  → 템플릿 변수로 컨테이너·레벨 필터링
+```
+→ 특정 컨테이너 전체 로그 임시 조회 시 사용
+
 ### 5-3. 알림 규칙 (`rules.yml`)
 
-| 규칙 | 조건 | 심각도 |
-|------|------|--------|
-| RPC Latency Warning | RPC p95 > 3초 (2분 지속) | WARNING |
-| HTTP 5xx Critical | 5xx 에러율 > 1% (1분 지속) | CRITICAL |
-| Node 연결 끊김 | RPC error rate > 0.1/s (2분 지속) | CRITICAL |
+평가 주기: 1분. Group: `JackpotChain Alerts`.
+
+| uid | 규칙 | 조건 | 지속 시간 | 심각도 |
+|-----|------|------|----------|--------|
+| `jc-rpc-latency-warn` | RPC Latency Warning | `histogram_quantile(0.95, ...)` > 3s | 2분 | WARNING |
+| `jc-5xx-error-critical` | HTTP 5xx Critical | `errors / total * 100` > 1% | 1분 | CRITICAL |
+| `jc-node-connection-critical` | Node 연결 끊김 | `rate(outcome=~"rpc_error\|http_error")` > 0.1/s | 2분 | CRITICAL |
 
 → 조건 충족 시 Grafana가 설정한 채널(이메일/슬랙)로 자동 발송
 
@@ -534,7 +778,9 @@ WALLET_REGISTERED      █          1/min
 | "이 요청의 전체 흐름은?" | Loki | `{container=~"jc-backend.*"} \| json \| traceId="9a7c"` |
 | "commit이 이 시각에 몇 건?" | Prometheus | `rate(http_server_requests_seconds_count{uri="/api/v1/lotto/commit"}[5m])` |
 | "commit 오류의 스택트레이스?" | Loki | `{container=~"jc-backend.*"} \| json \| eventType="UNHANDLED_EXCEPTION"` |
-| "컨테이너 메모리가 급증?" | Prometheus (cAdvisor) | `container_memory_usage_bytes{name="jc-backend-local"}` |
+| "컨테이너 메모리가 급증?" | cAdvisor (Prometheus) | `container_memory_usage_bytes{name="jc-backend-local"}` |
+| "RPC 1초 초과 발생했나?" | Loki | `{container=~"jc-backend.*"} \| json \| eventType="JACKPOTCHAIN_RPC_SLOW"` |
+| "온보딩 보상 지급 건수?" | Loki | `{container=~"jc-backend.*"} \| json \| eventType="WALLET_ONBOARDING_REWARD_GRANTED"` |
 
 **핵심 원칙**: 메트릭으로 "언제, 얼마나" 이상이 생겼는지 탐지하고,
 로그에서 "왜, 어디서" 원인을 찾는다.
@@ -543,12 +789,15 @@ WALLET_REGISTERED      █          1/min
 
 ## 7. 포트 정리
 
-| 서비스 | 호스트 포트 | 용도 |
-|--------|-----------|------|
-| Prometheus | 9090 | `http://EC2:9090/targets` → 수집 대상 상태 확인 |
-| Grafana | 3002 | `http://EC2:3002` → 대시보드 (admin/admin) |
-| Loki | 3100 | Promtail → Loki 내부 통신 (직접 접근 불필요) |
-| cAdvisor | 8088 | 컨테이너 메트릭 원본 (`/metrics`) |
+| 서비스 | 컨테이너명 | 호스트 포트 | 용도 |
+|--------|----------|-----------|------|
+| Prometheus | jc-prometheus | 9090 | `http://EC2:9090/targets` → 수집 대상 상태 확인 |
+| Grafana | jc-grafana | 3002 | `http://EC2:3002` → 대시보드 (admin/admin) |
+| Loki | jc-loki | 3100 | Promtail → Loki 내부 통신 (직접 접근 불필요) |
+| cAdvisor | jc-cadvisor | 8088 | 컨테이너 메트릭 원본 (`/metrics`) |
+| Promtail | jc-promtail | 9080 | 에이전트 상태 확인 |
+
+모든 서비스는 외부 네트워크 `monitoring-net`에 연결된다.
 
 ---
 
@@ -566,14 +815,23 @@ Counter는 서버가 재시작되면 0으로 초기화된다.
 `rate()`는 지정 시간 범위의 초당 증가율을 계산해 재시작 초기화를 보정한다.
 `increase()`는 지정 시간 범위의 절대 증가량.
 
-**Q. MDC.clear()를 안 하면?**
-`Thread pool`에서 스레드가 재사용되므로 이전 요청의 `traceId`가 다음 요청 로그에 섞인다.
-`RequestLoggingFilter`의 `finally` 블록이 이를 보장한다.
+**Q. MDC.clear() 대신 MDC.remove()를 쓰는 이유는?**
+`clear()`는 해당 스레드의 MDC를 전부 지운다. Spring Security 같은 다른 필터가
+세팅한 MDC 필드도 날아갈 수 있다. `remove()`로 자신이 세팅한 키만 정리하는 게 안전하다.
+
+**Q. prod에서만 JSON 로그를 쓰는 이유는?**
+JSON은 기계가 파싱하기 좋지만 사람이 읽기 불편하다.
+로컬/dev에서는 패턴 텍스트가 디버깅에 훨씬 편리하고, Promtail도 prod 컨테이너만 감시한다.
 
 **Q. Loki와 Elasticsearch 중 왜 Loki인가?**
 이 프로젝트 규모에서 Elasticsearch는 과하다.
 Loki는 Grafana와 기본 통합이고, Prometheus와 같은 라벨 기반 모델이라 배우기 쉽다.
 대신 로그 전문 검색이 필요하면 Elasticsearch가 맞다.
+
+**Q. cAdvisor 메트릭이 Grafana에 안 보이는 이유는?**
+현재 `prometheus.yml`에 cAdvisor scrape job이 없다. Spring Boot 컨테이너 메트릭은
+Micrometer + Actuator로 수집 중이라 당장은 문제없지만, 컨테이너 레벨 CPU/메모리를
+Prometheus로 수집하려면 `cadvisor` job을 추가해야 한다.
 
 ---
 
@@ -582,14 +840,15 @@ Loki는 Grafana와 기본 통합이고, Prometheus와 같은 라벨 기반 모�
 | 파일 | 역할 |
 |------|------|
 | `monitoring/prometheus/prometheus.yml` | 수집 대상(scrape targets) 정의 |
-| `monitoring/loki/config.yml` | Loki 저장 방식 설정 |
+| `monitoring/loki/config.yml` | Loki 저장 방식 설정 (tsdb v13, 24h index) |
 | `monitoring/promtail/config.yml` | 컨테이너 로그 수집 & 라벨 설정 |
 | `monitoring/grafana/provisioning/datasources/datasources.yml` | Grafana datasource 자동 등록 |
-| `monitoring/grafana/provisioning/dashboards/spring-overview.json` | JVM/HTTP/RPC 대시보드 |
-| `monitoring/grafana/provisioning/dashboards/loki-logs.json` | 로그 조회 대시보드 |
-| `monitoring/grafana/provisioning/alerting/rules.yml` | 알림 규칙 |
-| `BE-ssatto/src/main/resources/logback-spring.xml` | prod → JSON 로그 포맷 |
+| `monitoring/grafana/provisioning/dashboards/spring-overview.json` | JVM/HTTP/RPC/Business 대시보드 |
+| `monitoring/grafana/provisioning/dashboards/loki-logs.json` | 로그 조회 대시보드 (3 row) |
+| `monitoring/grafana/provisioning/alerting/rules.yml` | 알림 규칙 3개 |
+| `docker-compose.monitoring.yml` | Prometheus, Grafana, Loki, Promtail, cAdvisor 실행 |
+| `BE-ssatto/src/main/resources/logback-spring.xml` | prod → JSON, local/dev/test → 패턴 텍스트 |
 | `BE-ssatto/src/main/java/.../logging/RequestLoggingFilter.java` | 요청별 traceId/requestId MDC 주입 |
 | `BE-ssatto/src/main/java/.../logging/BusinessEventLogger.java` | 핵심 이벤트 구조화 기록 |
-| `BE-ssatto/src/main/java/.../rpc/JackpotChainHttpRpcClient.java` | RPC Timer 계측 (Micrometer) |
-| `docker-compose.monitoring.yml` | Prometheus, Grafana, Loki, Promtail, cAdvisor 실행 |
+| `BE-ssatto/src/main/java/.../logging/LoggingEventType.java` | 이벤트 타입 열거형 (11개) |
+| `BE-ssatto/src/main/java/.../rpc/JackpotChainHttpRpcClient.java` | RPC Timer 계측 + RPC_SLOW/FAILURE 로그 |

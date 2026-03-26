@@ -42,16 +42,25 @@ export default function NodeNetwork({ activeNodes = dashboardStats.activeNodes }
   const links = useMemo<Array<[string, string]>>(() => {
     const count = Math.min(activeNodes, 10);
     const result: Array<[string, string]> = [];
-    for (let i = 0; i < count; i++) {
+
+    if (count === 0) return result;
+
+    // center → 최대 3개 peripheral (0, 1/3, 2/3 위치)
+    const centerTargets = count <= 2
+      ? Array.from({ length: count }, (_, i) => i)
+      : [0, Math.floor(count / 3), Math.floor((2 * count) / 3)];
+    for (const i of centerTargets) {
       result.push(["center", `n${i + 1}`]);
     }
+
+    // ring: 인접 노드간 연결
     for (let i = 0; i < count - 1; i++) {
       result.push([`n${i + 1}`, `n${i + 2}`]);
     }
-    // 첫 번째 노드와 마지막 노드를 연결해 링을 닫는다
-    if (count > 1) {
+    if (count > 2) {
       result.push([`n${count}`, `n1`]);
     }
+
     return result;
   }, [activeNodes]);
 

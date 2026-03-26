@@ -31,6 +31,7 @@ public enum ErrorCode {
     LOTTO_ROUND_NOT_FOUND(HttpStatus.NOT_FOUND, "로또 회차 정보를 찾을 수 없습니다."),
     LOTTO_ALREADY_ENTERED(HttpStatus.CONFLICT, "이미 해당 회차에 참여했습니다."),
     LOTTO_INSUFFICIENT_FEE(HttpStatus.CONFLICT, "로또 참여 수수료가 부족합니다."),
+    LOTTO_INSUFFICIENT_POT(HttpStatus.CONFLICT, "POT이 부족합니다."),
     LOTTO_ENTRY_NOT_FOUND(HttpStatus.NOT_FOUND, "로또 참여 내역을 찾을 수 없습니다."),
     LOTTO_INVALID_NUMBERS(HttpStatus.BAD_REQUEST, "유효하지 않은 로또 번호입니다."),
     LOTTO_NOT_CLAIMABLE(HttpStatus.CONFLICT, "현재 보상을 수령할 수 없습니다."),

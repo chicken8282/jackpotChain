@@ -6,34 +6,68 @@ describe("lotto participation guard", () => {
     expect(
       getLottoParticipationState({
         hasWallet: false,
+        isWalletLocked: false,
         disabled: false,
         randomizing: false,
         isSubmitting: false,
         potBalance: 3,
+        jackBalance: 0,
       }),
     ).toBe("require-wallet");
   });
 
-  it("POT이 부족하면 참여 불가 상태를 반환한다", () => {
+  it("지갑이 잠겨 있으면 wallet-locked를 반환한다", () => {
     expect(
       getLottoParticipationState({
         hasWallet: true,
+        isWalletLocked: true,
         disabled: false,
         randomizing: false,
         isSubmitting: false,
         potBalance: 0,
+        jackBalance: 0,
       }),
-    ).toBe("insufficient-pot");
+    ).toBe("wallet-locked");
+  });
+
+  it("POT이 부족하고 JACK >= 100이면 교환 유도 상태를 반환한다", () => {
+    expect(
+      getLottoParticipationState({
+        hasWallet: true,
+        isWalletLocked: false,
+        disabled: false,
+        randomizing: false,
+        isSubmitting: false,
+        potBalance: 0,
+        jackBalance: 100,
+      }),
+    ).toBe("insufficient-pot-exchange");
+  });
+
+  it("POT이 부족하고 JACK < 100이면 채굴 유도 상태를 반환한다", () => {
+    expect(
+      getLottoParticipationState({
+        hasWallet: true,
+        isWalletLocked: false,
+        disabled: false,
+        randomizing: false,
+        isSubmitting: false,
+        potBalance: 0,
+        jackBalance: 50,
+      }),
+    ).toBe("insufficient-pot-mine");
   });
 
   it("조건이 충족되면 참여 가능 상태를 반환한다", () => {
     expect(
       getLottoParticipationState({
         hasWallet: true,
+        isWalletLocked: false,
         disabled: false,
         randomizing: false,
         isSubmitting: false,
         potBalance: 1,
+        jackBalance: 0,
       }),
     ).toBe("ready");
   });
