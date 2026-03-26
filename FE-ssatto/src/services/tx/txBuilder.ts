@@ -155,7 +155,7 @@ function signTransaction(
 }
 
 function isCoinbaseSpendable(utxo: WalletUtxo) {
-  return !utxo.coinbase || utxo.confirmations >= COINBASE_MATURITY_CONFIRMATIONS;
+  return utxo.confirmations >= COINBASE_MATURITY_CONFIRMATIONS;
 }
 
 function hasPositiveAssets(utxo: WalletUtxo) {
