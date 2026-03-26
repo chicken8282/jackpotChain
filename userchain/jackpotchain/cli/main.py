@@ -102,6 +102,10 @@ def run_node(args):
     data_dir = args.data_dir or get_default_data_dir()
     wallet_file = args.wallet_file or get_default_wallet_file()
 
+    # 지갑 파일명에서 채굴자 닉네임 추출 (예: "DH.json" → "DH")
+    miner_nickname = os.path.splitext(os.path.basename(wallet_file))[0]
+    miner_nickname_bytes = miner_nickname.encode('utf-8')[:100]  # 최대 100바이트
+
     # 지갑 디렉토리 생성
     wallet_dir = os.path.dirname(wallet_file)
     if wallet_dir:
@@ -186,7 +190,8 @@ def run_node(args):
                     transactions=txs,
                     difficulty_target=difficulty,
                     height=height,
-                    blockchain=blockchain
+                    blockchain=blockchain,
+                    extra_data=miner_nickname_bytes
                 )
                 print(f"\n[Miner] Mining block {height}...")
 

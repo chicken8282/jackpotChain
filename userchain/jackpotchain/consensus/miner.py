@@ -53,7 +53,7 @@ def create_coinbase_tx(
     # Coinbase input (null outpoint)
     # BIP34: 블록 높이를 scriptSig에 포함
     height_bytes = block_height.to_bytes((block_height.bit_length() + 7) // 8, 'little')
-    script_sig = bytes([len(height_bytes)]) + height_bytes + extra_data
+    script_sig = bytes([len(height_bytes)]) + height_bytes + extra_data[:100]
 
     coinbase_input = TxInput(
         prev_tx_id=bytes(32),
@@ -271,6 +271,7 @@ def create_block_template(
     difficulty_target: int,
     height: int,
     blockchain=None,
+    extra_data: bytes = b'',
 ) -> Block:
     """
     블록 템플릿 생성 (채굴 준비)
@@ -282,6 +283,7 @@ def create_block_template(
         difficulty_target: 난이도
         height: 새 블록의 높이
         blockchain: Blockchain 인스턴스 (자동 지급용)
+        extra_data: coinbase에 포함할 추가 데이터 (채굴자 닉네임 등)
 
     Returns:
         block_template: 채굴할 블록 (nonce=0)
@@ -293,7 +295,8 @@ def create_block_template(
     coinbase_tx = create_coinbase_tx(
         block_height=height,
         miner_address=miner_address,
-        total_fees=total_fees
+        total_fees=total_fees,
+        extra_data=extra_data
     )
 
     # 전체 TX 리스트 (Coinbase 먼저)
