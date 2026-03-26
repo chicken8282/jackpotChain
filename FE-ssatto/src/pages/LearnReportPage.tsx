@@ -15,7 +15,7 @@ export default function LearnReportPage() {
   return (
     <PageLayout>
       <GlassCard elevation={3} className="text-center">
-        <p className="text-[11px] font-semibold tracking-[0.3em] text-accent-gold/80 uppercase">
+        <p className="text-xs font-semibold tracking-[0.3em] text-accent-gold uppercase">
           학습 완료
         </p>
         <h1 className="mt-2 font-display text-3xl font-black text-white">
@@ -26,7 +26,7 @@ export default function LearnReportPage() {
 
       {/* 최종 정리: 네트워크 시각화 */}
       <div className="space-y-3">
-        <h2 className="text-[11px] font-semibold tracking-[0.24em] text-accent-gold/70 uppercase">
+        <h2 className="text-xs font-semibold tracking-[0.24em] text-accent-gold/90 uppercase">
           최종 정리
         </h2>
         <div className={`${glass} p-6`}>

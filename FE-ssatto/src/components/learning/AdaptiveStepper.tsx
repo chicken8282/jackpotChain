@@ -28,9 +28,9 @@ export default function AdaptiveStepper() {
   return (
     <div className="space-y-3">
       {/* 프로그레스 바 */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-5 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+      <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] backdrop-blur-xl px-5 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-white/50">
+          <span className="text-xs text-white/65">
             <span className="text-accent-gold font-bold">{completed}</span> / {TOTAL} 모듈 완료
           </span>
           <span className="text-xs font-bold text-accent-gold">{percent}%</span>
@@ -46,7 +46,7 @@ export default function AdaptiveStepper() {
       </div>
 
       {/* 스테퍼 */}
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-4 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+    <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] backdrop-blur-xl px-4 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
       <div className="flex items-center gap-1">
         {STAGES.map((s, idx) => {
           const allDone = s.modules.every((m) => isCompleted(m));
@@ -70,17 +70,17 @@ export default function AdaptiveStepper() {
                   }
                   className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-colors ${
                     allDone
-                      ? "border-green-500/40 bg-green-500/10 text-green-400"
+                      ? "border-green-500/60 bg-green-500/15 text-green-400"
                       : isCurrent
-                        ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                        ? "border-blue-500/60 bg-blue-500/15 text-blue-400"
                         : anyDone
-                          ? "border-accent-gold/30 bg-accent-gold/5 text-accent-gold"
-                          : "border-white/10 bg-white/[0.02] text-white/30"
+                          ? "border-accent-gold/50 bg-accent-gold/12 text-accent-gold"
+                          : "border-white/20 bg-white/[0.05] text-white/50"
                   }`}
                 >
                   {allDone ? "✓" : s.stage}
                 </motion.div>
-                <span className={`text-[10px] ${isCurrent ? "text-blue-400" : allDone ? "text-green-400" : "text-white/30"}`}>
+                <span className={`text-xs ${isCurrent ? "text-blue-400" : allDone ? "text-green-400" : "text-white/50"}`}>
                   {s.title}
                 </span>
 
@@ -92,7 +92,7 @@ export default function AdaptiveStepper() {
                       className={`h-2 w-2 rounded-full transition-colors ${
                         isCompleted(m)
                           ? "bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]"
-                          : "bg-white/15"
+                          : "bg-white/25"
                       }`}
                     />
                   ))}
@@ -101,7 +101,7 @@ export default function AdaptiveStepper() {
 
               {/* 연결선 */}
               {idx < STAGES.length - 1 && (
-                <div className={`mx-1 h-px flex-1 ${allDone ? "bg-green-500/30" : "bg-white/[0.06]"}`} />
+                <div className={`mx-1 h-px flex-1 ${allDone ? "bg-green-500/40" : "bg-white/[0.12]"}`} />
               )}
             </div>
           );

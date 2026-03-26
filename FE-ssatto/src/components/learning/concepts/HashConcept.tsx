@@ -174,25 +174,25 @@ const CARDS = [
   {
     title: "단방향성", short: "거꾸로 풀 수 없는 기계",
     desc: "데이터는 해시로 변환되지만, 해시에서 원본을 되돌릴 수 없습니다.",
-    accent: "text-red-400", border: "border-red-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.3)] hover:border-red-500/50",
-    bg: "from-red-500/[0.08] to-red-600/[0.02]",
+    accent: "text-red-400", border: "border-red-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.3)] hover:border-red-500/60",
+    bg: "from-red-500/[0.14] to-red-600/[0.04]",
     Anim: OneWayAnim,
   },
   {
     title: "눈사태 효과", short: "한 글자가 전부를 바꿉니다",
     desc: "글자 하나만 바꿔도 해시가 완전히 달라집니다. 90% 같아도 결과는 100% 다릅니다.",
-    accent: "text-orange-400", border: "border-orange-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.3)] hover:border-orange-500/50",
-    bg: "from-orange-500/[0.08] to-orange-600/[0.02]",
+    accent: "text-orange-400", border: "border-orange-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.3)] hover:border-orange-500/60",
+    bg: "from-orange-500/[0.14] to-orange-600/[0.04]",
     Anim: AvalancheAnim,
   },
   {
     title: "결정성", short: "같은 입력, 항상 같은 결과",
     desc: "같은 입력은 항상 같은 해시를 만듭니다. 해시는 데이터의 유일한 이름표입니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: DeterministicAnim,
   },
 ];
@@ -221,7 +221,7 @@ export default function HashConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">디지털 봉인 (해시)</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           어떤 데이터든 고유한 64자리 지문으로 바꾸는 마법의 함수
         </p>
       </div>
@@ -241,7 +241,7 @@ export default function HashConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

@@ -136,25 +136,25 @@ const CARDS = [
   {
     title: "개인키 = 열쇠", short: "절대 공유 금지",
     desc: "세상에 단 하나뿐인 마스터키. 잃어버리면 자산에 영원히 접근할 수 없습니다.",
-    accent: "text-yellow-400", border: "border-yellow-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.3)] hover:border-yellow-500/50",
-    bg: "from-yellow-500/[0.08] to-yellow-600/[0.02]",
+    accent: "text-yellow-400", border: "border-yellow-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.3)] hover:border-yellow-500/60",
+    bg: "from-yellow-500/[0.14] to-yellow-600/[0.04]",
     Anim: PrivKeyAnim,
   },
   {
     title: "공개키 = 신분증", short: "공개해도 안전합니다",
     desc: "개인키에서 파생되지만, 공개해도 개인키를 역추적할 수 없어 안전합니다.",
-    accent: "text-sky-400", border: "border-sky-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(56,189,248,0.3)] hover:border-sky-500/50",
-    bg: "from-sky-500/[0.08] to-sky-600/[0.02]",
+    accent: "text-sky-400", border: "border-sky-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(56,189,248,0.3)] hover:border-sky-500/60",
+    bg: "from-sky-500/[0.14] to-sky-600/[0.04]",
     Anim: PubKeyAnim,
   },
   {
     title: "주소 = 우편함", short: "코인을 받는 입구",
     desc: "누구나 코인을 보낼 수 있지만, 꺼내려면 반드시 개인키가 필요합니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: AddressAnim,
   },
 ];
@@ -182,7 +182,7 @@ export default function KeyConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">나만의 열쇠 만들기</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           개인키는 금고의 열쇠, 주소는 누구나 접근 가능한 우편함
         </p>
       </div>
@@ -202,7 +202,7 @@ export default function KeyConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

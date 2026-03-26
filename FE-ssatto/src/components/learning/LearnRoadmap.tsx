@@ -26,7 +26,7 @@ export default function LearnRoadmap() {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-[11px] font-semibold tracking-[0.24em] text-accent-gold/80 uppercase">학습 로드맵</h2>
+      <h2 className="text-xs font-semibold tracking-[0.24em] text-accent-gold uppercase">학습 로드맵</h2>
       <div className="relative space-y-5">
         <div className="absolute left-6 top-0 h-full w-px bg-gradient-to-b from-accent-gold/20 via-white/5 to-transparent" />
         {STAGES.map((s, i) => {
@@ -37,13 +37,13 @@ export default function LearnRoadmap() {
               <div className={`absolute left-3 top-2 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold ${
                 allDone ? "border-green-500/50 bg-green-500/10 text-green-400 shadow-[0_0_8px_rgba(34,197,94,0.2)]"
                 : anyDone ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
-                : "border-white/10 bg-white/[0.02] text-white/30"}`}>
+                : "border-white/20 bg-white/[0.05] text-white/50"}`}>
                 {allDone ? "✓" : s.stage}
               </div>
               <GlassCard elevation={1} className="p-5">
                 <div className="mb-3 flex items-center gap-3">
                   <h3 className="font-display text-lg font-bold text-white">{s.title}</h3>
-                  <span className="text-xs text-white/40">{s.subtitle}</span>
+                  <span className="text-xs text-white/60">{s.subtitle}</span>
                 </div>
                 <div className="space-y-2">
                   {s.modules.map((m) => {
@@ -51,8 +51,8 @@ export default function LearnRoadmap() {
                     return (
                       <button key={m.id} onClick={() => navigate(`/learn/${s.stage}/${m.id}`)}
                         className={`flex w-full items-center gap-3 rounded-xl border px-4 py-2.5 text-left text-sm transition-all hover:border-accent-gold/20 hover:bg-white/[0.03] ${
-                          done ? "border-green-500/15 bg-green-500/[0.03] text-green-400" : "border-white/[0.04] text-white/50 hover:text-white"}`}>
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${done ? "bg-green-500/15 text-green-400" : "bg-white/5 text-white/25"}`}>
+                          done ? "border-green-500/30 bg-green-500/[0.08] text-green-400" : "border-white/[0.10] text-white/70 hover:text-white"}`}>
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${done ? "bg-green-500/15 text-green-400" : "bg-white/10 text-white/50"}`}>
                           {done ? "✓" : m.id}
                         </span>
                         <span className="font-medium">{m.title}</span>
@@ -76,7 +76,7 @@ export default function LearnRoadmap() {
               <span className="text-xs text-white/40">네트워크 전체 흐름</span>
             </div>
             <button onClick={() => navigate("/learn/network")}
-              className="flex w-full items-center gap-3 rounded-xl border border-accent-gold/10 bg-accent-gold/[0.03] px-4 py-2.5 text-left text-sm text-accent-gold transition-all hover:border-accent-gold/30 hover:bg-accent-gold/[0.06]">
+              className="flex w-full items-center gap-3 rounded-xl border border-accent-gold/20 bg-accent-gold/[0.08] px-4 py-2.5 text-left text-sm text-accent-gold transition-all hover:border-accent-gold/35 hover:bg-accent-gold/[0.12]">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-gold/15 text-accent-gold text-[10px]">
                 ★
               </span>

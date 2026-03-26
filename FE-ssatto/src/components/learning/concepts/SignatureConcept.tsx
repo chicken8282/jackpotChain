@@ -227,25 +227,25 @@ const CARDS = [
   {
     title: "위조 불가", short: "복제할 수 없는 도장입니다",
     desc: "개인키 없이는 똑같은 서명을 만들 수 없습니다.",
-    accent: "text-red-400", border: "border-red-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/50",
-    bg: "from-red-500/[0.08] to-red-600/[0.02]",
+    accent: "text-red-400", border: "border-red-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/60",
+    bg: "from-red-500/[0.14] to-red-600/[0.04]",
     Anim: ForgeryAnim,
   },
   {
     title: "누구나 검증", short: "공개키로 진위를 확인합니다",
     desc: "공개키만 있으면 누구나 서명의 진위를 확인할 수 있습니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: VerifyAnim,
   },
   {
     title: "부인 방지", short: "서명 기록은 영원히 남습니다",
     desc: "한번 서명한 기록은 영원히 남으며, 부인할 수 없습니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: NonRepudiationAnim,
   },
 ];
@@ -276,7 +276,7 @@ export default function SignatureConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">디지털 서명은 어떻게 작동할까요?</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           나를 증명하는 도장 — 개인키로 잠그고, 공개키로 확인합니다
         </p>
       </div>
@@ -296,7 +296,7 @@ export default function SignatureConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

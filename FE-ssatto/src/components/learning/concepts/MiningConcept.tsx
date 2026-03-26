@@ -213,25 +213,25 @@ const CARDS = [
   {
     title: "작업 증명", short: "수백만 번의 해시 계산",
     desc: "정답을 찾을 때까지 수없이 해시를 계산합니다. 슬롯머신을 수백만 번 돌리는 것과 같습니다.",
-    accent: "text-yellow-400", border: "border-yellow-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/50",
-    bg: "from-yellow-500/[0.08] to-yellow-600/[0.02]",
+    accent: "text-yellow-400", border: "border-yellow-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/60",
+    bg: "from-yellow-500/[0.14] to-yellow-600/[0.04]",
     Anim: PowAnim,
   },
   {
     title: "난이도 조정", short: "0의 개수가 난이도를 결정합니다",
     desc: "0의 개수가 늘수록 정답 찾기가 기하급수적으로 어려워집니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: DifficultyAnim,
   },
   {
     title: "보상", short: "정답을 찾으면 100 JACK!",
     desc: "정답을 찾은 채굴자에게 100 JACK이 새로 발행됩니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: RewardAnim,
   },
 ];
@@ -262,7 +262,7 @@ export default function MiningConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">채굴은 거대한 슬롯머신이다</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           JackpotChain에서 잭팟을 터뜨려 보세요!
         </p>
       </div>
@@ -282,7 +282,7 @@ export default function MiningConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>
