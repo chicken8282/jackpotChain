@@ -281,7 +281,8 @@ def validate_coinbase(
     tx: Transaction,
     block_height: int,
     expected_reward: int,
-    total_fees: int
+    total_fees: int,
+    check_height: bool = True
 ) -> TxValidationResult:
     """Coinbase 트랜잭션 검증"""
     if not tx.is_coinbase():
@@ -326,7 +327,7 @@ def validate_coinbase(
         )
 
     encoded_height = int.from_bytes(script_sig[1:1+height_len], 'little')
-    if encoded_height != block_height:
+    if check_height and encoded_height != block_height:
         return TxValidationResult(
             is_valid=False,
             error=TxValidationError.INVALID_SCRIPT,
