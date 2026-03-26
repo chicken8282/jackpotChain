@@ -57,6 +57,7 @@ class NodeConfig:
     rendezvous_seeds: list = None  # 랑데부 시드 노드 (ip:port)
     is_seed_node: bool = False  # True면 랑데부 서버도 실행
     allow_private_ip: bool = False  # True면 사설 IP 피어도 캐시 허용 (로컬 테스트용)
+    disable_discovery: bool = False  # True면 피어 발견 비활성 (로컬 고립 테스트용)
 
 
 class Node:
