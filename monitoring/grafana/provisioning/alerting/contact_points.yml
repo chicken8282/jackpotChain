@@ -1,0 +1,17 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: discord-alerts
+    receivers:
+      - uid: discord-webhook
+        type: discord
+        settings:
+          url: "https://discord.com/api/webhooks/https://discordapp.com/api/webhooks/1486640327501549649/ZJDmPtc4-B6Ons9JJLfgvfQD-PmsloRe8YW6dm9muHuriLgBL9ahcEEM-6iytZEQlja6"
+          message: |
+            {{ range .Alerts }}
+            **[{{ .Labels.severity | toUpper }}] {{ .Annotations.summary }}**
+            {{ .Annotations.description }}
+            상태: {{ .Status }}
+            {{ end }}
+        disableResolveMessage: false

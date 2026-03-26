@@ -218,25 +218,25 @@ const CARDS = [
   {
     title: "입력 (Input)", short: "지갑에서 지폐를 꺼냅니다",
     desc: "내 지갑 속 UTXO를 선택합니다. 계산대에 지폐를 올려놓는 행위입니다.",
-    accent: "text-sky-400", border: "border-sky-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(56,189,248,0.35)] hover:border-sky-500/50",
-    bg: "from-sky-500/[0.08] to-sky-600/[0.02]",
+    accent: "text-sky-400", border: "border-sky-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(56,189,248,0.35)] hover:border-sky-500/60",
+    bg: "from-sky-500/[0.14] to-sky-600/[0.04]",
     Anim: InputAnim,
   },
   {
     title: "출력 (Output)", short: "송금액 + 잔돈이 생성됩니다",
     desc: "받는 사람에게 갈 금액과, 나에게 돌아올 잔돈 두 개의 UTXO가 생성됩니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: OutputAnim,
   },
   {
     title: "수수료", short: "광부에게 주는 팁입니다",
     desc: "입력과 출력의 차이가 채굴자의 수수료가 됩니다. 광부에게 주는 팁입니다.",
-    accent: "text-amber-400", border: "border-amber-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(245,158,11,0.35)] hover:border-amber-500/50",
-    bg: "from-amber-500/[0.08] to-amber-600/[0.02]",
+    accent: "text-amber-400", border: "border-amber-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(245,158,11,0.35)] hover:border-amber-500/60",
+    bg: "from-amber-500/[0.14] to-amber-600/[0.04]",
     Anim: FeeAnim,
   },
 ];
@@ -268,7 +268,7 @@ export default function TxConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">트랜잭션은 어떻게 만들어질까요?</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           송금 전표 — 누가, 누구에게, 얼마를 보내는지 기록합니다
         </p>
       </div>
@@ -288,7 +288,7 @@ export default function TxConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

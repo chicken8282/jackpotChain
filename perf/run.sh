@@ -66,7 +66,8 @@ run_k6() {
       ${extra_args} \
       "${script}"
   else
-    docker run --rm -i \
+    # MSYS_NO_PATHCONV=1 : Git Bash가 /perf/... 를 Windows 경로로 변환하는 것을 방지
+    MSYS_NO_PATHCONV=1 docker run --rm -i \
       -v "${REPO_ROOT}/perf:/perf" \
       --add-host=host.docker.internal:host-gateway \
       grafana/k6 run \

@@ -104,26 +104,26 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
     <>
       <div className="space-y-5">
         {/* 브레드크럼 */}
-        <nav className="flex items-center gap-2 text-xs text-white/30">
+        <nav className="flex items-center gap-2 text-xs text-white/50">
           <button onClick={() => navigate("/learn")} className="hover:text-accent-gold transition-colors">학습</button>
           <span>/</span>
-          <span className="text-white/50">{stageNumber}단계</span>
+          <span className="text-white/65">{stageNumber}단계</span>
           <span>/</span>
           <span className="text-accent-gold">{MODULE_TITLES[moduleId]}</span>
         </nav>
 
         {/* 모듈 제목 */}
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.24em] text-accent-gold/70 uppercase">모듈 {moduleId}</p>
+          <p className="text-xs font-semibold tracking-[0.24em] text-accent-gold/90 uppercase">모듈 {moduleId}</p>
           <h1 className="mt-1 font-display text-2xl font-bold text-white">{MODULE_TITLES[moduleId]}</h1>
         </div>
 
         {/* 3탭 네비게이션 */}
-        <div className="flex gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-1">
+        <div className="flex gap-1 rounded-2xl border border-white/[0.10] bg-white/[0.05] p-1">
           {TABS.map((t) => (
             <button key={t} onClick={() => setTab(t)}
               className={`relative flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
-                tab === t ? "text-white" : "text-white/30 hover:text-white/60"}`}>
+                tab === t ? "text-white" : "text-white/50 hover:text-white/70"}`}>
               {tab === t && (
                 <motion.div layoutId="tab-bg" className="absolute inset-0 rounded-xl border border-white/10 bg-white/[0.06]" />
               )}
@@ -133,7 +133,7 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
         </div>
 
         {/* 탭 콘텐츠 */}
-        <div className="rounded-3xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl p-6 min-h-[300px]">
+        <div className="rounded-3xl border border-white/[0.10] bg-white/[0.04] backdrop-blur-xl p-6 min-h-[300px]">
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
               {tab === "concept" && (() => {
@@ -157,10 +157,10 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
 
                     {/* 핵심 포인트 카드 */}
                     <div>
-                      <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">핵심 포인트</p>
+                      <p className="text-xs font-semibold text-white/60 uppercase tracking-widest mb-3">핵심 포인트</p>
                       <div className="grid gap-3 sm:grid-cols-3">
                         {concept.points.map((pt, i) => (
-                          <div key={i} className="group rounded-xl border border-accent-gold/10 bg-gradient-to-b from-accent-gold/[0.06] to-transparent p-4 hover:border-accent-gold/25 transition-colors">
+                          <div key={i} className="group rounded-xl border border-accent-gold/20 bg-gradient-to-b from-accent-gold/[0.12] to-transparent p-4 hover:border-accent-gold/35 transition-colors">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-gold/20 text-[10px] font-bold text-accent-gold">{i + 1}</span>
                               <p className="text-sm font-bold text-accent-gold">{pt.title}</p>

@@ -231,25 +231,25 @@ const CARDS = [
   {
     title: "지폐 모델", short: "잔액 = 지폐 조각들의 합",
     desc: "잔액이라는 개념이 없습니다. 지갑 속 '지폐 조각들'의 합이 잔액입니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: BillModelAnim,
   },
   {
     title: "소멸과 생성", short: "지폐는 소멸 후 새로 생성됩니다",
     desc: "기존 지폐는 소멸하고, 송금액과 잔돈 두 장의 새 지폐가 생성됩니다.",
-    accent: "text-orange-400", border: "border-orange-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.35)] hover:border-orange-500/50",
-    bg: "from-orange-500/[0.08] to-orange-600/[0.02]",
+    accent: "text-orange-400", border: "border-orange-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.35)] hover:border-orange-500/60",
+    bg: "from-orange-500/[0.14] to-orange-600/[0.04]",
     Anim: DestroyCreateAnim,
   },
   {
     title: "추적 가능", short: "최초 채굴까지 거슬러 올라갑니다",
     desc: "모든 코인의 출처를 최초 채굴까지 거슬러 추적할 수 있습니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: TraceAnim,
   },
 ];
@@ -283,7 +283,7 @@ export default function UTXOConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">블록체인에는 잔액이 없다?</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           만원짜리와 거스름돈 — UTXO는 실제 지폐처럼 작동합니다
         </p>
       </div>
@@ -303,7 +303,7 @@ export default function UTXOConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

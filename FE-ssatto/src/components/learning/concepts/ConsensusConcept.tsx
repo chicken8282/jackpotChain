@@ -156,25 +156,25 @@ const CARDS = [
   {
     title: "다수결 원칙", short: "과반수가 동의해야 합니다",
     desc: "과반수 이상이 '맞다'고 동의해야 기록이 확정됩니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.3)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.3)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: MajorityAnim,
   },
   {
     title: "비잔틴 내결함", short: "배신자가 있어도 안전합니다",
     desc: "일부가 거짓말을 해도, 정직한 다수가 시스템을 지킵니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.3)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.3)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: ByzantineAnim,
   },
   {
     title: "탈중앙화", short: "중앙 관리자가 없습니다",
     desc: "중앙 관리자 없이 네트워크 전체가 함께 검증합니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.3)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: DecentralAnim,
   },
 ];
@@ -206,7 +206,7 @@ export default function ConsensusConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">합의의 힘</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           과반수 이상이 동의해야 기록이 인정되는 마을 회의
         </p>
       </div>
@@ -226,7 +226,7 @@ export default function ConsensusConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

@@ -201,25 +201,25 @@ const CARDS = [
   {
     title: "투명성", short: "모든 것이 공개됩니다",
     desc: "모든 거래 기록이 공개됩니다. 유리 금고처럼, 숨길 수 없습니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: TransparencyAnim,
   },
   {
     title: "분산 저장", short: "수천 곳에 동시 보관됩니다",
     desc: "수천 대의 컴퓨터에 동시 저장됩니다. 한 곳이 꺼져도 데이터는 살아있습니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: DistributedAnim,
   },
   {
     title: "조작 불가", short: "변조하면 즉시 발각됩니다",
     desc: "하나를 바꾸면 전체 체인이 무너집니다. 다수결로 즉시 발각됩니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: TamperAnim,
   },
 ];
@@ -250,7 +250,7 @@ export default function VaultConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">투명한 유리 금고</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           블록체인은 모든 참여자가 동일한 복사본을 가진 공유 장부입니다
         </p>
       </div>
@@ -270,7 +270,7 @@ export default function VaultConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

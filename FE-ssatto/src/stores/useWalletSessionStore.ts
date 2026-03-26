@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export const WALLET_IDLE_LOCK_MS = 30 * 60 * 1000;
+export const WALLET_IDLE_LOCK_MS = 24 * 60 * 60 * 1000;
 
 interface UnlockedWallet {
   privateKey: string;

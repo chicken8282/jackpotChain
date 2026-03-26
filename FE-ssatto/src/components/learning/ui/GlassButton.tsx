@@ -8,9 +8,9 @@ interface Props extends PropsWithChildren<ComponentProps<typeof motion.button>> 
 }
 
 const VARIANTS = {
-  primary: "border-accent-gold/30 bg-accent-gold/10 text-accent-gold hover:bg-accent-gold/20",
-  secondary: "border-white/10 bg-white/5 text-text-secondary hover:text-white hover:bg-white/10",
-  danger: "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20",
+  primary: "border-accent-gold/30 bg-accent-gold/15 text-accent-gold hover:bg-accent-gold/25",
+  secondary: "border-white/10 bg-white/10 text-white/70 hover:text-white hover:bg-white/15",
+  danger: "border-red-500/30 bg-red-500/15 text-red-400 hover:bg-red-500/25",
 };
 
 export default function GlassButton({ children, variant = "primary", className, ...props }: Props) {

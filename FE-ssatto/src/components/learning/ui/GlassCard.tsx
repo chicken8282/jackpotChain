@@ -8,9 +8,9 @@ interface Props extends PropsWithChildren {
 }
 
 const ELEVATION = {
-  1: "bg-white/[0.03] border-white/[0.06]",
-  2: "bg-white/[0.05] border-white/[0.10]",
-  3: "bg-white/[0.08] border-white/[0.15]",
+  1: "bg-white/[0.06] border-white/[0.12]",
+  2: "bg-white/[0.08] border-white/[0.18]",
+  3: "bg-white/[0.12] border-white/[0.25]",
 };
 
 export default function GlassCard({ children, className, elevation = 2 }: Props) {

@@ -249,25 +249,25 @@ const CARDS = [
   {
     title: "JACK", short: "채굴 보상, 송금, 수수료에 사용되는 기본 코인",
     desc: "JACK은 JackpotChain의 기본 화폐입니다. 채굴 보상으로 획득하고, 송금과 수수료 지불에 사용합니다.",
-    accent: "text-yellow-400", border: "border-yellow-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/50",
-    bg: "from-yellow-500/[0.08] to-yellow-600/[0.02]",
+    accent: "text-yellow-400", border: "border-yellow-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/60",
+    bg: "from-yellow-500/[0.14] to-yellow-600/[0.04]",
     Anim: JackAnim,
   },
   {
     title: "POT", short: "로또 참여에 필요한 전용 토큰. 100 JACK = 1 POT",
     desc: "POT은 로또 참여 전용 토큰입니다. 100 JACK을 교환하여 1 POT을 받고, 이를 통해 로또에 참여할 수 있습니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: PotAnim,
   },
   {
     title: "소각", short: "참가비의 19%는 영구 소각되어 디플레이션 효과",
     desc: "로또 참가비의 19%는 영구적으로 소각됩니다. 이를 통해 JACK의 총 공급량이 점차 줄어 디플레이션 효과를 만듭니다.",
-    accent: "text-red-400", border: "border-red-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/50",
-    bg: "from-red-500/[0.08] to-red-600/[0.02]",
+    accent: "text-red-400", border: "border-red-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/60",
+    bg: "from-red-500/[0.14] to-red-600/[0.04]",
     Anim: BurnAnim,
   },
 ];
@@ -300,7 +300,7 @@ export default function EconomyConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">JACK & POT 이코노미</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           JackpotChain에는 JACK과 POT 두 가지가 있습니다
         </p>
       </div>
@@ -320,7 +320,7 @@ export default function EconomyConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

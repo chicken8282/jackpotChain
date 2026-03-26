@@ -362,25 +362,25 @@ const CARDS = [
   {
     title: "예측 불가", short: "미래 블록 해시는 아무도 미리 알 수 없습니다",
     desc: "블록 해시는 채굴 과정에서 결정됩니다. 미래 블록이 생성되기 전에는 그 해시를 예측할 수 없습니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: UnpredictableAnim,
   },
   {
     title: "조작 불가", short: "데이터를 바꾸면 해시가 완전히 변합니다",
     desc: "블록 데이터를 조금이라도 변경하면 해시가 완전히 달라집니다. 원하는 결과를 만들어낼 수 없습니다.",
-    accent: "text-red-400", border: "border-red-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/50",
-    bg: "from-red-500/[0.08] to-red-600/[0.02]",
+    accent: "text-red-400", border: "border-red-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/60",
+    bg: "from-red-500/[0.14] to-red-600/[0.04]",
     Anim: TamperProofAnim,
   },
   {
     title: "검증 가능", short: "누구나 블록 해시를 확인하여 결과를 검증합니다",
     desc: "블록체인의 모든 데이터는 공개되어 있습니다. 누구나 블록 해시를 직접 확인하여 로또 결과를 검증할 수 있습니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: VerifiableAnim,
   },
 ];
@@ -416,7 +416,7 @@ export default function FairnessConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">수학적 공정성</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           블록 해시는 예측할 수도, 조작할 수도 없습니다
         </p>
       </div>
@@ -436,7 +436,7 @@ export default function FairnessConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

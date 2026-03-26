@@ -222,9 +222,9 @@ const CARDS: CardData[] = [
     short: "2000년대, 돈이 휴지조각이 되었습니다",
     desc: "무가베 정부의 무리한 토지 개혁으로 농업이 붕괴했습니다. 정부는 부족한 예산을 메우기 위해 중앙은행을 통해 돈을 마구 찍어냈습니다. 물건은 귀해졌고, 돈의 가치는 빠르게 휴지조각이 되었습니다.",
     accent: "text-red-400",
-    border: "border-red-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/50",
-    bg: "from-red-500/[0.08] to-red-600/[0.02]",
+    border: "border-red-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(239,68,68,0.35)] hover:border-red-500/60",
+    bg: "from-red-500/[0.14] to-red-600/[0.04]",
     Anim: EconomyCollapseAnim,
   },
   {
@@ -232,9 +232,9 @@ const CARDS: CardData[] = [
     short: "24시간마다 물가가 두 배로 뛰었습니다",
     desc: "월간 물가 상승률이 796억%에 달했습니다. 물가가 24시간마다 두 배로 뛰었습니다. 아침에 커피 한 잔 가격이 점심엔 두 배가 됐고, 사람들은 돈을 받는 즉시 물건으로 바꾸려 했습니다.",
     accent: "text-orange-400",
-    border: "border-orange-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.35)] hover:border-orange-500/50",
-    bg: "from-orange-500/[0.08] to-orange-600/[0.02]",
+    border: "border-orange-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(249,115,22,0.35)] hover:border-orange-500/60",
+    bg: "from-orange-500/[0.14] to-orange-600/[0.04]",
     Anim: HyperinflationAnim,
   },
   {
@@ -242,9 +242,9 @@ const CARDS: CardData[] = [
     short: "100조 달러로 달걀 3개를 샀습니다",
     desc: "정부는 인플레이션을 따라잡기 위해 100조 짐바브웨 달러 지폐를 발행했습니다. 그 한 장으로 살 수 있는 것은 달걀 세 개뿐이었습니다. 결국 2009년 4월, 짐바브웨는 자국 화폐 사용을 완전히 포기했습니다.",
     accent: "text-yellow-400",
-    border: "border-yellow-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/50",
-    bg: "from-yellow-500/[0.08] to-yellow-600/[0.02]",
+    border: "border-yellow-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:border-yellow-500/60",
+    bg: "from-yellow-500/[0.14] to-yellow-600/[0.04]",
     Anim: EggExchangeAnim,
   },
 ];
@@ -263,7 +263,7 @@ export default function DecentralizationConcept({ onGoInteraction }: Props) {
       {/* ── 제목 ──────────────────────────────────────── */}
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">탈중앙화의 필요성</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           왜 중앙 기관 없이도 돈이 작동해야 할까요?
         </p>
       </div>
@@ -310,7 +310,7 @@ export default function DecentralizationConcept({ onGoInteraction }: Props) {
             {/* 제목 */}
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
             {/* 짧은 설명 */}
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

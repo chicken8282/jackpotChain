@@ -45,7 +45,7 @@ export default function DecisionModal({ result, onClose }: Props) {
           exit={{ scale: 0.9, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 25 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-6 shadow-[0_16px_64px_rgba(0,0,0,0.4)]"
+          className="w-full max-w-md rounded-3xl border border-white/18 bg-white/[0.08] backdrop-blur-xl p-6 shadow-[0_16px_64px_rgba(0,0,0,0.4)]"
         >
           {/* 헤더 */}
           <div className="text-center">
@@ -64,7 +64,7 @@ export default function DecisionModal({ result, onClose }: Props) {
 
           {/* 오답 분석 */}
           {result.wrongCategories && (
-            <div className="mt-4 rounded-xl border border-red-500/10 bg-red-500/[0.03] p-3 text-xs text-red-300">
+            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/[0.08] p-3 text-xs text-red-300">
               <span className="font-semibold">취약 영역:</span> {result.wrongCategories}
             </div>
           )}
@@ -93,8 +93,8 @@ export default function DecisionModal({ result, onClose }: Props) {
 
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
-      <p className="text-[10px] text-white/40 uppercase">{label}</p>
+    <div className="rounded-xl border border-white/[0.14] bg-white/[0.06] p-3 text-center">
+      <p className="text-xs text-white/60 uppercase">{label}</p>
       <p className={`mt-1 font-mono text-lg font-bold ${color}`}>{value}</p>
     </div>
   );

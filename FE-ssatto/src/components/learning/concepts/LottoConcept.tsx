@@ -237,25 +237,25 @@ const CARDS = [
   {
     title: "번호 선택", short: "0x0~0xF 중 6개를 고릅니다",
     desc: "0부터 F까지 16진수 중 6개 번호를 선택합니다. 블록체인 특성에 맞는 16진수 로또 시스템입니다.",
-    accent: "text-blue-400", border: "border-blue-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/50",
-    bg: "from-blue-500/[0.08] to-blue-600/[0.02]",
+    accent: "text-blue-400", border: "border-blue-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(59,130,246,0.35)] hover:border-blue-500/60",
+    bg: "from-blue-500/[0.14] to-blue-600/[0.04]",
     Anim: PickAnim,
   },
   {
     title: "블록 해시 결과", short: "N+3, N+6, ..., N+18 블록의 해시로 결정",
     desc: "당첨 번호는 미래 블록(N+3, N+6, ..., N+18)의 해시에서 추출됩니다. 아무도 미리 알 수 없으므로 공정합니다.",
-    accent: "text-purple-400", border: "border-purple-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/50",
-    bg: "from-purple-500/[0.08] to-purple-600/[0.02]",
+    accent: "text-purple-400", border: "border-purple-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:border-purple-500/60",
+    bg: "from-purple-500/[0.14] to-purple-600/[0.04]",
     Anim: BlockHashAnim,
   },
   {
     title: "수령 기간", short: "N+18 ~ N+68 블록 사이에 당첨금 수령",
     desc: "당첨 결과는 N+18 블록 이후 확정됩니다. N+68 블록까지 50블록 이내에 당첨금을 수령해야 합니다.",
-    accent: "text-emerald-400", border: "border-emerald-500/25",
-    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/50",
-    bg: "from-emerald-500/[0.08] to-emerald-600/[0.02]",
+    accent: "text-emerald-400", border: "border-emerald-500/40",
+    glowHover: "hover:shadow-[0_0_24px_rgba(34,197,94,0.35)] hover:border-emerald-500/60",
+    bg: "from-emerald-500/[0.14] to-emerald-600/[0.04]",
     Anim: ClaimTimerAnim,
   },
 ];
@@ -287,7 +287,7 @@ export default function LottoConcept({ onGoInteraction }: Props) {
     <div className="space-y-8">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">공정한 로또 시스템</h2>
-        <p className="mt-2 text-sm text-white/50">
+        <p className="mt-2 text-sm text-white/65">
           6개 번호를 선택하면, 블록 해시가 결과를 결정합니다
         </p>
       </div>
@@ -307,7 +307,7 @@ export default function LottoConcept({ onGoInteraction }: Props) {
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
             <div className={card.accent}>{icons[i]}</div>
             <p className={`text-sm font-bold ${card.accent}`}>{card.title}</p>
-            <p className="text-[11px] text-white/40 leading-relaxed">{card.short}</p>
+            <p className="text-xs text-white/60 leading-relaxed">{card.short}</p>
           </motion.div>
         ))}
       </div>

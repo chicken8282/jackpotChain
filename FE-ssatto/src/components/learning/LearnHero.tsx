@@ -11,14 +11,14 @@ export default function LearnHero() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl px-8 py-14 text-center shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+      className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-xl px-8 py-14 text-center shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
     >
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-accent-gold/5 blur-3xl" />
         <div className="absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-blue-500/5 blur-3xl" />
       </div>
       <div className="relative z-10">
-        <p className="mb-3 text-[11px] font-semibold tracking-[0.3em] text-accent-gold/80 uppercase">
+        <p className="mb-3 text-xs font-semibold tracking-[0.3em] text-accent-gold uppercase">
           JACKPOTCHAIN ACADEMY
         </p>
         <h1 className="font-display text-3xl font-black leading-tight text-white sm:text-4xl">
@@ -28,7 +28,7 @@ export default function LearnHero() {
             직접 체험하세요
           </span>
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/60">
+        <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-white/75">
           직접 설계하고, 즉시 증명하는 블록체인
         </p>
         <div className="mt-8 flex justify-center gap-3">
