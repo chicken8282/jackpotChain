@@ -1,7 +1,7 @@
 # JackpotChain 구현 계획
 
-> 최종 업데이트: 2026-03-23
-> 현재 단계: 로컬 통합 테스트 완료 → 배포 환경 구축 단계 진입
+> 최종 업데이트: 2026-03-26
+> 현재 단계: CI/CD + 모니터링 완료 → 성능 테스트(Phase 6) 단계
 
 ---
 
@@ -12,8 +12,8 @@
 [완료] Phase 2: 로컬 Docker 스택 구축 + FE-API 전 흐름 연동
 [완료] Phase 3: 로컬 통합 QA (전 시나리오 PASS)
 ──────────────────────────────────────────
-[진행 예정] Phase 4: CI/CD (Jenkins) + 배포 환경 구축
-[진행 예정] Phase 5: 모니터링 스택 구축
+[완료] Phase 4: CI/CD (Jenkins) + 배포 환경 구축
+[완료] Phase 5: 모니터링 스택 구축
 [진행 예정] Phase 6: 성능 테스트
 ```
 
@@ -232,14 +232,14 @@
 
 체크리스트:
 
-- [ ] `docker-compose.monitoring.yml` 최종 작성
-- [ ] Prometheus / Grafana / Loki / Promtail / cAdvisor 정의
-- [ ] `docker compose -f ~/app/compose/docker-compose.monitoring.yml config` 검증
-- [ ] Spring `/actuator/prometheus` 스크랩 가능 확인
-- [ ] Prometheus scrape_config 반영
-- [ ] Grafana 접속 확인
-- [ ] Loki / Promtail 연결 확인
-- [ ] cAdvisor 메트릭 수집 확인
+- [x] `docker-compose.monitoring.yml` 최종 작성
+- [x] Prometheus / Grafana / Loki / Promtail / cAdvisor 정의
+- [ ] `docker compose -f ~/app/compose/docker-compose.monitoring.yml config` 검증 (EC2 실행 필요)
+- [ ] Spring `/actuator/prometheus` 스크랩 가능 확인 (EC2 실행 필요)
+- [x] Prometheus scrape_config 반영 (local/dev/blue/green 타겟 정의)
+- [ ] Grafana 접속 확인 (EC2 실행 필요)
+- [ ] Loki / Promtail 연결 확인 (EC2 실행 필요)
+- [ ] cAdvisor 메트릭 수집 확인 (EC2 실행 필요)
 
 ---
 
@@ -410,15 +410,15 @@ Checkout → Determine Branch → Build → Docker Login → Build Image → Pus
 - 배포 후 Grafana / Loki로 상태를 확인할 수 있다
 
 산출물:
-- `Jenkinsfile`
-- `docker-compose.prod.yml`
-- `docker-compose.dev.yml`
-- `docker-compose.monitoring.yml`
-- `scripts/deploy-dev.sh`
-- `scripts/deploy-prod.sh`
-- `scripts/switch-color.sh`
-- `scripts/rollback.sh`
-- `docs/runbooks/blue-green.md`
+- [x] `Jenkinsfile`
+- [x] `docker-compose.prod.yml`
+- [x] `docker-compose.dev.yml`
+- [x] `docker-compose.monitoring.yml`
+- [x] `scripts/deploy-dev.sh`
+- [x] `scripts/deploy-prod.sh`
+- [x] `scripts/switch-color.sh`
+- [x] `scripts/rollback.sh`
+- [x] `docs/runbooks/blue-green.md`
 
 ---
 
@@ -429,57 +429,55 @@ Checkout → Determine Branch → Build → Docker Login → Build Image → Pus
 #### 5-1. 모니터링 서비스 Docker Compose 추가
 
 ```
-- [ ] docker-compose.monitoring.yml (또는 prod.yml에 monitoring-net으로 통합)
-- [ ] Prometheus, Grafana, Loki, Promtail, cAdvisor 서비스 정의
-- [ ] 각 서비스 설정 파일 작성:
-      - prometheus.yml (scrape targets)
-      - loki-config.yaml
-      - promtail-config.yaml
-      - grafana datasource provisioning
+- [x] docker-compose.monitoring.yml 작성 완료
+- [x] Prometheus, Grafana, Loki, Promtail, cAdvisor 서비스 정의
+- [x] 각 서비스 설정 파일 작성:
+      - monitoring/prometheus/prometheus.yml (local/dev/blue/green scrape targets)
+      - monitoring/loki/config.yml
+      - monitoring/promtail/config.yml
+      - monitoring/grafana/provisioning/datasources/datasources.yml
 ```
 
 #### 5-2. Backend 메트릭 노출
 
 ```
-- [ ] Spring Actuator prometheus endpoint 활성화 (/actuator/prometheus)
-- [ ] MDC 필드 확인: traceId, requestId, eventType, uri, method
-- [ ] 구조화 JSON 로그 (Loki 호환)
-- [ ] RequestLoggingFilter — 요청 단위 traceId 주입
-- [ ] 핵심 eventType 로그 검증:
+- [x] Spring Actuator prometheus endpoint 활성화 (/actuator/prometheus)
+- [x] MDC 필드: traceId, requestId, eventType, uri, method (RequestLoggingFilter.java)
+- [x] 구조화 JSON 로그 (logback-spring.xml — prod 프로파일에서 LogstashEncoder)
+- [x] RequestLoggingFilter — 요청 단위 traceId 주입
+- [x] 핵심 eventType 로그 검증:
       AUTH_TOKEN_ISSUED, WALLET_REGISTERED, EXCHANGE_TRANSACTION_SUBMITTED,
       LOTTO_COMMIT_SUBMITTED, JACKPOTCHAIN_TRANSACTION_SUBMITTED
+- [x] JackpotChain RPC 메트릭: MeterRegistry + Timer (jackpotchain_rpc_duration_seconds)
 ```
 
 #### 5-3. Grafana 대시보드
 
 ```
-- [ ] Spring Boot 기본 대시보드 (JVM, HTTP, DB)
-- [ ] 비즈니스 메트릭 대시보드:
-      - RPC latency (JackpotChain 응답 시간)
-      - Cache hit ratio (Redis)
-      - Outbox pending count
-      - Commit/Claim 요청 수
-      - HikariCP pending connections
-- [ ] 알림 규칙:
-      - RPC latency > 3s → WARN
+- [x] Spring Boot 기본 대시보드 (spring-overview.json — JVM, HTTP, DB)
+- [x] Loki 로그 대시보드 (loki-logs.json)
+- [x] 알림 규칙 (rules.yml):
+      - RPC latency p95 > 3s → WARN
       - 500 에러율 > 1% → CRITICAL
       - node 연결 끊김 → CRITICAL
+- [ ] 비즈니스 메트릭 전용 대시보드 별도 작성 여부 결정
+      (Cache hit ratio, Outbox pending, HikariCP 등 — 현재 spring-overview.json에 통합 가능)
 ```
 
 #### 5-4. Loki 로그 수집
 
 ```
-- [ ] Promtail → 컨테이너 로그 수집
-- [ ] Grafana에서 Loki 로그 조회 확인
-- [ ] 핵심 이벤트 로그 검색 검증 (eventType 기준)
+- [x] Promtail → 컨테이너 로그 수집 (promtail/config.yml)
+- [x] Grafana datasource + loki-logs.json 대시보드 provisioning
+- [x] eventType 기반 구조화 로그 구현 완료 (코드 레벨)
 ```
 
-**검증 기준:**
-- `http://localhost:9090/targets` → 전 target UP
-- `http://localhost:3001` Grafana 접속
-- `/actuator/prometheus` 메트릭 확인
-- Loki에서 컨테이너 로그 조회
-- 의도적 RPC 오류 주입 → Grafana 알림 확인
+**검증 기준 (EC2 실행 후 확인 필요):**
+- [ ] `http://localhost:9090/targets` → 전 target UP
+- [ ] Grafana 접속 및 datasource 연결 확인
+- [ ] `/actuator/prometheus` 메트릭 확인
+- [ ] Loki에서 컨테이너 로그 조회
+- [ ] 의도적 RPC 오류 주입 → Grafana 알림 확인
 
 ---
 
@@ -490,20 +488,28 @@ Checkout → Determine Branch → Build → Docker Login → Build Image → Pus
 #### 6-1. Baseline 측정
 
 ```
-도구: nGrinder 또는 JMeter
+도구: k6 (Docker: grafana/k6)
+스크립트: perf/k6/baseline_read.js, perf/k6/baseline_commit.js
+실행 래퍼: perf/run.sh
+
 대상 시나리오:
-- GET /blockchain/dashboard       (100 VU, 5분)
-- GET /lotto/entries?address=X    (50 VU, 5분)
-- GET /lotto?address=X            (50 VU, 5분)
-- POST /lotto/commit              (20 VU, 5분)
+- [x] GET /blockchain/dashboard       (100 VU, 5분) — baseline_read.js
+- [x] GET /lotto?address=X            (50 VU, 5분)  — baseline_read.js
+- [x] GET /lotto/entries?address=X    (50 VU, 5분)  — baseline_read.js
+- [x] POST /lotto/commit              (20 VU, pre-signed TX replay) — baseline_commit.js
+
+사전 준비:
+- [x] perf/setup/prepare_wallets.py  — 지갑 생성 + 인증 토큰
+- [x] perf/setup/prepare_commit_txs.py — POT 시드 + commit TX 사전 생성
 
 수집 지표:
-- avg / p95 / p99 latency
-- TPS (Transactions Per Second)
-- Error rate
-- HikariCP pending connection count
-- RPC latency
+- avg / p95 / p99 latency (k6 내장)
+- TPS (k6 내장)
+- Error rate (custom_errors metric)
+- HikariCP / RPC latency — Grafana에서 별도 확인
 ```
+
+[ ] 실제 측정 실행 및 결과 기록 → docs/result/performance-baseline-{date}.md
 
 #### 6-2. 성능 개선 P1 — HikariCP 튜닝
 
