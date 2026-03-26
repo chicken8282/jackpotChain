@@ -358,6 +358,9 @@ class Blockchain:
             block = self._blocks[block_hash]
             height = self._block_index[block_hash].height
             self._connect_block(block, height)
+            # reorg된 블록을 스토리지에도 반영
+            if self._store:
+                self._store.save_block(block, height)
             for tx in block.transactions[1:]:
                 new_chain_txids.add(tx.get_txid())
 
