@@ -549,14 +549,23 @@ class Node:
         # ===== SYNCED 상태: 실시간 블록 처리 =====
         block_hash = block.get_hash()
 
-        # 이전 블록이 메인 체인에 없으면 버퍼에 저장
+        # 이전 블록이 아예 없으면 버퍼에 저장 + 경쟁 체인 동기화 시도
         prev_hash = block.header.prev_block_hash
-        if prev_hash != bytes(32) and not self.blockchain.is_in_main_chain(prev_hash):
+        if prev_hash != bytes(32) and prev_hash not in self.blockchain._block_index:
             if len(self._block_buffer) >= MAX_BLOCK_BUFFER_SIZE:
                 oldest_key = next(iter(self._block_buffer))
                 del self._block_buffer[oldest_key]
                 _log('BUFFER', f'크기 제한 초과, 오래된 블록 제거: {oldest_key.hex()[:16]}...')
             self._block_buffer[block_hash] = block
+            # 경쟁 체인 감지: 피어에게 GETHEADERS 요청하여 분기점부터 받아옴
+            if self.sync_manager.state == _SyncState.SYNCED:
+                _log('SYNC', f'경쟁 블록 감지 (prev 없음), 헤더 동기화 시작: {block_hash.hex()[:16]}')
+                self.sync_manager.state = _SyncState.IDLE
+                self.sync_manager._best_known_height = max(
+                    self.sync_manager._best_known_height,
+                    self.blockchain.get_height() + 2
+                )
+                await self.sync_manager.start_sync()
             return
 
         # 블록 처리
@@ -589,7 +598,7 @@ class Node:
         while processed:
             processed = False
             for buf_hash, buf_block in list(self._block_buffer.items()):
-                if self.blockchain.is_in_main_chain(buf_block.header.prev_block_hash):
+                if buf_block.header.prev_block_hash in self.blockchain._block_index:
                     if self._on_block:
                         self._on_block(buf_block, peer)
                     if self.mempool:
