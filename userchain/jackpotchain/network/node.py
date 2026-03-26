@@ -215,11 +215,12 @@ class Node:
                     if elapsed > self.sync_manager.STALL_TIMEOUT:
                         stale_count = len(self.sync_manager._downloading)
                         if stale_count > 0:
-                            # stale 요청 정리 → _blocks_to_fetch로 복원
+                            # stale 요청 정리 → _blocks_to_fetch_set로 복원, fetch_index 리셋
                             for h in list(self.sync_manager._downloading):
-                                self.sync_manager._blocks_to_fetch.add(h)
+                                self.sync_manager._blocks_to_fetch_set.add(h)
                             self.sync_manager._downloading.clear()
                             self.sync_manager._peer_downloads.clear()
+                            self.sync_manager._fetch_index = 0
                             self.sync_manager._last_block_time = time.time()
                             _log('SYNC', f'watchdog: stale {stale_count}개 블록 재요청 대기')
                             await self.sync_manager._request_blocks()
@@ -365,9 +366,9 @@ class Node:
                     await self._process_message(address, header, payload)
 
         except asyncio.TimeoutError:
-            pass
+            _log('PEER', f'타임아웃: {address.ip}:{address.port}')
         except Exception as e:
-            pass
+            _log('PEER', f'피어 처리 에러: {address.ip}:{address.port} - {type(e).__name__}: {e}')
         finally:
             await self._disconnect(address)
 
@@ -447,11 +448,8 @@ class Node:
         # 피어에게 주소 요청
         await self._send_getaddr(address)
 
-        # 동기화 체크 (아웃바운드는 VERSION 수신 후에 체크)
-        peer = self.peer_manager.get_peer(address)
-        if peer and peer.is_inbound:
-            # 인바운드면 VERACK 받은 후 동기화 체크
-            await self._check_sync(address)
+        # 동기화 체크 (VERACK 수신 = 핸드셰이크 완료 → 양쪽 모두 체크)
+        await self._check_sync(address)
 
     async def _check_sync(self, address: PeerAddress):
         """동기화 필요 여부 확인 및 시작 (헤더 우선 동기화)"""
@@ -459,11 +457,13 @@ class Node:
         if peer:
             self.sync_manager.update_peer_height(peer, peer.start_height)
 
+        # 이미 동기화 중이면 스킵 (중복 start_sync 방지)
+        if self.sync_manager.state != _SyncState.IDLE:
+            return
+
         if self.sync_manager.needs_sync():
-            _log('SYNC', f'IBD 시작 (헤더 우선): 로컬={self.height}, 피어={peer.start_height if peer else "N/A"}')
+            _log('SYNC', f'IBD 시작 (헤더 우선): 로컬={self.height}, 피어={peer.start_height if peer else "N/A"}, best_known={self.sync_manager._best_known_height}')
             await self.sync_manager.start_sync()
-        else:
-            _log('SYNC', f'동기화 불필요: 로컬={self.height}, 피어={peer.start_height if peer else "N/A"}')
 
     async def _handle_ping(self, address: PeerAddress, payload: bytes):
         """PING 처리"""
@@ -529,7 +529,12 @@ class Node:
 
     async def _handle_block(self, address: PeerAddress, payload: bytes):
         """BLOCK 수신 — IBD 중이면 SyncManager 위임, 아니면 실시간 처리"""
-        block, _ = Block.deserialize(payload)
+        try:
+            block, _ = Block.deserialize(payload)
+        except Exception as e:
+            _log('SYNC', f'블록 파싱 실패: {type(e).__name__}: {e} from {address.ip}:{address.port}')
+            return
+        _log('SYNC', f'BLOCK 수신: height추정={block.header.timestamp}, hash={block.get_hash().hex()[:16]} from {address.ip}:{address.port}')
         peer = self.peer_manager.get_peer(address)
 
         # IBD 중이면 SyncManager에 위임
@@ -714,7 +719,10 @@ class Node:
         try:
             msg = HeadersMessage.deserialize(payload)
         except Exception:
+            _log('SYNC', f'HEADERS 파싱 실패: {address.ip}:{address.port}')
             return
+
+        _log('SYNC', f'HEADERS 수신: {len(msg.headers)}개 from {address.ip}:{address.port}, sync_state={self.sync_manager.state}')
 
         # 피어의 synced_headers 업데이트
         peer = self.peer_manager.get_peer(address)

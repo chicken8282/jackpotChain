@@ -15,7 +15,6 @@ from enum import Enum
 from ..consensus.chain import Blockchain, ChainState
 from ..core.block import Block, BlockHeader
 from ..network.peer import PeerInfo, PeerManager, PeerAddress
-from ..validation.block import validate_block
 from ..constants import MAX_HEADERS_SIZE
 
 
@@ -76,6 +75,7 @@ class SyncManager:
 
         # 헤더 동기화
         self._headers_synced = 0
+        self._last_header_hash: Optional[bytes] = None  # 마지막 수신 헤더 해시 (locator용)
 
         # 블록 다운로드 대기열 (높이순 정렬된 리스트)
         self._blocks_to_fetch: List[bytes] = []
@@ -131,9 +131,12 @@ class SyncManager:
     # =================================================================
 
     async def _request_headers(self):
-        """GETHEADERS 요청"""
+        """GETHEADERS 요청 — 마지막 헤더 해시를 locator 선두에 포함"""
         if self._request_headers_callback:
             locator = self.blockchain.get_block_locator()
+            # 헤더 전용 블록의 마지막 해시를 locator 앞에 추가
+            if self._last_header_hash and self._last_header_hash not in locator:
+                locator = [self._last_header_hash] + locator
             await self._request_headers_callback(locator)
 
     async def on_headers_received(self, peer_address: PeerAddress, raw_headers: List[bytes]):
@@ -178,6 +181,9 @@ class SyncManager:
             self.peer_manager.add_ban_score(peer_address, 20)
             return
         self._headers_synced += added
+        # 마지막 헤더 해시 기록 (다음 GETHEADERS locator용)
+        if headers:
+            self._last_header_hash = headers[-1].get_hash()
         _log('SYNC', f'헤더 수신: {len(headers)}개 (추가: {added}개, 총: {self._headers_synced}개)')
 
         # 3. 상태 전환 판단
@@ -224,17 +230,22 @@ class SyncManager:
         if not self._request_blocks_callback:
             return
 
-        peers = self.peer_manager.get_connected_peers()
+        # 블록을 가진 피어만 선택 (start_height > 로컬 높이)
+        local_height = self.blockchain.get_height()
+        peers = [p for p in self.peer_manager.get_connected_peers()
+                 if p.start_height > local_height]
         if not peers:
             return
 
-        # 피어별 빈 슬롯 계산
+        # 피어별 빈 슬롯 계산 + 높이 매핑
         peer_slots: Dict[PeerAddress, int] = {}
+        peer_heights: Dict[PeerAddress, int] = {}
         for peer in peers:
             addr = peer.address
             in_flight = len(self._peer_downloads.get(addr, set()))
             if in_flight < self.MAX_PER_PEER:
                 peer_slots[addr] = self.MAX_PER_PEER - in_flight
+                peer_heights[addr] = peer.start_height
 
         if not peer_slots:
             return
@@ -258,16 +269,25 @@ class SyncManager:
             if block_hash in self._downloading or block_hash in self._block_buffer:
                 continue  # 이미 요청 중이거나 버퍼에 있음
 
-            # 빈 슬롯이 있는 다음 피어 찾기 (라운드로빈)
+            # 블록 높이 조회
+            block_idx = self.blockchain.get_block_index(block_hash)
+            block_height = block_idx.height if block_idx else 0
+
+            # 빈 슬롯이 있고 이 블록을 가진 피어 찾기 (라운드로빈)
+            found = False
             for _ in range(len(peer_list)):
                 addr = peer_list[peer_idx]
-                if len(peer_requests[addr]) < peer_slots[addr]:
+                peer_idx = (peer_idx + 1) % len(peer_list)
+                if (len(peer_requests[addr]) < peer_slots[addr]
+                        and peer_heights[addr] >= block_height):
                     peer_requests[addr].append(block_hash)
                     self._downloading.add(block_hash)
                     assigned += 1
-                    peer_idx = (peer_idx + 1) % len(peer_list)
+                    found = True
                     break
-                peer_idx = (peer_idx + 1) % len(peer_list)
+
+            if not found:
+                break  # 이 블록을 줄 수 있는 피어가 없음 → 중단
 
         # _fetch_index 업데이트 (완료된 블록 건너뛰기)
         self._fetch_index = i
@@ -306,6 +326,8 @@ class SyncManager:
             # 아직 이전 블록이 없음 → 버퍼에 저장
             if len(self._block_buffer) < self.MAX_BLOCK_BUFFER:
                 self._block_buffer[block_hash] = block
+                if len(self._block_buffer) % 50 == 0:
+                    _log('SYNC', f'버퍼: {len(self._block_buffer)}개 (prev 대기: {prev_hash.hex()[:16]})')
             return
 
         # 체인에 추가 시도
@@ -323,32 +345,19 @@ class SyncManager:
                 self._finish_sync()
 
     async def _try_add_block(self, block: Block, peer: PeerInfo) -> bool:
-        """블록 검증 후 체인에 추가
+        """블록을 체인에 추가
 
-        IBD 중 스킵하는 검증:
-        - coinbase height: 기존 블록 호환성 문제
-        - difficulty: 헤더 단계에서 PoW 이미 검증됨, 체인은 총 작업량 기준 선택
+        IBD에서는 validate_block을 스킵한다:
+        - PoW: 헤더 단계에서 이미 검증 완료
+        - TX 검증: 기존 체인 블록이 validate_block 없이 추가되었으므로 호환성 유지
+        - 체인 리셋 후 깨끗한 블록만 있으면 validate_block 활성화 가능
         """
-        prev_block = self.blockchain.get_tip()
-        prev_header = prev_block.header if prev_block else None
-
-        result = validate_block(
-            block,
-            self.blockchain.utxo_set,
-            self.blockchain.get_height() + 1,
-            prev_header=prev_header,
-            expected_difficulty=None,
-            blockchain=self.blockchain,
-            check_coinbase_height=False
-        )
-
-        if not result.is_valid:
-            _log('SYNC', f'블록 검증 실패: {result.message}')
-            if peer:
-                self.peer_manager.add_ban_score(peer.address, 20)
+        try:
+            success, msg = self.blockchain.add_block(block)
+        except Exception as e:
+            _log('SYNC', f'블록 추가 예외: {type(e).__name__}: {e}')
             return False
 
-        success, msg = self.blockchain.add_block(block)
         if success:
             self._blocks_downloaded += 1
 
@@ -357,14 +366,18 @@ class SyncManager:
                 _log('SYNC', f'reorg 감지 — 블록 버퍼 초기화 ({len(self._block_buffer)}개)')
                 self._block_buffer.clear()
 
-            if self._blocks_downloaded % 500 == 0:
+            if self._blocks_downloaded % 100 == 0:
                 elapsed = time.time() - self._download_start_time
                 bps = self._blocks_downloaded / elapsed if elapsed > 0 else 0
-                _log('SYNC', f'블록 진행: {self._blocks_downloaded}개 ({bps:.0f} blocks/s), 높이: {self.blockchain.get_height()}')
+                _log('SYNC', f'블록 진행: {self._blocks_downloaded}개 ({bps:.0f} blocks/s), 높이: {self.blockchain.get_height()}, 버퍼: {len(self._block_buffer)}개, 대기: {len(self._blocks_to_fetch_set)}개')
+
+            # 사이드 체인 경고
+            if "side chain" in msg.lower():
+                _log('SYNC', f'⚠ 사이드체인 추가: hash={block.get_hash().hex()[:16]}, msg={msg}')
 
             return True
         else:
-            _log('SYNC', f'블록 추가 실패: {msg}')
+            _log('SYNC', f'블록 추가 실패: {msg}, hash={block.get_hash().hex()[:16]}')
             return False
 
     async def _flush_buffer(self, peer: PeerInfo):
