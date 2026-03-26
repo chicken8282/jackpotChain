@@ -58,14 +58,14 @@ function EconomyCollapseAnim() {
           transition={{ repeat: Infinity, duration: 6, times: [0, 0.2, 0.5, 0.8, 1] }}
         />
 
-        {/* 쌓이는 지폐들 — 아래에서 위로 순차 등장 */}
+        {/* 쌓이는 지폐들 — 위에서 아래로 떨어져 쌓임 */}
         {denominations.map((label, i) => (
           <motion.div
             key={i}
-            className="absolute left-1/2 w-16 h-8 rounded border border-green-500/30 bg-green-900/40 flex items-center justify-center text-[8px] font-mono text-green-300/60"
-            style={{ transform: "translateX(-50%)" }}
+            className="absolute left-1/2 -translate-x-1/2 w-16 h-8 rounded border border-green-500/30 bg-green-900/40 flex items-center justify-center text-[8px] font-mono text-green-300/60"
+            style={{ bottom: 10 + i * 22 }}
             animate={{
-              bottom: [140, 10 + i * 22, 10 + i * 22, -30],
+              y: [-160, 0, 0, 40],
               opacity: [0, 1, 1, 0],
               rotate: [0, 0, (i % 2 === 0 ? 3 : -3), (i % 2 === 0 ? 15 : -15)],
             }}
@@ -100,33 +100,38 @@ function EconomyCollapseAnim() {
  */
 function HyperinflationAnim() {
   const rates = ["10%", "100%", "1,000%", "100만%", "796억%"];
+  const n = rates.length;
+  // 각 숫자의 표시 구간: fadeIn → hold → fadeOut, 겹침 없이 순차 전환
+  const slotDur = 1 / n; // 각 숫자에 할당된 시간 비율 (0.2)
 
   return (
     <div className="w-full flex justify-center">
       <div className="relative" style={{ width: 200, height: 140 }}>
-        {/* 중앙: 상승률 숫자가 순차적으로 전환 */}
+        {/* 중앙: 상승률 숫자가 순차적으로 전환 (겹침 없음) */}
         <div className="absolute inset-0 flex items-center justify-center">
-          {rates.map((rate, i) => (
-            <motion.span
-              key={i}
-              className="absolute font-mono font-bold"
-              style={{ fontSize: `${14 + i * 4}px` }}
-              animate={{
-                opacity: rates.map((_, j) => (j === i ? 1 : 0)),
-                scale: rates.map((_, j) => (j === i ? 1 : 0.5)),
-                color: i < 3
-                  ? ["rgb(251,191,36)", "rgb(251,191,36)", "rgb(251,191,36)", "rgb(251,191,36)", "rgb(251,191,36)"]
-                  : ["rgb(239,68,68)", "rgb(239,68,68)", "rgb(239,68,68)", "rgb(239,68,68)", "rgb(239,68,68)"],
-              }}
-              transition={{
-                repeat: Infinity,
-                duration: 5,
-                times: rates.map((_, j) => j / rates.length),
-              }}
-            >
-              {rate}
-            </motion.span>
-          ))}
+          {rates.map((rate, i) => {
+            // 각 숫자의 키프레임: 나타남 전 0 → fadeIn → hold → fadeOut → 나머지 0
+            const start = i * slotDur;
+            const fadeIn = start + slotDur * 0.1;
+            const holdEnd = start + slotDur * 0.75;
+            const fadeOut = start + slotDur * 0.95;
+            // times와 values를 정밀하게 설정
+            const times = [0, Math.max(start, 0.001), fadeIn, holdEnd, Math.min(fadeOut, 0.999), 1];
+            const opacityValues = [0, 0, 1, 1, 0, 0];
+            const scaleValues = [0.5, 0.5, 1, 1, 0.5, 0.5];
+
+            return (
+              <motion.span
+                key={i}
+                className="absolute font-mono font-bold"
+                style={{ fontSize: `${14 + i * 4}px`, color: i < 3 ? "rgb(251,191,36)" : "rgb(239,68,68)" }}
+                animate={{ opacity: opacityValues, scale: scaleValues }}
+                transition={{ repeat: Infinity, duration: 6, times, ease: "easeInOut" }}
+              >
+                {rate}
+              </motion.span>
+            );
+          })}
         </div>
 
         {/* 주변 경고 파티클 — 6방향으로 퍼져나감 */}
@@ -282,9 +287,9 @@ export default function DecentralizationConcept({ onGoInteraction }: Props) {
             style={{ objectPosition: "center 60%" }}
           />
         </div>
-        <p className="text-center text-xs text-white/40 py-3 italic">
-          "1923년 독일, 빵 한 덩이를 사기 위해 수레 가득 돈을 끌고 가야 했습니다"
-        </p>
+        <blockquote className="text-center text-xs text-white/50 py-3 italic border-l-2 border-white/20 pl-4 mx-auto max-w-xs">
+          "2008년 짐바브웨, 빵 한 덩이를 사기 위해 수레 가득한 돈이 필요했습니다"
+        </blockquote>
       </div>
 
       {/* ── 섹션 제목 ─────────────────────────────────── */}
@@ -322,32 +327,33 @@ export default function DecentralizationConcept({ onGoInteraction }: Props) {
           const CardAnim = card.Anim;
           return (
             <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setExpandedCard(null)}
             >
               <motion.div
-                className={`rounded-3xl border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
+                className={`relative rounded-3xl overflow-hidden border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.5, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 260, damping: 22 }}
                 onClick={(e) => e.stopPropagation()}
               >
+                <button onClick={() => setExpandedCard(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/40 hover:text-white/70 transition-colors" aria-label="닫기">&times;</button>
                 <div className="flex flex-col items-center gap-6">
                   {/* 자동재생 애니메이션 */}
                   <CardAnim />
                   {/* 텍스트 설명 */}
                   <div className="text-center">
                     <p className={`text-lg font-bold ${card.accent} mb-2`}>{card.title}</p>
-                    <p className="text-sm text-white/70 leading-relaxed">{card.desc}</p>
+                    <p className="text-sm text-white/70 leading-[1.7]">{card.desc}</p>
                   </div>
                   {/* 닫기 버튼 */}
                   <button
                     onClick={() => setExpandedCard(null)}
-                    className="text-xs text-white/30 hover:text-white/60 transition-colors"
+                    className="text-sm text-white/40 hover:text-white/70 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/[0.06]"
                   >
                     닫기
                   </button>

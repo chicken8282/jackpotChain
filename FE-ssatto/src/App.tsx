@@ -37,9 +37,12 @@ export default function App() {
       <Suspense
         fallback={
           <div className="relative z-10 flex min-h-[calc(100vh-88px)] items-center justify-center px-6">
-            <div className="rounded-[28px] border border-border bg-surface/80 px-8 py-6 text-center shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-              <p className="font-display text-2xl font-black text-white">화면을 불러오는 중입니다.</p>
-              <p className="mt-2 text-sm text-text-secondary">잠시만 기다려주세요.</p>
+            <div className="rounded-[28px] border border-border bg-surface/80 px-8 py-8 text-center shadow-[0_18px_50px_rgba(0,0,0,0.18)] flex flex-col items-center gap-4">
+              <div className="w-8 h-8 border-2 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin" />
+              <div>
+                <p className="font-display text-lg font-bold text-white">화면을 불러오는 중입니다</p>
+                <p className="mt-1 text-xs text-text-secondary">잠시만 기다려주세요</p>
+              </div>
             </div>
           </div>
         }
