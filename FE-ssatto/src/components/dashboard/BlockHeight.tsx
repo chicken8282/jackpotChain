@@ -1,9 +1,8 @@
+import { useMemo } from "react";
 import { motion } from "motion/react";
 import AnimatedNumber from "../common/AnimatedNumber";
 import { useAnimateOnScroll } from "../../hooks/useAnimateOnScroll";
 import { dashboardStats } from "./dashboardMockData";
-
-const stackLayers = [712, 780, 835, 881, 915, 928];
 
 interface BlockHeightProps {
   currentHeight?: number;
@@ -11,6 +10,11 @@ interface BlockHeightProps {
 
 export default function BlockHeight({ currentHeight = dashboardStats.currentHeight }: BlockHeightProps) {
   const { ref, inView } = useAnimateOnScroll<HTMLDivElement>();
+
+  const stackLayers = useMemo(() => {
+    const base = currentHeight > 5 ? currentHeight - 5 : 0;
+    return Array.from({ length: 6 }, (_, i) => base + i);
+  }, [currentHeight]);
 
   return (
     <motion.section

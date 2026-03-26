@@ -4,6 +4,7 @@ import HexPicker from "../components/lotto/HexPicker";
 import LottoTierRanking from "../components/lotto/LottoTierRanking";
 import { useLottoEntries } from "../hooks/useLottoEntries";
 import { useLottoOverview } from "../hooks/useLottoOverview";
+import { useLottoRanking } from "../hooks/useLottoRanking";
 import { getLottoEntryResult } from "../services/lottoService";
 import { mapLottoResult, type LottoHistoryDetail } from "../services/readModelAdapters";
 import { useWalletSessionStore } from "../stores/useWalletSessionStore";
@@ -47,12 +48,18 @@ function CommitFailedModal({
   );
 }
 
-function WalletRequiredModal({
+function AlertModal({
   open,
+  title,
+  message,
+  confirmLabel,
   onClose,
   onConfirm,
 }: {
   open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -63,10 +70,8 @@ function WalletRequiredModal({
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-[30px] border border-white/10 bg-[rgba(12,16,28,0.98)] px-6 py-7 shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
-        <h3 className="text-xl font-bold text-white">지갑 생성이 필요합니다</h3>
-        <p className="mt-3 text-sm leading-6 text-text-secondary">
-          로또 추첨에 참여하려면 지갑을 먼저 생성해주세요. 지갑을 만들면 1 POT이 즉시 지급되어 바로 참여할 수 있습니다.
-        </p>
+        <h3 className="text-xl font-bold text-white">{title}</h3>
+        <p className="mt-3 text-sm leading-6 text-text-secondary">{message}</p>
         <div className="mt-6 flex gap-3">
           <button
             type="button"
@@ -80,7 +85,7 @@ function WalletRequiredModal({
             onClick={onConfirm}
             className="h-12 flex-1 rounded-2xl border border-accent-gold/35 bg-accent-gold/10 font-bold text-accent-gold transition-colors hover:bg-accent-gold/15"
           >
-            지갑 생성하러 가기
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -101,16 +106,22 @@ export default function LottoPage() {
   const activeWallet = wallets.find((wallet) => wallet.address === activeAddress);
   const activeAccessToken = activeWallet ? accessSessions[activeWallet.walletId]?.accessToken : undefined;
   const activePrivateKey = activeWallet ? unlockedWallets[activeWallet.walletId]?.privateKey : undefined;
+  const isWalletLocked = wallets.length > 0 && !!activeWallet && !activePrivateKey;
   const { overview, refetch: refetchLottoOverview } = useLottoOverview(activeAddress, activeAccessToken);
   const { entries } = useLottoEntries(activeAddress, activeAccessToken);
+  const { winners } = useLottoRanking();
   const [pendingEntries, setPendingEntries] = useState<LottoHistoryEntry[]>([]);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWalletRequiredModal, setShowWalletRequiredModal] = useState(false);
   const [showCommitFailedModal, setShowCommitFailedModal] = useState(false);
+  const [showJackInsufficientModal, setShowJackInsufficientModal] = useState(false);
+  const [showWalletLockedModal, setShowWalletLockedModal] = useState(false);
 
   // 현재 address 의 optimistic pot offset (POT 단위, 전역 store)
   const optimisticPotOffset = activeAddress ? (potOptimisticOffsetByAddress[activeAddress] ?? 0) : 0;
+
+  const actualJackBalance = Math.floor((overview?.jackBalance ?? 0) / 100_000_000);
 
   // ── reset optimistic offset whenever server potBalance changes ──────────────
   const prevOverviewPotRef = useRef<number | undefined>(undefined);
@@ -126,8 +137,6 @@ export default function LottoPage() {
   }, [overview?.potBalance, activeAddress, clearPotOptimisticOffset]);
 
   // ── S2: failure detection — runs on every entries poll cycle ────────────────
-  // Using a ref to read the latest pendingEntries without making it a reactive
-  // dep (which would cause an update loop with setPendingEntries inside).
   const pendingEntriesRef = useRef(pendingEntries);
   pendingEntriesRef.current = pendingEntries;
 
@@ -160,7 +169,6 @@ export default function LottoPage() {
     setPendingEntries((prev) => prev.filter((p) => !toRemove.has(p.id)));
 
     if (timedOutIds.length > 0) {
-      // Restore optimistic offset for each failed commit
       if (activeAddress) {
         for (let i = 0; i < timedOutIds.length; i++) {
           applyPotOptimisticOffset(activeAddress, 1);
@@ -172,7 +180,6 @@ export default function LottoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries]);
 
-  // pending 항목과 실제 entries 합치기 — 실제 entries에 있으면 pending 제거
   const mergedEntries = useMemo(() => {
     const confirmedHashes = new Set(entries.map((e) => e.numbers.join("")));
     const activePending = pendingEntries.filter(
@@ -242,12 +249,10 @@ export default function LottoPage() {
         chosenNumbers,
       });
 
-      // optimistic POT decrement — show -1 immediately before block confirm
       if (activeAddress) {
         applyPotOptimisticOffset(activeAddress, -1);
       }
 
-      // 대기중 항목 추가
       const now = new Intl.DateTimeFormat("ko-KR", {
         month: "2-digit",
         day: "2-digit",
@@ -271,7 +276,6 @@ export default function LottoPage() {
       ]);
       setActionStatus("로또 참여 트랜잭션을 제출했습니다. 약 10분 뒤 결과를 확인해 주세요.");
 
-      // immediate refetch so the server potBalance updates as fast as possible
       void refetchLottoOverview();
     } finally {
       setIsSubmitting(false);
@@ -300,14 +304,50 @@ export default function LottoPage() {
     }
   };
 
+  const handleWalletLocked = () => {
+    setShowWalletLockedModal(true);
+  };
+
+  const handleInsufficientJack = () => {
+    setShowJackInsufficientModal(true);
+  };
+
   return (
     <PageLayout>
-      <WalletRequiredModal
+      {/* 지갑 등록 필요 */}
+      <AlertModal
         open={showWalletRequiredModal}
+        title="지갑 등록이 필요합니다"
+        message="로또 추첨에 참여하려면 지갑을 먼저 등록해주세요. 지갑을 만들면 1 POT이 즉시 지급되어 바로 참여할 수 있습니다."
+        confirmLabel="지갑 등록하러 가기"
         onClose={() => setShowWalletRequiredModal(false)}
         onConfirm={() => {
           setShowWalletRequiredModal(false);
           navigate("/wallet");
+        }}
+      />
+      {/* JACK 부족 → 채굴 페이지로 */}
+      <AlertModal
+        open={showJackInsufficientModal}
+        title="JACK이 부족합니다"
+        message="채굴을 통해 JACK을 획득하세요. 100 JACK을 모으면 1 POT으로 교환하여 로또에 참여할 수 있습니다."
+        confirmLabel="채굴 페이지로 이동"
+        onClose={() => setShowJackInsufficientModal(false)}
+        onConfirm={() => {
+          setShowJackInsufficientModal(false);
+          navigate("/mining");
+        }}
+      />
+      {/* 지갑 잠금 상태 → 지갑 페이지 + 잠금해제 모달 */}
+      <AlertModal
+        open={showWalletLockedModal}
+        title="지갑 잠금해제가 필요합니다"
+        message="로또 참여를 위해 지갑 잠금을 해제해야 합니다. 지갑 페이지에서 비밀번호로 잠금을 해제해 주세요."
+        confirmLabel="지갑 잠금 해제하기"
+        onClose={() => setShowWalletLockedModal(false)}
+        onConfirm={() => {
+          setShowWalletLockedModal(false);
+          navigate("/wallet", { state: { showUnlockModal: true } });
         }}
       />
       <CommitFailedModal
@@ -324,13 +364,16 @@ export default function LottoPage() {
           className="h-full"
           value={Math.floor((overview?.poolBalanceJack ?? 0) / 100_000_000)}
         />
-        <LottoTierRanking entries={overview?.prizeTiers ?? []} />
+        <LottoTierRanking winners={winners} />
       </section>
       <HexPicker
         disabled={isSubmitting}
         hasWallet={wallets.length > 0}
+        isWalletLocked={isWalletLocked}
         onRequireWallet={() => setShowWalletRequiredModal(true)}
-        jackBalance={Math.floor((overview?.jackBalance ?? 0) / 100_000_000)}
+        onWalletLocked={handleWalletLocked}
+        onInsufficientJack={handleInsufficientJack}
+        jackBalance={actualJackBalance}
         potBalance={Math.max(0, Math.floor((overview?.potBalance ?? 0) / 100_000_000) + optimisticPotOffset)}
         onExchangeJackToPot={handleExchangeJackToPot}
         onCommit={handleCommit}
