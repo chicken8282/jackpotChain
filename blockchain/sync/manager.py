@@ -320,10 +320,10 @@ class SyncManager:
         if peer and peer.address in self._peer_downloads:
             self._peer_downloads[peer.address].discard(block_hash)
 
-        # 이전 블록이 메인 체인에 있는지 확인
+        # 이전 블록이 존재하는지 확인 (메인 체인 또는 사이드 체인 모두 허용)
         prev_hash = block.header.prev_block_hash
-        if prev_hash != bytes(32) and not self.blockchain.is_in_main_chain(prev_hash):
-            # 아직 이전 블록이 없음 → 버퍼에 저장
+        if prev_hash != bytes(32) and prev_hash not in self.blockchain._block_index:
+            # 이전 블록이 아예 없음 → 버퍼에 저장
             if len(self._block_buffer) < self.MAX_BLOCK_BUFFER:
                 self._block_buffer[block_hash] = block
                 if len(self._block_buffer) % 50 == 0:
@@ -386,7 +386,7 @@ class SyncManager:
         while processed:
             processed = False
             for buf_hash, buf_block in list(self._block_buffer.items()):
-                if self.blockchain.is_in_main_chain(buf_block.header.prev_block_hash):
+                if buf_block.header.prev_block_hash in self.blockchain._block_index:
                     del self._block_buffer[buf_hash]
                     if await self._try_add_block(buf_block, peer):
                         processed = True
