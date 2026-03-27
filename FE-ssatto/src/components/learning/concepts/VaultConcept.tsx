@@ -76,17 +76,10 @@ function TransparencyAnim() {
         <div className="absolute inset-0 flex flex-col justify-center px-4 gap-1.5">
           {ledger.map((tx, i) => (
             <motion.div key={i}
-              className="rounded-md bg-blue-500/15 border border-blue-500/25 px-2 py-1 text-[10px] font-mono text-blue-300"
+              className="rounded-md bg-blue-500/10 px-2 py-1 text-[10px] font-mono text-blue-300"
               animate={{ opacity: [0, 0, 1, 1, 0] }}
               transition={{ repeat: Infinity, duration: 6, times: [0, 0.3, 0.45 + i * 0.05, 0.8, 0.95], delay: i * 0.05 }}
-            />
-          ))}
-          {ledger.map((tx, i) => (
-            <motion.div key={`t${i}`}
-              className="absolute rounded-md px-2 py-1 text-[10px] font-mono text-blue-300"
-              style={{ top: 10 + i * 30, left: 16, right: 16 }}
-              animate={{ opacity: [0, 0, 1, 1, 0] }}
-              transition={{ repeat: Infinity, duration: 6, times: [0, 0.3, 0.45 + i * 0.05, 0.8, 0.95] }}>
+            >
               {tx}
             </motion.div>
           ))}
@@ -281,24 +274,25 @@ export default function VaultConcept({ onGoInteraction }: Props) {
           const card = CARDS[expandedCard];
           const CardAnim = card.Anim;
           return (
-            <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setExpandedCard(null)}>
               <motion.div
-                className={`rounded-3xl border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
+                className={`relative rounded-3xl overflow-hidden border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
                 initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 260, damping: 22 }}
                 onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setExpandedCard(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/40 hover:text-white/70 transition-colors" aria-label="닫기">&times;</button>
                 <div className="flex flex-col items-center gap-6">
                   {/* 애니메이션 */}
                   <CardAnim />
                   {/* 설명 */}
                   <div className="text-center">
                     <p className={`text-lg font-bold ${card.accent} mb-2`}>{card.title}</p>
-                    <p className="text-sm text-white/70 leading-relaxed">{card.desc}</p>
+                    <p className="text-sm text-white/70 leading-[1.7]">{card.desc}</p>
                   </div>
                   <button onClick={() => setExpandedCard(null)}
-                    className="text-xs text-white/30 hover:text-white/60 transition-colors">닫기</button>
+                    className="text-sm text-white/40 hover:text-white/70 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/[0.06]">닫기</button>
                 </div>
               </motion.div>
             </motion.div>

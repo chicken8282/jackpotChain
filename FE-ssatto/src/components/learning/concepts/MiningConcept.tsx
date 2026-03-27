@@ -74,7 +74,7 @@ function PowAnim() {
   const symbols = ["7", "0", "3", "a", "f", "0", "9", "b"];
   return (
     <div className="w-full flex justify-center">
-      <div className="relative" style={{ width: 200, height: 100 }}>
+      <div className="relative overflow-hidden rounded-xl" style={{ width: 200, height: 100 }}>
         {/* 슬롯 프레임 */}
         <div className="absolute inset-0 rounded-xl border-2 border-yellow-500/30 bg-yellow-500/[0.05] flex items-center justify-center gap-2 px-4">
           {[0, 1, 2].map((i) => (
@@ -92,9 +92,9 @@ function PowAnim() {
           ))}
         </div>
 
-        {/* 레버 */}
+        {/* 레버 (컨테이너 내부 우측에 배치) */}
         <motion.div
-          className="absolute -right-3 top-1/2 -translate-y-1/2 w-3 h-12 rounded-full bg-red-500/40 border border-red-400/30"
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-12 rounded-full bg-red-500/40 border border-red-400/30"
           animate={{ y: [0, 4, 0] }}
           transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
         />
@@ -293,22 +293,23 @@ export default function MiningConcept({ onGoInteraction }: Props) {
           const card = CARDS[expandedCard];
           const CardAnim = card.Anim;
           return (
-            <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setExpandedCard(null)}>
               <motion.div
-                className={`rounded-3xl border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
+                className={`relative rounded-3xl overflow-hidden border ${card.border} bg-gradient-to-b ${card.bg} bg-bg-primary backdrop-blur-2xl p-8 max-w-sm w-full mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.5)]`}
                 initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 260, damping: 22 }}
                 onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setExpandedCard(null)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/40 hover:text-white/70 transition-colors" aria-label="닫기">&times;</button>
                 <div className="flex flex-col items-center gap-6">
                   <CardAnim />
                   <div className="text-center">
                     <p className={`text-lg font-bold ${card.accent} mb-2`}>{card.title}</p>
-                    <p className="text-sm text-white/70 leading-relaxed">{card.desc}</p>
+                    <p className="text-sm text-white/70 leading-[1.7]">{card.desc}</p>
                   </div>
                   <button onClick={() => setExpandedCard(null)}
-                    className="text-xs text-white/30 hover:text-white/60 transition-colors">닫기</button>
+                    className="text-sm text-white/40 hover:text-white/70 transition-colors px-4 py-1.5 rounded-lg hover:bg-white/[0.06]">닫기</button>
                 </div>
               </motion.div>
             </motion.div>

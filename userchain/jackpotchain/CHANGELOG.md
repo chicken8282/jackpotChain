@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)
 
 ---
 
+## [1.1.0] - 2026-03-27
+
+### Fixed
+- HEADERS 동기화 타임아웃 처리 추가 (10초 타임아웃, 최대 2회 재시도 후 INV 모드 전환)
+- 고아 블록 수신 시 GETDATA로 이전 블록 역추적 동기화 (전체 헤더 재동기화 대신 직접 요청)
+- 리오그 미발동 버그 수정: `is_in_main_chain` → `_block_index` 체크 변경 (사이드체인 블록 허용)
+
+### Changed
+- 헤더 동기화 실패 시 자동으로 SYNCED 상태 전환 및 INV 기반 블록 수신 모드 폴백
+
+---
+
 ## [1.0.8] - 2026-03-26
 
 ### Fixed

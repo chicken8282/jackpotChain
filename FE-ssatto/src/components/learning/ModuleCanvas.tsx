@@ -23,6 +23,7 @@ import EconomyConcept from "./concepts/EconomyConcept";
 import LottoConcept from "./concepts/LottoConcept";
 import FairnessConcept from "./concepts/FairnessConcept";
 import DecentralizationConcept from "./concepts/DecentralizationConcept";
+import PropagationConcept from "./concepts/PropagationConcept";
 
 const CUSTOM_CONCEPT_MAP: Record<string, React.FC<{ onGoInteraction: () => void }>> = {
   "0.1": DecentralizationConcept,
@@ -33,6 +34,7 @@ const CUSTOM_CONCEPT_MAP: Record<string, React.FC<{ onGoInteraction: () => void 
   "2.2": SignatureConcept,
   "3.1": UTXOConcept,
   "3.2": TxConcept,
+  "3.3": PropagationConcept,
   "4.1": MiningConcept,
   "4.2": EconomyConcept,
   "5.1": LottoConcept,
@@ -122,10 +124,13 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
         <div className="flex gap-1 rounded-2xl border border-white/[0.10] bg-white/[0.05] p-1">
           {TABS.map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`relative flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`relative flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
                 tab === t ? "text-white" : "text-white/50 hover:text-white/70"}`}>
               {tab === t && (
-                <motion.div layoutId="tab-bg" className="absolute inset-0 rounded-xl border border-white/10 bg-white/[0.06]" />
+                <motion.div layoutId="tab-bg" className="absolute inset-0 rounded-xl border border-white/10 bg-white/[0.08]" />
+              )}
+              {tab === t && (
+                <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full bg-accent-gold" />
               )}
               <span className="relative z-10">{TAB_LABELS[t]}</span>
             </button>
@@ -192,8 +197,8 @@ export default function ModuleCanvas({ stageNumber, moduleId }: Props) {
           </AnimatePresence>
         </div>
 
-        {/* 이전/다음 */}
-        <div className="flex justify-between">
+        {/* 이전/다음 — FAB 겹침 방지를 위해 우측 여백 확보 */}
+        <div className="flex justify-between pr-16">
           {prevMod ? (
             <GlassButton variant="secondary" onClick={() => { setTab("concept"); navigate(`/learn/${prevMod.split(".")[0]}/${prevMod}`); }}>
               ← {MODULE_TITLES[prevMod]}
