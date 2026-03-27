@@ -5,6 +5,7 @@ import Navbar from "./components/layout/Navbar";
 import PageLayout from "./components/layout/PageLayout";
 // [챗봇] 전역 챗봇 컴포넌트 — chatbotConfig.ts에서 ON/OFF 제어
 import ChatBot from "./components/chatbot/ChatBot";
+import { useHardRefreshHandler } from "./hooks/useHardRefreshHandler";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LottoPage = lazy(() => import("./pages/LottoPage"));
@@ -26,6 +27,7 @@ const pageTransition = {
 
 export default function App() {
   const location = useLocation();
+  useHardRefreshHandler();
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-bg-primary text-text-primary">

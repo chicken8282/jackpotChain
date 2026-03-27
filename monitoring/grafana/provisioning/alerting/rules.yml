@@ -84,7 +84,7 @@ groups:
               from: 300
               to: 0
             model:
-              expression: errors / total * 100
+              expression: $errors / $total * 100
               refId: ratio
               type: math
           - refId: threshold

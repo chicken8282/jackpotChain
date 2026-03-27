@@ -3,6 +3,10 @@ import { clearPendingState } from "../services/tx/pendingTxTracker";
 
 export const WALLET_IDLE_LOCK_MS = 24 * 60 * 60 * 1000;
 
+// sessionStorage key for persisting access tokens across normal page reloads (Ctrl+R).
+// Cleared explicitly on hard refresh (Ctrl+Shift+R) via useHardRefreshHandler.
+const SESSION_TOKENS_KEY = "ssatto-access-sessions";
+
 interface UnlockedWallet {
   privateKey: string;
   unlockedAt: number;
@@ -26,27 +30,57 @@ interface WalletSessionState {
   lockExpiredWallets: (maxIdleMs?: number) => boolean;
 }
 
+function loadInitialAccessSessions(): Record<string, AccessSession> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_TOKENS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, AccessSession>;
+    const now = Date.now();
+    const valid: Record<string, AccessSession> = {};
+    for (const [walletId, session] of Object.entries(parsed)) {
+      if (
+        session.accessToken &&
+        session.accessTokenExpiresAt &&
+        new Date(session.accessTokenExpiresAt).getTime() > now
+      ) {
+        valid[walletId] = session;
+      }
+    }
+    return valid;
+  } catch {
+    return {};
+  }
+}
+
+function persistAccessSessions(sessions: Record<string, AccessSession>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SESSION_TOKENS_KEY, JSON.stringify(sessions));
+  } catch {
+    // Ignore storage errors (e.g., private browsing quota exceeded)
+  }
+}
+
 export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
-  accessSessions: {},
+  accessSessions: loadInitialAccessSessions(),
   unlockedWallets: {},
   lastInteractionAt: Date.now(),
   setAccessSession: (walletId, accessToken, accessTokenExpiresAt) =>
-    set((state) => ({
-      accessSessions: {
+    set((state) => {
+      const nextSessions = {
         ...state.accessSessions,
-        [walletId]: {
-          accessToken,
-          accessTokenExpiresAt,
-        },
-      },
-    })),
+        [walletId]: { accessToken, accessTokenExpiresAt },
+      };
+      persistAccessSessions(nextSessions);
+      return { accessSessions: nextSessions };
+    }),
   clearAccessSession: (walletId) =>
     set((state) => {
       const nextAccessSessions = { ...state.accessSessions };
       delete nextAccessSessions[walletId];
-      return {
-        accessSessions: nextAccessSessions,
-      };
+      persistAccessSessions(nextAccessSessions);
+      return { accessSessions: nextAccessSessions };
     }),
   unlockWallet: (walletId, privateKey) =>
     set((state) => ({
@@ -66,6 +100,7 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
       const nextAccessSessions = { ...state.accessSessions };
       delete nextUnlockedWallets[walletId];
       delete nextAccessSessions[walletId];
+      persistAccessSessions(nextAccessSessions);
       return {
         unlockedWallets: nextUnlockedWallets,
         accessSessions: nextAccessSessions,
@@ -73,10 +108,13 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
     }),
   lockAllWallets: () => {
     clearPendingState();
-    return set(() => ({
-      unlockedWallets: {},
-      accessSessions: {},
-    }));
+    return set(() => {
+      persistAccessSessions({});
+      return {
+        unlockedWallets: {},
+        accessSessions: {},
+      };
+    });
   },
   touchSession: () =>
     set(() => ({
@@ -91,6 +129,7 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
       return false;
     }
     clearPendingState();
+    persistAccessSessions({});
     set(() => ({
       unlockedWallets: {},
       accessSessions: {},
