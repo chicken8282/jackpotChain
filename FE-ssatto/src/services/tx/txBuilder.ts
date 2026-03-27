@@ -53,9 +53,21 @@ export interface LottoClaimBuildInput {
   rewardPot: number;
 }
 
+export interface BuiltTransactionMeta {
+  spentOutpoints: Array<{ txId: string; vout: number }>;
+  changeOutputs: Array<{
+    txId: string;
+    vout: number;
+    address: string;
+    jackAmount: number;
+    assets: Record<string, number>;
+  }>;
+}
+
 export interface BuiltTransaction {
   signedTxHex: string;
   txId: string;
+  meta: BuiltTransactionMeta;
 }
 
 function concatBytes(...chunks: Uint8Array[]) {
@@ -158,7 +170,7 @@ function isCoinbaseSpendable(utxo: WalletUtxo) {
   if (utxo.coinbase) {
     return utxo.confirmations >= COINBASE_MATURITY_CONFIRMATIONS;
   }
-  return utxo.confirmations >= 1;
+  return true;
 }
 
 function hasPositiveAssets(utxo: WalletUtxo) {
@@ -243,9 +255,25 @@ export function buildExchangeTransaction(input: ExchangeBuildInput): BuiltTransa
 
   signTransaction(transaction, selected, credentials.privateKey, credentials.publicKey);
 
+  const txId = transactionIdHex(transaction);
+  const changeOutputs: BuiltTransactionMeta["changeOutputs"] = [];
+  if (jackChange > 0) {
+    changeOutputs.push({
+      txId,
+      vout: transaction.outputs.length - 1,
+      address: input.address,
+      jackAmount: jackChange,
+      assets: {},
+    });
+  }
+
   return {
     signedTxHex: txToHex(transaction),
-    txId: transactionIdHex(transaction),
+    txId,
+    meta: {
+      spentOutpoints: selected.map((utxo) => ({ txId: utxo.txId, vout: utxo.vout })),
+      changeOutputs,
+    },
   };
 }
 
@@ -318,9 +346,36 @@ export function buildLottoCommitTransaction(input: LottoCommitBuildInput): Built
 
   signTransaction(transaction, selected, credentials.privateKey, credentials.publicKey);
 
+  const txId = transactionIdHex(transaction);
+  const changeOutputs: BuiltTransactionMeta["changeOutputs"] = [];
+  let outputIndex = 1;
+  if (potChange > 0) {
+    changeOutputs.push({
+      txId,
+      vout: outputIndex,
+      address: input.address,
+      jackAmount: 0,
+      assets: { [POT_ASSET_ID]: potChange },
+    });
+    outputIndex += 1;
+  }
+  if (jackChange > 0) {
+    changeOutputs.push({
+      txId,
+      vout: outputIndex,
+      address: input.address,
+      jackAmount: jackChange,
+      assets: {},
+    });
+  }
+
   return {
     signedTxHex: txToHex(transaction),
-    txId: transactionIdHex(transaction),
+    txId,
+    meta: {
+      spentOutpoints: selected.map((utxo) => ({ txId: utxo.txId, vout: utxo.vout })),
+      changeOutputs,
+    },
   };
 }
 
@@ -386,9 +441,17 @@ export function buildLottoClaimTransaction(input: LottoClaimBuildInput): BuiltTr
 
   signTransaction(transaction, feeSelection.selected, credentials.privateKey, credentials.publicKey);
 
+  const txId = transactionIdHex(transaction);
   return {
     signedTxHex: txToHex(transaction),
-    txId: transactionIdHex(transaction),
+    txId,
+    meta: {
+      spentOutpoints: [
+        ...feeSelection.selected.map((utxo) => ({ txId: utxo.txId, vout: utxo.vout })),
+        ...poolSelection.selected.map((utxo) => ({ txId: utxo.txId, vout: utxo.vout })),
+      ],
+      changeOutputs: [],
+    },
   };
 }
 
