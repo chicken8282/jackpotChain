@@ -22,7 +22,10 @@ export interface LottoHistoryDetail extends LottoHistoryEntry {
 const SATOSHI = 100_000_000;
 
 function formatDateTime(value: string) {
-  const date = new Date(value);
+  // Backend timestamps are UTC but may lack a timezone indicator.
+  // Append 'Z' so JavaScript parses them as UTC instead of local time.
+  const normalized = /Z|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`;
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) {
     return value;
   }

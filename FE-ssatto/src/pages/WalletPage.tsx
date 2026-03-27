@@ -14,6 +14,7 @@ import {
   unlockWalletPrivateKey,
 } from "../services/walletSecurityService";
 import { restoreWalletSession } from "../services/walletSessionService";
+import { consumeForceReauthFlag } from "../hooks/useHardRefreshHandler";
 import {
   toWalletAuthErrorMessage,
   toWalletWriteErrorMessage,
@@ -240,6 +241,15 @@ export default function WalletPage() {
     let cancelled = false;
     const wallet = activeWalletRef.current;
     if (!wallet) {
+      return;
+    }
+
+    // Ctrl+Shift+R sets a short-lived localStorage flag to force re-auth.
+    // Consume it here so the session is not silently restored after a hard refresh.
+    if (consumeForceReauthFlag()) {
+      clearAccessSession(wallet.walletId);
+      setUnlockModalSessionExpired(false);
+      setShowUnlockModal(true);
       return;
     }
 
