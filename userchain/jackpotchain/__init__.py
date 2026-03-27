@@ -8,7 +8,7 @@ Features:
 - 30초 블록 타임
 """
 
-__version__ = "0.1.0"
+__version__ = "1.1.0"
 __author__ = "JackpotChain Team"
 
 # Core exports

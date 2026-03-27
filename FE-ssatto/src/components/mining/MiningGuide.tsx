@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Card from "../common/Card";
 
-const INSTALLER_PATH = "/downloads/JackpotChain-Setup-1.0.5.exe";
+const INSTALLER_PATH = "/downloads/JackpotChain-Setup-1.1.0.exe";
 
 const STEPS = [
   {
@@ -19,7 +19,7 @@ const STEPS = [
           download
           className="self-start rounded-xl bg-accent-gold px-6 py-3 text-sm font-bold text-black hover:opacity-90 transition-opacity"
         >
-          JackpotChain-Setup-1.0.5.exe 다운로드
+          JackpotChain-Setup-1.1.0.exe 다운로드
         </a>
       </div>
     ),
@@ -32,7 +32,7 @@ const STEPS = [
       <ol className="flex flex-col gap-3 text-sm text-text-secondary">
         <li className="flex gap-3">
           <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs font-bold text-text-secondary">1</span>
-          <span>다운로드한 설치 파일(<code className="text-accent-gold">JackpotChain-Setup-1.0.5.exe</code>)을 실행하고 설치 마법사의 안내에 따라 설치를 완료합니다.</span>
+          <span>다운로드한 설치 파일(<code className="text-accent-gold">JackpotChain-Setup-1.1.0.exe</code>)을 실행하고 설치 마법사의 안내에 따라 설치를 완료합니다.</span>
         </li>
         <li className="flex gap-3">
           <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-xs font-bold text-text-secondary">2</span>
