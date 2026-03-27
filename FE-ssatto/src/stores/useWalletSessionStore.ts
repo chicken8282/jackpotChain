@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clearPendingState } from "../services/tx/pendingTxTracker";
 
 export const WALLET_IDLE_LOCK_MS = 24 * 60 * 60 * 1000;
 
@@ -94,6 +95,7 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
     })),
   lockWallet: (walletId) =>
     set((state) => {
+      clearPendingState();
       const nextUnlockedWallets = { ...state.unlockedWallets };
       const nextAccessSessions = { ...state.accessSessions };
       delete nextUnlockedWallets[walletId];
@@ -104,14 +106,16 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
         accessSessions: nextAccessSessions,
       };
     }),
-  lockAllWallets: () =>
-    set(() => {
+  lockAllWallets: () => {
+    clearPendingState();
+    return set(() => {
       persistAccessSessions({});
       return {
         unlockedWallets: {},
         accessSessions: {},
       };
-    }),
+    });
+  },
   touchSession: () =>
     set(() => ({
       lastInteractionAt: Date.now(),
@@ -124,6 +128,7 @@ export const useWalletSessionStore = create<WalletSessionState>((set, get) => ({
     if (Date.now() - state.lastInteractionAt < maxIdleMs) {
       return false;
     }
+    clearPendingState();
     persistAccessSessions({});
     set(() => ({
       unlockedWallets: {},

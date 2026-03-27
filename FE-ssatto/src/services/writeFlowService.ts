@@ -3,6 +3,7 @@ import { claimLottoReward, commitLotto, getLottoClaimContext } from "./lottoServ
 import { getWalletUtxos } from "./walletService";
 import { COIN } from "./tx/txCodec";
 import { buildExchangeTransaction, buildLottoClaimTransaction, buildLottoCommitTransaction } from "./tx/txBuilder";
+import { applyPendingState, recordSubmittedTx } from "./tx/pendingTxTracker";
 
 interface WriteFlowBaseInput {
   address: string;
@@ -25,40 +26,54 @@ interface LottoClaimWriteInput extends WriteFlowBaseInput {
 export async function submitExchangeWrite(input: ExchangeWriteInput) {
   const jackAmount = input.jackAmount ?? 100 * COIN;
   const utxoResponse = await getWalletUtxos(input.address, input.accessToken);
+  const effectiveUtxos = applyPendingState(utxoResponse.utxos);
   const transaction = buildExchangeTransaction({
     address: input.address,
     privateKey: input.privateKey,
-    utxos: utxoResponse.utxos,
+    utxos: effectiveUtxos,
     jackAmount,
   });
 
-  return exchangeJackToPot(
-    {
-      fromAddress: input.address,
-      jackAmount,
-      signedTxHex: transaction.signedTxHex,
-    },
-    input.accessToken,
-  );
+  try {
+    const result = await exchangeJackToPot(
+      {
+        fromAddress: input.address,
+        jackAmount,
+        signedTxHex: transaction.signedTxHex,
+      },
+      input.accessToken,
+    );
+    recordSubmittedTx(transaction.meta.spentOutpoints, transaction.meta.changeOutputs);
+    return result;
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function submitLottoCommitWrite(input: LottoCommitWriteInput) {
   const utxoResponse = await getWalletUtxos(input.address, input.accessToken);
+  const effectiveUtxos = applyPendingState(utxoResponse.utxos);
   const transaction = buildLottoCommitTransaction({
     address: input.address,
     privateKey: input.privateKey,
-    utxos: utxoResponse.utxos,
+    utxos: effectiveUtxos,
     chosenNumbers: input.chosenNumbers,
   });
 
-  return commitLotto(
-    {
-      fromAddress: input.address,
-      chosenNumbers: input.chosenNumbers,
-      signedTxHex: transaction.signedTxHex,
-    },
-    input.accessToken,
-  );
+  try {
+    const result = await commitLotto(
+      {
+        fromAddress: input.address,
+        chosenNumbers: input.chosenNumbers,
+        signedTxHex: transaction.signedTxHex,
+      },
+      input.accessToken,
+    );
+    recordSubmittedTx(transaction.meta.spentOutpoints, transaction.meta.changeOutputs);
+    return result;
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function submitLottoClaimWrite(input: LottoClaimWriteInput) {
@@ -70,22 +85,29 @@ export async function submitLottoClaimWrite(input: LottoClaimWriteInput) {
     throw new Error("현재 수령 가능한 보상만 클레임할 수 있습니다.");
   }
 
+  const effectiveUtxos = applyPendingState(utxoResponse.utxos);
   const transaction = buildLottoClaimTransaction({
     address: input.address,
     privateKey: input.privateKey,
-    walletUtxos: utxoResponse.utxos,
+    walletUtxos: effectiveUtxos,
     poolUtxos: claimContext.poolUtxos,
     commitHash: input.commitHash,
     rewardJack: claimContext.rewardJack ?? 0,
     rewardPot: claimContext.rewardPot ?? 0,
   });
 
-  return claimLottoReward(
-    {
-      fromAddress: input.address,
-      commitHash: input.commitHash,
-      signedTxHex: transaction.signedTxHex,
-    },
-    input.accessToken,
-  );
+  try {
+    const result = await claimLottoReward(
+      {
+        fromAddress: input.address,
+        commitHash: input.commitHash,
+        signedTxHex: transaction.signedTxHex,
+      },
+      input.accessToken,
+    );
+    recordSubmittedTx(transaction.meta.spentOutpoints, transaction.meta.changeOutputs);
+    return result;
+  } catch (error) {
+    throw error;
+  }
 }
