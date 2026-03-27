@@ -10,7 +10,6 @@ import ssatto.BE_ssatto.domain.auth.exception.AuthForbiddenException;
 import ssatto.BE_ssatto.domain.auth.util.WalletAuthCrypto;
 import ssatto.BE_ssatto.domain.blockchain.entity.Block;
 import ssatto.BE_ssatto.domain.blockchain.repository.BlockRepository;
-import ssatto.BE_ssatto.domain.blockchain.service.BlockchainReadModelSyncService;
 import ssatto.BE_ssatto.domain.mining.dto.MiningBlockCursorResponse;
 import ssatto.BE_ssatto.domain.mining.dto.MiningBlockItemResponse;
 import ssatto.BE_ssatto.domain.mining.exception.InvalidMiningRequestException;
@@ -26,7 +25,6 @@ public class MiningService {
 
     private final BlockRepository blockRepository;
     private final WalletAuthCrypto walletAuthCrypto;
-    private final BlockchainReadModelSyncService blockchainReadModelSyncService;
 
     /**
      * 인증 지갑 주체와 요청 지갑 주소를 함께 검증한 뒤 채굴 블록 내역을 조회한다.
@@ -48,7 +46,6 @@ public class MiningService {
         validateWalletSubject(authenticatedWalletAddress, address);
         validateSize(size);
         validateCursor(lastBlockId);
-        blockchainReadModelSyncService.syncToTip();
 
         PageRequest pageRequest = PageRequest.of(0, size);
         Page<Block> page = lastBlockId == null
