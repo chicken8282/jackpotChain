@@ -204,7 +204,41 @@ dashboard 병목 해소 후 lotto VU 100개 자체가 HikariPool 10개를 초과
 | 구간 | total iterations | 측정 시간 | TPS |
 |------|----------------|---------|-----|
 | Before | ~10,106 | 5분 | ~34/s |
-| 최종 | 57,477 | 5분 | **191/s** |
+| 최종 (Baseline 200VU) | 57,477 | 5분 | **191/s** |
+| Stress 500VU 구간 | ~79,894 | 3분 | **~444/s** |
+
+---
+
+## Stress Test — 단계적 VU 증가 (200 → 500 → 1000)
+
+**측정일:** 2026-03-28
+**결과 파일:** `perf/results/stress_read_20260328_204108.json`
+**패턴:** ramping-vus, 총 11분 (200VU 3분 → 500VU 3분 → 1000VU 5분)
+
+### 단계별 결과
+
+| 구간 | 시나리오 | n | avg | p95 | p99 | 실패율 | 목표 |
+|------|---------|---|-----|-----|-----|--------|------|
+| **200VU** (0~3분) | dashboard | 14,949 | 6ms | 17ms | 44ms | 0% | ✅ |
+| | lotto_overview | 7,444 | 10ms | 24ms | 58ms | 0% | ✅ |
+| | lotto_entries | 7,344 | 22ms | 50ms | 191ms | 0% | ✅ |
+| **500VU** (3~6분) | dashboard | 40,247 | 7ms | 24ms | 90ms | 0% | ✅ |
+| | lotto_overview | 19,997 | 14ms | 55ms | 164ms | 0% | ✅ |
+| | lotto_entries | 19,650 | 32ms | 128ms | 303ms | 0% | ✅ |
+| **1000VU** (6~11분) | dashboard | 41,325 | 1,363ms | 4,925ms | 4,962ms | 0% | ❌ |
+| | lotto_overview | 17,012 | 1,879ms | 5,393ms | 7,938ms | 13.6% | ❌ |
+| | lotto_entries | 15,541 | 2,155ms | 8,178ms | 8,267ms | 21.3% | ❌ |
+
+### 한계점 (Breaking Point)
+
+**500VU 이하: 안정 운영 가능** — 전 시나리오 p95 < 500ms, 실패율 0%
+
+**1000VU 진입 시 붕괴** — 두 가지 병목이 동시에 발생:
+
+1. **JVM 스레드 경합** — 동시 1000 VU가 Spring 스레드 풀을 포화시켜 요청 큐잉 발생. dashboard는 캐시 히트임에도 p95 4,925ms로 급등 (Redis 응답 자체는 빠르나 스레드 획득 대기)
+2. **HikariPool 재고갈** — lotto 동시 500 VU가 Pool 50개를 초과 요청 → 실패율 13~21%
+
+**결론: 현재 인프라(로컬 Docker)의 실질적 안전 운영 한계 = 500 VU**
 
 ---
 
@@ -214,27 +248,30 @@ dashboard 병목 해소 후 lotto VU 100개 자체가 HikariPool 10개를 초과
 
 **캐시 콜드 스타트:**
 - Redis 재시작 또는 TTL 만료 직후 첫 요청은 여전히 RPC 23회를 직렬 호출함
-- 현재 구조에서 dashboard p99가 598ms로 목표(500ms)를 소폭 초과하는 원인이 이 콜드 스타트임
+- dashboard p99가 598ms(Baseline 테스트)로 목표를 소폭 초과하는 원인
 
-**lotto p99:**
-- lotto_overview p99 644ms, lotto_entries p99 951ms로 p99 기준으로는 목표 미달
-- 동시 요청이 몰릴 때 HikariPool 50개도 일시 고갈 가능성 존재
+**1000VU 이상 처리 불가:**
+- 스레드 풀 한계로 500VU → 1000VU 전환 시 p95가 17ms → 4,925ms로 280배 급등
+- HikariPool 50개로도 lotto 500 동시 VU 감당 불가
 
 **캐시 무효화 전략 미비:**
-- 블록 캐시는 TTL 10분이라 새 블록이 생성돼도 최대 10분간 이전 데이터를 반환할 수 있음
-- 현재는 블록체인의 블록 생성 주기와 limit=10(최근 10개 블록)이라는 특성상 실용적 문제는 없으나, 명시적 eviction 전략이 없음
+- 블록 캐시 TTL 10분 — 새 블록 생성 시에도 최대 10분간 이전 데이터 반환 가능
+- 현재 블록 생성 주기 특성상 실용적 문제는 없으나 명시적 eviction 전략 없음
 
 ### 다음 개선안
 
 **1. 캐시 콜드 스타트 제거 — 블록 조회 병렬화**
-- `getRecentBlocks()` 내부의 `getBlockHash` → `getBlock` 10쌍을 `CompletableFuture`로 병렬 실행
-- 콜드 스타트 시 직렬 20회 RPC → 병렬 2 depth(hash 10개 동시 → block 10개 동시)로 단축
-- p99 500ms 이내 달성 가능
+- `getRecentBlocks()` 내부 `getBlockHash` → `getBlock` 10쌍을 `CompletableFuture`로 병렬 실행
+- 콜드 스타트 시 직렬 20회 RPC → 병렬 2 depth로 단축, p99 500ms 이내 가능
 
-**2. HikariPool 추가 튜닝**
-- `maximum-pool-size: 50`은 로컬 환경 기준. 운영 DB 서버 `max_connections` 확인 후 조정 필요
-- `minimum-idle`, `connection-timeout` 값도 실측 기반으로 재설정 권장
+**2. Spring 스레드 풀 튜닝**
+- `server.tomcat.threads.max` 기본값(200) 증설 또는 Virtual Thread(Java 21) 도입
+- 1000VU 구간 JVM 스레드 포화 해소
 
-**3. 캐시 워밍 (Cache Warming)**
-- 서버 시작 시 최근 N개 블록을 미리 Redis에 로드하는 워밍 로직 추가
-- `@PostConstruct` 또는 ApplicationReadyEvent로 구현 가능
+**3. HikariPool 추가 튜닝**
+- `maximum-pool-size: 50`은 로컬 환경 기준. 운영 DB `max_connections` 확인 후 조정
+- `connection-timeout` 실측 기반 재설정
+
+**4. 캐시 워밍 (Cache Warming)**
+- 서버 시작 시 최근 N개 블록을 미리 Redis에 로드
+- `@PostConstruct` 또는 `ApplicationReadyEvent`로 구현

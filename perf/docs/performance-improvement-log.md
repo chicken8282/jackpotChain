@@ -124,7 +124,7 @@ TCP 연결 재사용으로 `http_req_blocked` 시간은 줄었으나,
 
 ---
 
-## 최종 요약 (전체 개선 효과)
+## 최종 요약 (전체 개선 효과 — Baseline 대비)
 
 | 시나리오 | Before p95 | 최종 p95 | 개선율 | 목표 달성 |
 |---------|-----------|---------|-------|---------|
@@ -138,3 +138,46 @@ TCP 연결 재사용으로 `http_req_blocked` 시간은 줄었으나,
 - `BE-ssatto/src/main/java/.../service/BlockchainQueryService.java` — dashboard 캐시
 - `BE-ssatto/src/main/java/.../global/config/CacheConfig.java` — RedisCacheManager 설정
 - `BE-ssatto/src/main/resources/application-local.yml` — HikariPool 증설
+
+---
+
+## Stress Test — 단계적 VU 증가 (200 → 500 → 1000)
+
+**측정일:** 2026-03-28
+**결과 파일:** `perf/results/stress_read_20260328_204108.json`
+**부하 패턴:** ramping-vus, 총 11분
+**VU 비율:** dashboard 50% / lotto_overview 25% / lotto_entries 25%
+
+### 단계별 결과
+
+**200VU 구간 (0~3분 — Baseline 수준)**
+
+| 시나리오 | n | avg | p95 | p99 | 실패율 | 목표 달성 |
+|---------|---|-----|-----|-----|--------|---------|
+| dashboard | 14,949 | 6ms | 17ms | 44ms | 0% | ✅ PASS |
+| lotto_overview | 7,444 | 10ms | 24ms | 58ms | 0% | ✅ PASS |
+| lotto_entries | 7,344 | 22ms | 50ms | 191ms | 0% | ✅ PASS |
+
+**500VU 구간 (3~6분 — 중간 피크)**
+
+| 시나리오 | n | avg | p95 | p99 | 실패율 | 목표 달성 |
+|---------|---|-----|-----|-----|--------|---------|
+| dashboard | 40,247 | 7ms | 24ms | 90ms | 0% | ✅ PASS |
+| lotto_overview | 19,997 | 14ms | 55ms | 164ms | 0% | ✅ PASS |
+| lotto_entries | 19,650 | 32ms | 128ms | 303ms | 0% | ✅ PASS |
+
+**1000VU 구간 (6~11분 — 최대 피크)**
+
+| 시나리오 | n | avg | p95 | p99 | 실패율 | 목표 달성 |
+|---------|---|-----|-----|-----|--------|---------|
+| dashboard | 41,325 | 1,363ms | 4,925ms | 4,962ms | 0% | ❌ FAIL |
+| lotto_overview | 17,012 | 1,879ms | 5,393ms | 7,938ms | 13.6% | ❌ FAIL |
+| lotto_entries | 15,541 | 2,155ms | 8,178ms | 8,267ms | 21.3% | ❌ FAIL |
+
+### 한계점 (Breaking Point)
+
+**1000VU (dashboard 500 + lotto 500)** 구간에서 시스템이 무너짐.
+
+- **dashboard**: 캐시 히트는 유지되나, 동시 500 VU 처리 과정에서 Redis/JVM 스레드 경합으로 p95 4,925ms
+- **lotto**: HikariPool 50개로도 500 VU 동시 DB 접근을 감당하지 못함 → 실패율 13~21%
+- **500VU 이하**에서는 전 시나리오 p95 < 500ms, 실패율 0% 유지 — **실질적 안전 운영 한계: 500 VU**
