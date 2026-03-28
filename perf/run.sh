@@ -86,6 +86,12 @@ case "${TEST_TYPE}" in
       "${RESULTS_DIR}/baseline_read_${TIMESTAMP}.json"
     ;;
 
+  stress)
+    run_k6 \
+      "${REPO_ROOT}/perf/k6/stress_read.js" \
+      "${RESULTS_DIR}/stress_read_${TIMESTAMP}.json"
+    ;;
+
   commit)
     if [ ! -f "${REPO_ROOT}/perf/fixtures/commit-payloads.json" ]; then
       echo "[ERROR] commit-payloads.json 없음. 먼저 실행하세요:"
@@ -110,7 +116,7 @@ case "${TEST_TYPE}" in
     ;;
 
   *)
-    echo "사용법: $0 <read|commit|all> [BASE_URL]"
+    echo "사용법: $0 <read|commit|all|stress> [BASE_URL]"
     exit 1
     ;;
 esac
