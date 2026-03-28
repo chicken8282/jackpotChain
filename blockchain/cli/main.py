@@ -49,6 +49,11 @@ def main():
     node_parser.add_argument('--rendezvous-port', type=int, default=8334, help='Rendezvous server port (default: 8334)')
     node_parser.add_argument('--rendezvous-seed', action='append', help='Rendezvous seed (ip:port) for hole punching')
     node_parser.add_argument('--disable-discovery', action='store_true', default=False, help='Disable peer discovery (local isolated testing)')
+    # RabbitMQ 연동 옵션
+    node_parser.add_argument('--rabbitmq-host', default='localhost', help='RabbitMQ host (default: localhost)')
+    node_parser.add_argument('--rabbitmq-port', type=int, default=5672, help='RabbitMQ AMQP port (default: 5672)')
+    node_parser.add_argument('--rabbitmq-user', default='guest', help='RabbitMQ username (default: guest)')
+    node_parser.add_argument('--rabbitmq-password', default='guest', help='RabbitMQ password (default: guest)')
     # wallet 명령
     wallet_parser = subparsers.add_parser('wallet', help='Wallet operations')
     wallet_parser.add_argument('action', choices=['create', 'balance', 'address', 'send'])
@@ -83,6 +88,37 @@ def main():
     else:
         # 인자 없이 실행하면 Simple TUI 시작
         run_simple_default()
+
+
+def publish_block_event(block, rmq_host, rmq_port, rmq_user, rmq_password):
+    """새 블록 이벤트를 RabbitMQ jackpotchain.events Exchange에 발행한다.
+    실패해도 예외를 전파하지 않아 노드 동작에 영향을 주지 않는다."""
+    import pika
+    import json
+    try:
+        credentials = pika.PlainCredentials(rmq_user, rmq_password)
+        params = pika.ConnectionParameters(
+            host=rmq_host,
+            port=rmq_port,
+            credentials=credentials,
+            connection_attempts=1,
+            socket_timeout=2,
+        )
+        conn = pika.BlockingConnection(params)
+        ch = conn.channel()
+        ch.basic_publish(
+            exchange='jackpotchain.events',
+            routing_key='node.block.created',
+            body=json.dumps({'height': block.height, 'hash': block.get_hash_hex()}),
+            properties=pika.BasicProperties(
+                content_type='application/json',
+                delivery_mode=2,
+            ),
+        )
+        conn.close()
+        print(f"[RabbitMQ] 발행 완료: node.block.created height={block.height}")
+    except Exception as e:
+        print(f"[RabbitMQ] 발행 실패 (무시): {e}")
 
 
 def run_node(args):
@@ -240,6 +276,18 @@ def run_node(args):
                         # 네트워크에 브로드캐스트
                         await node.broadcast_block(result.block)
                         print(f"[Miner] Block added and broadcasted. New height: {new_height}")
+
+                        # RabbitMQ에 블록 이벤트 발행 (논블로킹)
+                        loop = asyncio.get_event_loop()
+                        loop.run_in_executor(
+                            None,
+                            publish_block_event,
+                            result.block,
+                            args.rabbitmq_host,
+                            args.rabbitmq_port,
+                            args.rabbitmq_user,
+                            args.rabbitmq_password,
+                        )
                     else:
                         print(f"[Miner] Failed to add block: {msg}")
 
@@ -288,6 +336,15 @@ def run_node(args):
                     if added:
                         restored += 1
                 print(f"[REORG] {len(disconnected_txs)}개 TX 중 {restored}개 mempool 복원")
+
+            # RabbitMQ에 블록 이벤트 발행
+            publish_block_event(
+                block,
+                args.rabbitmq_host,
+                args.rabbitmq_port,
+                args.rabbitmq_user,
+                args.rabbitmq_password,
+            )
         else:
             # 이미 있는 블록이면 무시 (중복 수신)
             if "already exists" not in msg.lower():

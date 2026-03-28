@@ -20,6 +20,8 @@ import ssatto.BE_ssatto.domain.lotto.entity.LottoEntryStatus;
 import ssatto.BE_ssatto.domain.lotto.repository.JackpotPoolRepository;
 import ssatto.BE_ssatto.domain.lotto.repository.LottoEntryRepository;
 import ssatto.BE_ssatto.domain.lotto.service.LottoRankingService;
+import ssatto.BE_ssatto.domain.outbox.entity.OutboxEvent;
+import ssatto.BE_ssatto.domain.outbox.repository.OutboxEventRepository;
 import ssatto.BE_ssatto.domain.wallet.entity.Wallet;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivity;
 import ssatto.BE_ssatto.domain.wallet.entity.WalletActivityType;
@@ -55,6 +57,7 @@ public class BlockchainReadModelSyncService {
     private final WalletRepository walletRepository;
     private final WalletActivityRepository walletActivityRepository;
     private final LottoRankingService lottoRankingService;
+    private final OutboxEventRepository outboxEventRepository;
 
     /**
      * 현재 체인 팁까지 read-model을 동기화한다.
@@ -78,22 +81,32 @@ public class BlockchainReadModelSyncService {
     private void syncBlock(long height) {
         String blockHash = jackpotChainRpcClient.getBlockHash(height);
         JackpotChainIndexedBlock indexedBlock = jackpotChainRpcClient.getIndexedBlock(blockHash);
+
+        boolean[] isNew = {false};
         Block block = blockRepository.findByHeight(height)
-            .orElseGet(() -> blockRepository.save(Block.create(
-                indexedBlock.height(),
-                indexedBlock.hash(),
-                indexedBlock.previousBlockHash(),
-                indexedBlock.versionHex(),
-                toLocalDateTime(indexedBlock.time()),
-                0,
-                indexedBlock.difficultyDisplay(),
-                indexedBlock.nonce(),
-                indexedBlock.minerAddress(),
-                indexedBlock.rewardJack(),
-                indexedBlock.feeRewardJack(),
-                indexedBlock.transactions().size(),
-                indexedBlock.isMainChain()
-            )));
+            .orElseGet(() -> {
+                isNew[0] = true;
+                return blockRepository.save(Block.create(
+                    indexedBlock.height(),
+                    indexedBlock.hash(),
+                    indexedBlock.previousBlockHash(),
+                    indexedBlock.versionHex(),
+                    toLocalDateTime(indexedBlock.time()),
+                    0,
+                    indexedBlock.difficultyDisplay(),
+                    indexedBlock.nonce(),
+                    indexedBlock.minerAddress(),
+                    indexedBlock.rewardJack(),
+                    indexedBlock.feeRewardJack(),
+                    indexedBlock.transactions().size(),
+                    indexedBlock.isMainChain()
+                ));
+            });
+
+        // 신규 블록인 경우에만 Outbox 이벤트 저장 (동일 트랜잭션 내)
+        if (isNew[0]) {
+            outboxEventRepository.save(OutboxEvent.blockSynced(block.getHeight(), block.getHash()));
+        }
 
         for (JackpotChainIndexedTransaction indexedTransaction : indexedBlock.transactions()) {
             Transaction transaction = ensureTransaction(block, indexedTransaction, indexedBlock.time());

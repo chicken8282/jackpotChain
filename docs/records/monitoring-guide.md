@@ -2,6 +2,8 @@
 
 이 문서는 모니터링 스택(Prometheus + Loki + Grafana + Promtail + cAdvisor) 구축부터 Discord 알림 설정까지의 전 과정을 재현하기 위한 가이드입니다.
 
+> **검증 환경:** Grafana 12.4.1, Docker Compose v2
+
 ---
 
 ## 전체 구성 개요
@@ -89,6 +91,8 @@ cp ~/deploy-repo/monitoring/grafana/provisioning/alerting/rules.yml \
    ~/app/monitoring/grafana/provisioning/alerting/
 ```
 
+> **주의:** alerting 디렉토리의 3개 파일(`contact_points.yml`, `notification_policies.yml`, `rules.yml`) 모두 복사해야 합니다. 하나라도 누락되면 Contact Point 또는 Notification Policy가 UI에 반영되지 않습니다.
+
 ---
 
 ## 3단계: EC2 — 환경변수 파일 설정
@@ -138,9 +142,14 @@ curl -s http://localhost:9090/-/healthy
 # Loki 정상 응답 확인
 curl -s http://localhost:3100/ready
 
+# Grafana 기동 완료 확인 ({"database":"ok"} 응답이 오면 준비됨)
+curl -s http://localhost:3002/api/health
+
 # Grafana 프로비저닝 로그 확인 (에러 없으면 OK)
 docker logs jc-grafana 2>&1 | grep -i "provision\|error\|contact\|policy"
 ```
+
+> **Grafana는 기동에 30~60초 소요됩니다.** `/api/health` 응답이 없으면 잠시 기다린 후 재시도하세요.
 
 ---
 
@@ -204,7 +213,7 @@ management:
 ## 10단계: Grafana UI — Contact Point(Discord) 확인 및 테스트
 
 1. 좌측 메뉴 → **Alerting** → **Contact points**
-2. `discord-alerts` 항목 확인
+2. `discord-alerts` 항목 확인 (프로비저닝으로 자동 등록)
 3. 우측 **Test** 버튼 클릭
 4. Discord 채널에 테스트 메시지 수신 확인
 
@@ -248,7 +257,7 @@ docker logs jc-grafana 2>&1 | grep -i "discord\|webhook\|notif" | tail -20
 
 3. 각 규칙 상태가 **Normal** 이면 정상 동작 중
 
-**에러 상태인 경우:**
+> **규칙이 Error 상태인 경우:** Prometheus에 해당 메트릭이 아직 없는 것입니다. Spring Boot가 정상 운영되면 자동으로 Normal 상태로 전환됩니다.
 
 ```bash
 docker logs jc-grafana 2>&1 | grep -i "rule_uid\|Failed to" | tail -30
@@ -265,7 +274,84 @@ cd ~/app/compose
 docker compose -f docker-compose.monitoring.yml restart grafana
 ```
 
-> `docker compose restart grafana` 명령에서 서비스명은 **`grafana`** (container_name인 `jc-grafana` 아님)
+> `docker compose` 명령에서 서비스명은 **`grafana`** (container_name인 `jc-grafana` 아님)
+
+### Grafana 기동 후 접속이 안 되는 경우
+
+Grafana 12.x는 기동에 30~60초 소요됩니다. 아래로 기동 완료를 확인하세요.
+
+```bash
+# 기동 완료 로그 확인
+docker logs --since 2m jc-grafana | grep -i "listen\|HTTP server"
+
+# API 응답 확인
+curl -s http://localhost:3002/api/health
+```
+
+`{"database":"ok"}` 응답이 오면 접속 가능합니다.
+
+### Contact Point / Notification Policy가 UI에 없는 경우
+
+**원인:** alerting 파일이 컨테이너에 마운트되지 않은 것입니다.
+
+```bash
+# 컨테이너 내 파일 확인
+docker exec jc-grafana ls -la /etc/grafana/provisioning/alerting/
+```
+
+3개 파일(`contact_points.yml`, `notification_policies.yml`, `rules.yml`)이 모두 있어야 합니다. 없으면 EC2의 `~/app/monitoring/grafana/provisioning/alerting/`에 파일을 복사한 후 Grafana를 재시작하세요.
+
+### notification_policies.yml 파싱 에러로 Grafana 크래시
+
+```
+failure to map file notification_policies.yml: json: cannot unmarshal object into Go struct field Route.routes.matchers of type string
+```
+
+**원인:** Grafana 10+ 에서 `matchers` 형식이 변경됐습니다. 객체 형식이 아닌 **문자열 형식**을 사용해야 합니다.
+
+```yaml
+# 잘못된 형식 (구버전)
+routes:
+  - matchers:
+      - name: severity
+        value: critical
+
+# 올바른 형식 (Grafana 10+)
+routes:
+  - matchers:
+      - "severity=critical"
+```
+
+### rules.yml 5xx 에러율 규칙 파싱 에러
+
+```
+failed to parse expression [ratio]: invalid math command: expr: non existent function errors
+```
+
+**원인:** Math 표현식 노드에서 `$errors`, `$total` 같은 멀티 문자 refId를 함수로 잘못 파싱합니다.
+
+**해결:** 별도 쿼리를 나누지 말고 PromQL 단일 표현식으로 작성합니다.
+
+```yaml
+# 잘못된 형식
+data:
+  - refId: errors
+    model:
+      expr: sum(rate(...{status=~"5.."}[5m]))
+  - refId: total
+    model:
+      expr: sum(rate(...[5m]))
+  - refId: ratio
+    model:
+      expression: $errors / $total * 100   # ← 파싱 에러 발생
+      type: math
+
+# 올바른 형식
+data:
+  - refId: A
+    model:
+      expr: sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m])) * 100
+```
 
 ### Prometheus 스크레이프 대상 확인
 
@@ -317,6 +403,6 @@ docker compose -f docker-compose.monitoring.yml up -d
             │   └── loki-logs.json       # 로그 대시보드
             └── alerting/
                 ├── contact_points.yml       # Discord webhook
-                ├── notification_policies.yml # 라우팅 정책
-                └── rules.yml                # 알림 규칙 3개
+                ├── notification_policies.yml # 라우팅 정책 (matchers는 문자열 형식)
+                └── rules.yml                # 알림 규칙 3개 (5xx는 단일 PromQL)
 ```

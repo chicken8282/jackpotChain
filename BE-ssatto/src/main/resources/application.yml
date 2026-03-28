@@ -62,7 +62,7 @@ management:
     redis:
       enabled: false
     rabbit:
-      enabled: false
+      enabled: true
   metrics:
     tags:
       application: ${spring.application.name}
