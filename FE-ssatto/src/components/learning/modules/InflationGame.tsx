@@ -31,8 +31,8 @@ import {
 
 const INITIAL_BREAD_PRICE = 100;   // 빵 초기 가격 (Z$)
 const EARN_AMOUNT = 1000;          // 클릭당 획득 금액 (Z$)
-const PRICE_MULTIPLIER = 1.5;      // 매 tick마다 빵 가격 곱셈 계수
-const GAME_OVER_RATIO = 300;       // 게임 종료 조건: 빵 가격 > 자산 × 이 값
+const PRICE_MULTIPLIER = 3;        // 매 tick마다 빵 가격 곱셈 계수
+const GAME_OVER_RATIO = 150;       // 게임 종료 조건: 빵 가격 > 자산 × 이 값
 const TICK_INTERVAL = 1000;        // 가격 상승 주기 (ms)
 
 /* ================================================================
@@ -98,6 +98,7 @@ interface InflationGameProps {
 
 export default function InflationGame({ onGoVerify }: InflationGameProps) {
   /* ── 상태 ────────────────────────────────────────── */
+  const [started, setStarted] = useState(false);
   const [money, setMoney] = useState(0);
   const [breadPrice, setBreadPrice] = useState(INITIAL_BREAD_PRICE);
   const [elapsed, setElapsed] = useState(0);
@@ -172,6 +173,7 @@ export default function InflationGame({ onGoVerify }: InflationGameProps) {
 
   /* ── 게임 재시작 ─────────────────────────────────── */
   const handleRestart = () => {
+    setStarted(false);
     setMoney(0);
     setBreadPrice(INITIAL_BREAD_PRICE);
     setElapsed(0);
@@ -187,6 +189,37 @@ export default function InflationGame({ onGoVerify }: InflationGameProps) {
   const gap = breadPrice > 0 ? breadPrice / Math.max(money, 1) : 0;
 
   /* ── 렌더 ────────────────────────────────────────── */
+
+  /* ── 시작 전 인트로 카드 ────────────────────────── */
+  if (!started) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <motion.div
+          className="rounded-3xl border border-orange-500/20 bg-gradient-to-b from-orange-500/[0.08] to-orange-600/[0.02] backdrop-blur-2xl p-10 max-w-md w-full mx-4 text-center shadow-[0_20px_60px_rgba(0,0,0,0.3)]"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
+        >
+          <p className="text-5xl mb-5">🍞</p>
+          <h3 className="text-xl font-bold text-white mb-3">
+            2008년의 초인플레이션 체험입니다
+          </h3>
+          <p className="text-sm text-white/60 leading-relaxed mb-8">
+            왼쪽의 돈벌기 버튼을 눌러서 물가상승을 이겨보세요
+          </p>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setStarted(true)}
+            className="px-8 py-3 rounded-2xl bg-accent-gold/20 border border-accent-gold/40 text-accent-gold font-bold text-sm"
+          >
+            시작하기
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
 
