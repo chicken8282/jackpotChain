@@ -1,6 +1,7 @@
 package ssatto.BE_ssatto.domain.blockchain.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainBlockDetailResponse;
 import ssatto.BE_ssatto.domain.blockchain.dto.BlockchainDashboardBlockResponse;
@@ -36,6 +37,7 @@ public class BlockchainQueryService {
      * @param limit 최근 블록 조회 개수
      * @return 대시보드 응답
      */
+    @Cacheable(value = "dashboard", key = "#limit")
     public BlockchainDashboardResponse getDashboard(int limit) {
         JackpotChainBlockchainInfo blockchainInfo = jackpotChainRpcClient.getBlockchainInfo();
         List<JackpotChainPeerInfo> peerInfos = jackpotChainRpcClient.getPeerInfo();

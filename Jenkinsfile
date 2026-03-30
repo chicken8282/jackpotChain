@@ -137,6 +137,8 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/contact_points.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/notification_policies.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.dev
 
@@ -186,6 +188,8 @@ pipeline {
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/spring-overview.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/dashboards/loki-logs.json ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/dashboards/
                         cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/rules.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/contact_points.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
+                        cp ${REMOTE_REPO_DIR}/monitoring/grafana/provisioning/alerting/notification_policies.yml ${REMOTE_APP_DIR}/monitoring/grafana/provisioning/alerting/
 
                         sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" ${REMOTE_APP_DIR}/env/.env.prod
 

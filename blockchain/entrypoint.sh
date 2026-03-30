@@ -13,6 +13,10 @@ NODE_MINING_ADDRESS_VALUE="${NODE_MINING_ADDRESS:-}"
 NODE_DISABLE_DISCOVERY_VALUE="${NODE_DISABLE_DISCOVERY:-false}"
 NODE_SEED_NODE_VALUE="${NODE_SEED_NODE:-false}"
 NODE_RENDEZVOUS_PORT_VALUE="${NODE_RENDEZVOUS_PORT:-8778}"
+RABBITMQ_HOST_VALUE="${LOCAL_RABBITMQ_HOST:-localhost}"
+RABBITMQ_PORT_VALUE="${LOCAL_RABBITMQ_PORT:-5672}"
+RABBITMQ_USER_VALUE="${LOCAL_RABBITMQ_USERNAME:-guest}"
+RABBITMQ_PASSWORD_VALUE="${LOCAL_RABBITMQ_PASSWORD:-guest}"
 
 mkdir -p "${DATA_DIR}" "$(dirname "${WALLET_FILE}")"
 
@@ -57,5 +61,11 @@ if [ "${NODE_SEED_NODE_VALUE}" = "true" ]; then
   set -- "$@" --seed-node
   set -- "$@" --rendezvous-port "${NODE_RENDEZVOUS_PORT_VALUE}"
 fi
+
+set -- "$@" \
+  --rabbitmq-host "${RABBITMQ_HOST_VALUE}" \
+  --rabbitmq-port "${RABBITMQ_PORT_VALUE}" \
+  --rabbitmq-user "${RABBITMQ_USER_VALUE}" \
+  --rabbitmq-password "${RABBITMQ_PASSWORD_VALUE}"
 
 exec "$@"

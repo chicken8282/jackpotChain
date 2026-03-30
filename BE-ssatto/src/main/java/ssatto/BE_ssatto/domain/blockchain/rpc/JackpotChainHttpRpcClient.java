@@ -4,7 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.cache.annotation.Cacheable;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -51,9 +57,17 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
      */
     @Autowired
     public JackpotChainHttpRpcClient(RestClient.Builder builder, JackpotChainRpcProperties properties, MeterRegistry meterRegistry) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(properties.getConnectTimeoutMs());
-        requestFactory.setReadTimeout(properties.getReadTimeoutMs());
+        CloseableHttpClient httpClient = HttpClients.custom()
+            .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
+                .setMaxConnTotal(200)
+                .setMaxConnPerRoute(200)
+                .build())
+            .setDefaultRequestConfig(RequestConfig.custom()
+                .setConnectTimeout(Timeout.ofMilliseconds(properties.getConnectTimeoutMs()))
+                .setResponseTimeout(Timeout.ofMilliseconds(properties.getReadTimeoutMs()))
+                .build())
+            .build();
+        HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
         String normalizedBaseUrl = normalizeBaseUrl(properties.getUrl());
 
         this.restClient = builder
@@ -182,6 +196,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
      * @param height 블록 높이
      * @return 블록 해시
      */
+    @Cacheable(value = "blockHash", key = "#height")
     @Override
     public String getBlockHash(long height) {
         JsonNode resultNode = invoke("getblockhash", List.of(height));
@@ -194,6 +209,7 @@ public class JackpotChainHttpRpcClient implements JackpotChainRpcClient {
      * @param blockHash 블록 해시
      * @return 블록 상세 정보
      */
+    @Cacheable(value = "block", key = "#blockHash")
     @Override
     public JackpotChainBlock getBlock(String blockHash) {
         JsonNode resultNode = invoke("getblock", List.of(blockHash, 1));
